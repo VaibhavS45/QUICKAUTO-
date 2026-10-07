@@ -1,4 +1,7 @@
 import { z } from 'zod'
+import { SecretVault, MODEL_API_KEY_NAME, COMPOSIO_API_KEY_NAME } from './secret-vault.js'
+
+export { MODEL_API_KEY_NAME, COMPOSIO_API_KEY_NAME }
 
 /**
  * Model/provider settings. Secrets (API key) are encrypted with Electron
@@ -39,7 +42,8 @@ export class MemorySettingsStore implements SettingsStore {
 }
 
 const SETTINGS_KEY = 'model-settings'
-const SECRET_KEY = 'model-api-key-encrypted'
+/** Legacy (Prompt 0) model-key slot, migrated into the vault on first read. */
+const LEGACY_SECRET_KEY = 'model-api-key-encrypted'
 
 export const DEFAULT_MODEL_SETTINGS: ModelSettings = {
   provider: 'anthropic',
@@ -55,10 +59,14 @@ export interface SafeStorageLike {
 }
 
 export class ModelSettingsService {
+  private readonly vault: SecretVault
+
   constructor(
     private readonly store: SettingsStore,
     private readonly safeStorage: SafeStorageLike
-  ) {}
+  ) {
+    this.vault = new SecretVault(store, safeStorage)
+  }
 
   /** Non-secret config (safe to send to the renderer). */
   getConfig(): ModelSettings {
@@ -76,9 +84,10 @@ export class ModelSettingsService {
   }
 
   /** Renderer-safe summary: never includes the key. */
-  async getPublicState(): Promise<ModelSettings & { keySet: boolean; encryptionAvailable: boolean }> {
+  async getPublicState(): Promise<
+    ModelSettings & { keySet: boolean; composioKeySet: boolean; encryptionAvailable: boolean }
+  > {
     const config = this.getConfig()
-    const encrypted = this.store.get(SECRET_KEY)
     let encryptionAvailable = true
     try {
       if (this.safeStorage.isAsyncEncryptionAvailable) {
@@ -87,26 +96,33 @@ export class ModelSettingsService {
     } catch {
       encryptionAvailable = false
     }
-    return { ...config, keySet: typeof encrypted === 'string' && encrypted.length > 0, encryptionAvailable }
+    return {
+      ...config,
+      keySet: await this.vault.hasSecret(MODEL_API_KEY_NAME),
+      composioKeySet: await this.vault.hasSecret(COMPOSIO_API_KEY_NAME),
+      encryptionAvailable
+    }
   }
 
   async setApiKey(key: string): Promise<void> {
-    const trimmed = key.trim()
-    if (!trimmed) throw new Error('API key must not be empty.')
-    if (trimmed.length > 10000) throw new Error('API key is too long.')
-    const encrypted = await this.safeStorage.encryptStringAsync(trimmed)
-    this.store.set(SECRET_KEY, encrypted.toString('hex'))
+    await this.vault.setSecret(MODEL_API_KEY_NAME, key)
   }
 
   async clearApiKey(): Promise<void> {
-    this.store.set(SECRET_KEY, '')
+    await this.vault.clearSecret(MODEL_API_KEY_NAME)
   }
 
   /** Main-process only. NEVER expose over IPC to the renderer. */
   async getApiKey(): Promise<string | null> {
-    const hex = this.store.get(SECRET_KEY)
+    const current = await this.vault.getSecret(MODEL_API_KEY_NAME)
+    if (current) return current
+    // One-time migration from the Prompt 0 slot.
+    const hex = this.store.get(LEGACY_SECRET_KEY)
     if (typeof hex !== 'string' || hex.length === 0) return null
     const out = await this.safeStorage.decryptStringAsync(Buffer.from(hex, 'hex'))
-    return typeof out === 'string' ? out : out.result
+    const plain = typeof out === 'string' ? out : out.result
+    await this.vault.setSecret(MODEL_API_KEY_NAME, plain)
+    this.store.set(LEGACY_SECRET_KEY, '')
+    return plain
   }
 }

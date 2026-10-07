@@ -1,4 +1,4 @@
-import { app, BrowserWindow, Tray, Menu, globalShortcut, ipcMain, nativeImage, session, Notification, safeStorage } from 'electron'
+import { app, BrowserWindow, Tray, Menu, globalShortcut, ipcMain, nativeImage, session, Notification, safeStorage, shell } from 'electron'
 import Store from 'electron-store'
 import { randomUUID } from 'node:crypto'
 import {
@@ -21,12 +21,16 @@ import {
   AgentApprovalResponseSchema,
   PaletteResizeSchema,
   ModelSettingsSchema,
+  ConnectionToolSchema,
   type PlatformInfo
 } from './ipc.js'
 import { defaultHotkey, toPaletteSubmit, TOOL_IDS, type ToolId } from '../shared/types.js'
 import type { AgentEvent } from '../shared/agent.js'
 import { runAgent, type ApprovalDecision } from './agent/runner.js'
 import { ModelSettingsService, type SettingsStore } from './settings/model-settings.js'
+import { SecretVault, COMPOSIO_API_KEY_NAME } from './settings/secret-vault.js'
+import { registerConnectorProvider } from './agent/registry.js'
+import { ComposioConnectorProvider } from './connectors/composio.js'
 import { BudgetGuard, type BudgetStore, type BudgetUsageState } from './connectors/budget-guard.js'
 
 const gotLock = app.requestSingleInstanceLock()
@@ -59,11 +63,20 @@ class ElectronBudgetStore implements BudgetStore {
   }
 }
 
-const settingsService = new ModelSettingsService(new ElectronSettingsStore(), {
+const safeStorageLike = {
   isAsyncEncryptionAvailable: () => safeStorage.isAsyncEncryptionAvailable(),
   encryptStringAsync: (s: string) => safeStorage.encryptStringAsync(s),
   decryptStringAsync: (b: Buffer) => safeStorage.decryptStringAsync(b)
+}
+
+const settingsService = new ModelSettingsService(new ElectronSettingsStore(), safeStorageLike)
+const secretVault = new SecretVault(new ElectronSettingsStore(), safeStorageLike)
+
+const composioProvider = new ComposioConnectorProvider({
+  getApiKey: () => secretVault.getSecret(COMPOSIO_API_KEY_NAME),
+  getGuard: () => getGuard()
 })
+registerConnectorProvider(composioProvider)
 
 let budgetGuard: BudgetGuard | null = null
 /** Singleton guard; recreated (with counts carried over) when reset day changes. */
@@ -261,6 +274,49 @@ function wireIpc(): void {
   ipcMain.handle(IpcChannels.clearApiKey, async () => {
     await settingsService.clearApiKey()
     return { ok: true as const }
+  })
+
+  ipcMain.handle(IpcChannels.setComposioKey, async (_event, payload: unknown) => {
+    const parsed = ApiKeySchema.safeParse(payload)
+    if (!parsed.success) return { ok: false as const, error: 'Invalid Composio API key.' }
+    try {
+      await secretVault.setSecret(COMPOSIO_API_KEY_NAME, parsed.data.key)
+      return { ok: true as const }
+    } catch (err) {
+      return { ok: false as const, error: err instanceof Error ? err.message : String(err) }
+    }
+  })
+
+  ipcMain.handle(IpcChannels.clearComposioKey, async () => {
+    await secretVault.clearSecret(COMPOSIO_API_KEY_NAME)
+    return { ok: true as const }
+  })
+
+  ipcMain.handle(IpcChannels.connectionStatus, async (_event, payload: unknown) => {
+    const parsed = ConnectionToolSchema.safeParse(payload)
+    if (!parsed.success) return { ok: false as const, error: 'Invalid connection request.' }
+    try {
+      const st = await composioProvider.status(parsed.data.toolId as ToolId)
+      return { ok: true as const, ...st }
+    } catch (err) {
+      return { ok: false as const, error: err instanceof Error ? err.message : String(err) }
+    }
+  })
+
+  ipcMain.handle(IpcChannels.connectionConnect, async (_event, payload: unknown) => {
+    const parsed = ConnectionToolSchema.safeParse(payload)
+    if (!parsed.success) return { ok: false as const, error: 'Invalid connection request.' }
+    try {
+      const res = await composioProvider.connect(parsed.data.toolId as ToolId)
+      if (res.ok && res.url) {
+        // Auth happens in the user's own browser; the Composio key and any
+        // tokens stay in main. Renderer polls connectionStatus until ACTIVE.
+        await shell.openExternal(res.url)
+      }
+      return { ok: res.ok as boolean, url: res.url, error: res.error }
+    } catch (err) {
+      return { ok: false as const, error: err instanceof Error ? err.message : String(err) }
+    }
   })
 
   ipcMain.handle(IpcChannels.getBudget, () => {

@@ -27,6 +27,10 @@ export const IpcChannels = {
   setModelSettings: 'settings:set-model',
   setApiKey: 'settings:set-api-key',
   clearApiKey: 'settings:clear-api-key',
+  setComposioKey: 'settings:set-composio-key',
+  clearComposioKey: 'settings:clear-composio-key',
+  connectionStatus: 'connections:status',
+  connectionConnect: 'connections:connect',
   agentRun: 'agent:run',
   agentCancel: 'agent:cancel',
   agentApproval: 'agent:approval',
@@ -52,6 +56,10 @@ export const SetHotkeySchema = z.object({
 
 export const ApiKeySchema = z.object({
   key: z.string().min(1).max(10000)
+})
+
+export const ConnectionToolSchema = z.object({
+  toolId: z.string().min(1).max(64)
 })
 
 export const AgentCancelSchema = z.object({

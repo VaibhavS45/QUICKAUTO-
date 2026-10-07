@@ -58,7 +58,13 @@ interface ModelState {
   baseUrl?: string
   resetDay?: number
   keySet: boolean
+  composioKeySet: boolean
   encryptionAvailable: boolean
+}
+
+interface ConnectionState {
+  connected: boolean
+  detail?: string
 }
 
 function mentionCandidates(typed: string): string[] {
@@ -243,6 +249,13 @@ export default function PaletteApp(): React.JSX.Element {
   const [settingsMsg, setSettingsMsg] = useState<string | null>(null)
   const [budget, setBudget] = useState<BudgetState | null>(null)
 
+  // Connections state
+  const [composioKey, setComposioKey] = useState('')
+  const [gmailStatus, setGmailStatus] = useState<ConnectionState | null>(null)
+  const [connecting, setConnecting] = useState(false)
+  const [connectMsg, setConnectMsg] = useState<string | null>(null)
+  const pollRef = useRef<ReturnType<typeof setInterval> | null>(null)
+
   const mention = useMemo(() => activeMention(value, caret), [value, caret])
   const candidates = useMemo(
     () => (mention ? mentionCandidates(mention.typed) : []),
@@ -269,6 +282,90 @@ export default function PaletteApp(): React.JSX.Element {
     } catch {
       /* ignore */
     }
+  }
+
+  async function refreshGmailStatus(): Promise<ConnectionState | null> {
+    try {
+      const res = (await window.palette.connectionStatus('gmail')) as {
+        ok: boolean
+        connected?: boolean
+        detail?: string
+      }
+      if (!res.ok) return null
+      const st = { connected: res.connected ?? false, detail: res.detail }
+      setGmailStatus(st)
+      return st
+    } catch {
+      return null
+    }
+  }
+
+  function stopPolling(): void {
+    if (pollRef.current) {
+      clearInterval(pollRef.current)
+      pollRef.current = null
+    }
+  }
+
+  /** Open the Composio auth link (main opens the browser) and poll status up to 2 minutes. */
+  async function startGmailConnect(): Promise<void> {
+    stopPolling()
+    setConnectMsg(null)
+    const res = (await window.palette.connectionConnect('gmail')) as {
+      ok: boolean
+      url?: string
+      error?: string
+    }
+    if (!res.ok) {
+      setConnectMsg(res.error ?? 'Could not start Gmail connection.')
+      return
+    }
+    const st = await refreshGmailStatus()
+    if (st?.connected) {
+      setConnectMsg('Gmail is connected.')
+      return
+    }
+    setConnecting(true)
+    setConnectMsg('Browser opened — approve Gmail access there. Waiting up to 2 minutes…')
+    const deadline = Date.now() + 120_000
+    pollRef.current = setInterval(() => {
+      void (async () => {
+        const cur = await refreshGmailStatus()
+        if (cur?.connected) {
+          stopPolling()
+          setConnecting(false)
+          setConnectMsg('Gmail connected. Ask your question again.')
+          void refreshBudget()
+        } else if (Date.now() > deadline) {
+          stopPolling()
+          setConnecting(false)
+          setConnectMsg('Timed out waiting (2 min). Press Connect Gmail to try again.')
+        }
+      })()
+    }, 3000)
+  }
+
+  async function saveComposioKey(): Promise<void> {
+    if (!composioKey.trim()) return
+    setConnectMsg(null)
+    const res = (await window.palette.setComposioKey(composioKey.trim())) as {
+      ok: boolean
+      error?: string
+    }
+    if (!res.ok) {
+      setConnectMsg(res.error ?? 'Key save failed.')
+      return
+    }
+    setComposioKey('')
+    setConnectMsg('Composio key saved.')
+    await refreshSettings()
+  }
+
+  async function clearComposioKey(): Promise<void> {
+    await window.palette.clearComposioKey()
+    setGmailStatus(null)
+    setConnectMsg('Composio key removed.')
+    await refreshSettings()
   }
 
   // Auto-resize: report content height so main can setContentSize (clamped).
@@ -304,6 +401,7 @@ export default function PaletteApp(): React.JSX.Element {
     const offSettings = window.palette.onOpenSettings(() => {
       setShowSettings(true)
       void refreshSettings()
+      void refreshGmailStatus()
     })
     const offErr = window.palette.onHotkeyError((msg) => setHotkeyMsg(msg))
     const offAgent = window.palette.onAgentEvent((raw) => {
@@ -328,6 +426,7 @@ export default function PaletteApp(): React.JSX.Element {
     })
     void refreshSettings()
     void refreshBudget()
+    void refreshGmailStatus()
     const timer = setInterval(() => void refreshBudget(), 30_000)
     return () => {
       offOpened()
@@ -335,6 +434,7 @@ export default function PaletteApp(): React.JSX.Element {
       offErr()
       offAgent()
       clearInterval(timer)
+      stopPolling()
     }
   }, [])
 
@@ -537,6 +637,7 @@ export default function PaletteApp(): React.JSX.Element {
           onClick={() => {
             setShowSettings((s) => !s)
             void refreshSettings()
+            void refreshGmailStatus()
           }}
           className="rounded px-1 text-neutral-500 hover:text-neutral-200"
           title="Settings"
@@ -643,6 +744,21 @@ export default function PaletteApp(): React.JSX.Element {
           ))}
 
           {runError && <div className="text-sm text-red-300">{runError}</div>}
+
+          {!running &&
+            toolCalls.some((t) => t.toolName.startsWith('gmail_')) &&
+            /not connected/i.test(`${answer} ${runError ?? ''}`) && (
+              <div className="mb-2">
+                <button
+                  onClick={() => void startGmailConnect()}
+                  disabled={connecting}
+                  className="rounded bg-emerald-600 px-3 py-1 text-xs font-medium text-white disabled:opacity-50"
+                >
+                  {connecting ? 'Waiting for Gmail…' : 'Connect Gmail'}
+                </button>
+                {connectMsg && <div className="pt-1 text-xs text-amber-200">{connectMsg}</div>}
+              </div>
+            )}
 
           {answer && <Markdown text={answer} />}
           {running && !answer && (
@@ -769,6 +885,68 @@ export default function PaletteApp(): React.JSX.Element {
               'Loading…'
             )}
           </div>
+
+          <div className="pt-3 font-medium">Connections</div>
+          <div className="flex flex-wrap items-end gap-2 pt-1">
+            <label className="text-xs text-neutral-400">
+              Composio API key {modelState?.composioKeySet ? '(set ✓)' : '(not set)'}
+              <input
+                type="password"
+                value={composioKey}
+                onChange={(e) => setComposioKey(e.target.value)}
+                placeholder={modelState?.composioKeySet ? '•••••• (enter to replace)' : 'composio key…'}
+                className="mt-0.5 w-64 rounded border border-neutral-700 bg-neutral-800 px-2 py-1 font-mono text-xs text-neutral-100"
+              />
+            </label>
+            <button
+              onClick={() => void saveComposioKey()}
+              className="rounded bg-indigo-600 px-2 py-1 text-xs text-white"
+            >
+              Save key
+            </button>
+            {modelState?.composioKeySet && (
+              <button
+                onClick={() => void clearComposioKey()}
+                className="rounded border border-neutral-600 px-2 py-1 text-xs text-neutral-300"
+              >
+                Remove
+              </button>
+            )}
+          </div>
+          <div className="flex flex-wrap items-center gap-2 pt-2 text-xs">
+            <span className="text-neutral-400">
+              Gmail {gmailStatus ? (gmailStatus.connected ? 'connected ✓' : 'not connected') : '…'}
+            </span>
+            {gmailStatus && !gmailStatus.connected && (
+              <button
+                onClick={() => void startGmailConnect()}
+                disabled={connecting}
+                className="rounded bg-emerald-600 px-2 py-1 text-xs text-white disabled:opacity-50"
+              >
+                {connecting ? 'Waiting…' : 'Connect Gmail'}
+              </button>
+            )}
+            {connecting && (
+              <button
+                onClick={() => {
+                  stopPolling()
+                  setConnecting(false)
+                  setConnectMsg('Stopped waiting.')
+                }}
+                className="rounded border border-neutral-600 px-2 py-1 text-xs text-neutral-300"
+              >
+                Stop waiting
+              </button>
+            )}
+            <button
+              onClick={() => void refreshGmailStatus()}
+              className="rounded border border-neutral-600 px-2 py-1 text-xs text-neutral-300"
+            >
+              Refresh
+            </button>
+          </div>
+          {gmailStatus?.detail && <div className="pt-1 text-[11px] text-neutral-500">{gmailStatus.detail}</div>}
+          {connectMsg && <div className="pt-1 text-xs text-amber-200">{connectMsg}</div>}
         </div>
       )}
 

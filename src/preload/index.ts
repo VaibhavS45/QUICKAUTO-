@@ -35,12 +35,19 @@ const api = {
     baseUrl?: string
     resetDay?: number
     keySet: boolean
+    composioKeySet: boolean
     encryptionAvailable: boolean
   }> => ipcRenderer.invoke('settings:get-model'),
   setModelSettings: (s: { provider: string; model: string; baseUrl?: string; resetDay?: number }) =>
     ipcRenderer.invoke('settings:set-model', s),
   setApiKey: (key: string) => ipcRenderer.invoke('settings:set-api-key', { key }),
   clearApiKey: () => ipcRenderer.invoke('settings:clear-api-key'),
+  setComposioKey: (key: string) => ipcRenderer.invoke('settings:set-composio-key', { key }),
+  clearComposioKey: () => ipcRenderer.invoke('settings:clear-composio-key'),
+  connectionStatus: (toolId: string): Promise<{ ok: boolean; connected?: boolean; detail?: string; error?: string }> =>
+    ipcRenderer.invoke('connections:status', { toolId }),
+  connectionConnect: (toolId: string): Promise<{ ok: boolean; url?: string; error?: string }> =>
+    ipcRenderer.invoke('connections:connect', { toolId }),
   agentRun: (payload: { prompt: string; tools: string[]; source: 'palette' | 'scheduled' }) =>
     ipcRenderer.invoke('agent:run', payload),
   agentCancel: (runId: string) => ipcRenderer.invoke('agent:cancel', { runId }),

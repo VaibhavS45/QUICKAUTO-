@@ -37,7 +37,7 @@ describe('ModelSettingsService', () => {
     const store = new MemorySettingsStore()
     const svc = new ModelSettingsService(store, fakeSafeStorage())
     await svc.setApiKey('sk-secret-123')
-    const atRest = store.get('model-api-key-encrypted')
+    const atRest = store.get('secret:model-api-key:encrypted')
     expect(typeof atRest).toBe('string')
     expect(atRest as string).not.toContain('sk-secret-123')
     expect(await svc.getApiKey()).toBe('sk-secret-123')
@@ -64,5 +64,18 @@ describe('ModelSettingsService', () => {
     store.set('model-settings', { provider: '???' })
     const svc = new ModelSettingsService(store, fakeSafeStorage())
     expect(svc.getConfig().provider).toBe('anthropic')
+  })
+
+  it('migrates a Prompt-0 legacy key into the vault', async () => {
+    const store = new MemorySettingsStore()
+    const safe = fakeSafeStorage()
+    // Legacy slot holds safeStorage-encrypted hex, as Prompt 0 wrote it.
+    const encrypted = await safe.encryptStringAsync('legacy-key')
+    store.set('model-api-key-encrypted', encrypted.toString('hex'))
+    const svc = new ModelSettingsService(store, safe)
+    expect(await svc.getApiKey()).toBe('legacy-key')
+    // Migrated: vault slot now holds it, legacy slot cleared.
+    expect(store.get('model-api-key-encrypted')).toBe('')
+    expect(await svc.getApiKey()).toBe('legacy-key')
   })
 })

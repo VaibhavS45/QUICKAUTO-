@@ -97,7 +97,13 @@ const api = {
   },
   calendarMinimize: () => ipcRenderer.send('calendar:minimize'),
   calendarMaximize: () => ipcRenderer.send('calendar:toggle-maximize'),
-  calendarClose: () => ipcRenderer.send('calendar:close')
+  calendarClose: () => ipcRenderer.send('calendar:close'),
+  closeSettings: () => ipcRenderer.send('settings:hide'),
+  onSettingsClose: (cb: () => void) => {
+    const fn = (): void => cb()
+    ipcRenderer.on('settings:close', fn)
+    return () => ipcRenderer.removeListener('settings:close', fn)
+  }
 }
 
 export type PaletteApi = typeof api

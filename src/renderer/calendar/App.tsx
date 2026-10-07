@@ -85,7 +85,6 @@ export default function CalendarApp(): React.JSX.Element {
 
   useEffect(() => {
     window.palette.calendarWindowEvent('opened')
-    window.palette.getAwake().then((s) => setAwake(s.enabled)).catch(() => {})
     const off = window.palette.onCalendarDraft((text) => setDraft(text))
     const onUnload = (): void => window.palette.calendarWindowEvent('closed')
     window.addEventListener('beforeunload', onUnload)
@@ -343,6 +342,7 @@ export default function CalendarApp(): React.JSX.Element {
             }}
           />
         </div>
+        <p className="pt-2 text-[11px] text-neutral-600">Drag across any day to create an event, or drag a bot to schedule it.</p>
       </aside>
 
       {/* Main column */}
@@ -412,11 +412,7 @@ export default function CalendarApp(): React.JSX.Element {
         <button
           role="switch"
           aria-checked={awake}
-          onClick={() => {
-            const next = !awake
-            setAwake(next)
-            window.palette.setAwake(next).then((s) => setAwake(s.enabled)).catch(() => setAwake(!next))
-          }}
+          onClick={() => setAwake((a) => !a)}
           className={`relative h-6 w-11 shrink-0 rounded-full ${awake ? 'bg-blue-500' : 'bg-neutral-700'}`}
         >
           <span className="absolute top-0.5 h-5 w-5 rounded-full bg-white" style={{ left: awake ? 22 : 2 }} />

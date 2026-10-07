@@ -1,4 +1,4 @@
-import { app, BrowserWindow, Tray, Menu, globalShortcut, ipcMain, nativeImage, session, Notification, safeStorage, powerMonitor, powerSaveBlocker } from 'electron'
+import { app, BrowserWindow, Tray, Menu, globalShortcut, ipcMain, nativeImage, session, Notification, safeStorage } from 'electron'
 import Store from 'electron-store'
 import { randomUUID } from 'node:crypto'
 import {
@@ -20,7 +20,6 @@ import {
   RoutineCreateSchema,
   RoutineIdSchema,
   RoutineToggleSchema,
-  AwakeSetSchema,
   AgentCancelSchema,
   AgentRunRequestSchema,
   AgentApprovalResponseSchema,
@@ -43,7 +42,6 @@ import {
   type Routine,
   type RoutineStore
 } from './agent/scheduler.js'
-import { AwakeManager } from './agent/awake.js'
 import { parseMentionedTools } from '../shared/types.js'
 
 const gotLock = app.requestSingleInstanceLock()
@@ -120,36 +118,6 @@ const scheduler = new Scheduler(new ElectronRoutineStore(), {
   isRunning: (id) => scheduledActive.has(id),
   fire: (routine) => fireRoutine(routine)
 })
-
-const awakeFile = new Store<{ enabled: boolean }>({ name: 'palette-awake', defaults: { enabled: true } })
-
-const awake = new AwakeManager(
-  {
-    load: () => awakeFile.get('enabled', true),
-    save: (enabled) => awakeFile.set('enabled', enabled)
-  },
-  {
-    startBlocker: () => powerSaveBlocker.start('prevent-app-suspension'),
-    stopBlocker: (id) => {
-      powerSaveBlocker.stop(id)
-    },
-    isOnBattery: () => {
-      try {
-        return powerMonitor.onBatteryPower
-      } catch {
-        return false
-      }
-    },
-    onPowerChange: (cb) => {
-      powerMonitor.on('on-ac', cb)
-      powerMonitor.on('on-battery', cb)
-      return () => {
-        powerMonitor.removeListener('on-ac', cb)
-        powerMonitor.removeListener('on-battery', cb)
-      }
-    }
-  }
-)
 
 let budgetGuard: BudgetGuard | null = null
 /** Singleton guard; recreated (with counts carried over) when reset day changes. */
@@ -573,19 +541,6 @@ function wireIpc(): void {
       : { ok: false as const, error: 'Routine not found.' }
   })
 
-  ipcMain.handle(IpcChannels.getAwake, () => ({
-    ok: true as const,
-    enabled: awake.enabled,
-    holding: awake.holding
-  }))
-
-  ipcMain.handle(IpcChannels.setAwake, (_event, payload: unknown) => {
-    const parsed = AwakeSetSchema.safeParse(payload)
-    if (!parsed.success) return { ok: false as const, error: 'Invalid awake preference.' }
-    const enabled = awake.setEnabled(parsed.data.enabled)
-    return { ok: true as const, enabled, holding: awake.holding }
-  })
-
   ipcMain.on('calendar:opened-with-window', () => {
     if (process.platform === 'darwin' && app.dock) app.dock.show()
   })
@@ -608,8 +563,6 @@ async function onReady(): Promise<void> {
   createPaletteWindow()
   wireIpc()
   scheduler.startAll()
-  awake.attach()
-  awake.reconcile()
   createTray()
   applyAutostart()
 

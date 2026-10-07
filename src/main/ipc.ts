@@ -39,7 +39,9 @@ export const IpcChannels = {
   routineList: 'routine:list',
   routineCreate: 'routine:create',
   routineRemove: 'routine:remove',
-  routineToggle: 'routine:toggle'
+  routineToggle: 'routine:toggle',
+  getAwake: 'awake:get',
+  setAwake: 'awake:set'
 } as const
 
 export type IpcChannel = (typeof IpcChannels)[keyof typeof IpcChannels]
@@ -79,6 +81,10 @@ export const RoutineIdSchema = z.object({
 
 export const RoutineToggleSchema = z.object({
   id: z.string().min(1).max(128),
+  enabled: z.boolean()
+})
+
+export const AwakeSetSchema = z.object({
   enabled: z.boolean()
 })
 

@@ -82,6 +82,10 @@ const api = {
   routineCreate: (text: string) => ipcRenderer.invoke('routine:create', { text }),
   routineRemove: (id: string) => ipcRenderer.invoke('routine:remove', { id }),
   routineToggle: (id: string, enabled: boolean) => ipcRenderer.invoke('routine:toggle', { id, enabled }),
+  getAwake: (): Promise<{ ok: boolean; enabled: boolean; holding: boolean }> =>
+    ipcRenderer.invoke('awake:get'),
+  setAwake: (enabled: boolean): Promise<{ ok: boolean; enabled: boolean; holding: boolean }> =>
+    ipcRenderer.invoke('awake:set', { enabled }),
   onCalendarDraft: (cb: (text: string) => void) => {
     const fn = (_e: unknown, text: string): void => cb(text)
     ipcRenderer.on('calendar:new-draft', fn)

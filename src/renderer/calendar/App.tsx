@@ -470,7 +470,7 @@ export default function CalendarApp(): React.JSX.Element {
               <div>
                 {Array.from({ length: 24 }, (_, h) => (
                   <div key={h} className="relative text-right" style={{ height: HOUR_H, borderBottom: `1px solid ${GRID}` }}>
-                    {h > 0 && <span className="text-[10px] text-neutral-600" style={{ position: 'absolute', top: -7, right: 8, lineHeight: '14px', whiteSpace: 'nowrap' }}>{hourLabel(h)}</span>}
+                    {h > 0 && <span className="text-[10px] text-neutral-600" style={{ position: 'absolute', top: 3, right: 8, lineHeight: '14px', whiteSpace: 'nowrap' }}>{hourLabel(h)}</span>}
                   </div>
                 ))}
               </div>

@@ -42,7 +42,13 @@ function defaultPickPort(): Promise<number> {
 
 async function defaultPollHealth(url: string, headers: Record<string, string>): Promise<boolean> {
   try {
-    const res = await fetch(`${url}/global/health`, { headers })
+    // Boot can be slow (provider discovery); bound EACH attempt so the outer
+    // startup deadline is always reachable — a hanging fetch must never stall
+    // the loop forever.
+    const res = await fetch(`${url}/global/health`, {
+      headers,
+      signal: AbortSignal.timeout(5000)
+    })
     if (!res.ok) return false
     const body = (await res.json()) as { healthy?: boolean }
     return body.healthy === true
@@ -165,7 +171,9 @@ export class OpencodeServerManager {
 
     const headers = { Authorization: `Basic ${Buffer.from(`opencode:${password}`).toString('base64')}` }
     const pollHealth = this.deps.pollHealth ?? defaultPollHealth
-    const timeoutMs = this.deps.startupTimeoutMs ?? 25000
+    // First boot can take a minute+ (provider/model discovery); each health
+    // attempt is separately bounded, this caps the total wait.
+    const timeoutMs = this.deps.startupTimeoutMs ?? 120000
     const deadline = Date.now() + timeoutMs
     try {
       for (;;) {

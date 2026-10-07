@@ -48,7 +48,9 @@ class Script {
     return { stdout: h.stdout ?? '', stderr: '' }
   }
   argv(cmd: string, first: string): string[][] {
-    return this.calls.filter((c) => c.cmd === cmd && c.args[0] === first).map((c) => c.args)
+    // Matches runs where `first` is the git subcommand, tolerating leading
+    // global flags such as `-c key=val` before it.
+    return this.calls.filter((c) => c.cmd === cmd && c.args.includes(first)).map((c) => c.args)
   }
 }
 
@@ -65,16 +67,16 @@ const REPO_VIEW = JSON.stringify({ defaultBranchRef: { name: 'main' } })
 
 function resolveScript(): Script {
   return new Script([
-    { match: (c, a) => c === 'gh' && a[1] === 'view' && a[0] === 'pr', stdout: PR_VIEW },
-    { match: (c, a) => c === 'gh' && a[0] === 'repo', stdout: REPO_VIEW },
-    { match: (c, a) => c === 'git' && a[0] === 'status', stdout: '' },
-    { match: (c, a) => c === 'git' && a[0] === 'show-ref', throwErr: 'not exists' },
-    { match: (c, a) => c === 'git' && a[0] === 'fetch', stdout: '' },
-    { match: (c, a) => c === 'git' && a[0] === 'checkout', stdout: '' },
-    { match: (c, a) => c === 'git' && a[0] === 'merge' && a[1] !== '--abort', throwErr: 'conflict' },
-    { match: (c, a) => c === 'git' && a[0] === 'diff' && a.includes('--diff-filter=U'), stdout: 'a.ts\nb.ts\n' },
-    { match: (c, a) => c === 'git' && a[0] === 'diff' && a.includes('--stat'), stdout: 'stat' },
-    { match: (c, a) => c === 'git' && a[0] === 'diff', stdout: 'DIFF-BODY' },
+    { match: (c, a) => c === 'gh' && a.includes('pr'), stdout: PR_VIEW },
+    { match: (c, a) => c === 'gh' && a.includes('repo'), stdout: REPO_VIEW },
+    { match: (c, a) => c === 'git' && a.includes('status'), stdout: '' },
+    { match: (c, a) => c === 'git' && a.includes('show-ref'), throwErr: 'not exists' },
+    { match: (c, a) => c === 'git' && a.includes('fetch'), stdout: '' },
+    { match: (c, a) => c === 'git' && a.includes('checkout'), stdout: '' },
+    { match: (c, a) => c === 'git' && a.includes('merge') && !a.includes('--abort'), throwErr: 'conflict' },
+    { match: (c, a) => c === 'git' && a.includes('--diff-filter=U'), stdout: 'a.ts\nb.ts\n' },
+    { match: (c, a) => c === 'git' && a.includes('--stat'), stdout: 'stat' },
+    { match: (c, a) => c === 'git' && a.includes('diff'), stdout: 'DIFF-BODY' },
     { match: () => true, stdout: '' }
   ])
 }
@@ -142,7 +144,13 @@ describe('resolve flow (happy path)', () => {
     const fetches = script.argv('git', 'fetch')
     expect(fetches[0]!.join(' ')).toContain('pull/12/head:')
     // Merge base in, no commit/push during resolve.
-    expect(script.argv('git', 'merge').filter((a) => a[1] !== '--abort')[0]).toEqual(['merge', 'origin/main', '--no-edit'])
+    expect(script.argv('git', 'merge').filter((a) => a[1] !== '--abort')[0]).toEqual([
+      '-c',
+      'rerere.enabled=false',
+      'merge',
+      'origin/main',
+      '--no-edit'
+    ])
     expect(script.argv('git', 'commit')).toHaveLength(0)
     expect(script.argv('git', 'push')).toHaveLength(0)
   })
@@ -329,8 +337,13 @@ describe('runOpencodeResolve', () => {
       abortCalled: { value: false },
       client: {
         session: {
-          create: async () => ({ id: 's1' }),
-          prompt: async () => ({ parts: [{ type: 'text', text: 'done\n{"resolved": ["a"], "unresolved": []}' }] }),
+          // hey-api 'fields' style: { data, request, response }, no error key.
+          create: async () => ({ data: { id: 's1' }, request: {}, response: {} }),
+          prompt: async () => ({
+            data: { parts: [{ type: 'text', text: 'done\n{"resolved": ["a"], "unresolved": []}' }] },
+            request: {},
+            response: {}
+          }),
           abort: async () => {
             return true
           }

@@ -1,11 +1,13 @@
-import { app, BrowserWindow, Tray, Menu, globalShortcut, ipcMain, nativeImage, session, Notification } from 'electron'
+import { app, BrowserWindow, Tray, Menu, globalShortcut, ipcMain, nativeImage, session, Notification, safeStorage } from 'electron'
 import Store from 'electron-store'
+import { randomUUID } from 'node:crypto'
 import {
   createPaletteWindow,
   showPalette,
   hidePalette,
   togglePalette,
-  getPaletteWindow
+  getPaletteWindow,
+  resizePaletteToContent
 } from './palette-window.js'
 import { openCalendar, getCalendarWindow } from './calendar-window.js'
 import {
@@ -13,9 +15,19 @@ import {
   PaletteSubmitSchema,
   CalendarDraftSchema,
   SetHotkeySchema,
+  ApiKeySchema,
+  AgentCancelSchema,
+  AgentRunRequestSchema,
+  AgentApprovalResponseSchema,
+  PaletteResizeSchema,
+  ModelSettingsSchema,
   type PlatformInfo
 } from './ipc.js'
-import { defaultHotkey, toPaletteSubmit } from '../shared/types.js'
+import { defaultHotkey, toPaletteSubmit, TOOL_IDS, type ToolId } from '../shared/types.js'
+import type { AgentEvent } from '../shared/agent.js'
+import { runAgent, type ApprovalDecision } from './agent/runner.js'
+import { ModelSettingsService, type SettingsStore } from './settings/model-settings.js'
+import { BudgetGuard, type BudgetStore, type BudgetUsageState } from './connectors/budget-guard.js'
 
 const gotLock = app.requestSingleInstanceLock()
 if (!gotLock) app.quit()
@@ -23,6 +35,64 @@ if (!gotLock) app.quit()
 const store = new Store<{ hotkey: string; openAtLogin: boolean }>({
   defaults: { hotkey: defaultHotkey(process.platform), openAtLogin: false }
 })
+
+class ElectronSettingsStore implements SettingsStore {
+  get(key: string): unknown {
+    return (store as unknown as { get: (k: string) => unknown }).get(key)
+  }
+  set(key: string, value: unknown): void {
+    ;(store as unknown as { set: (k: string, v: unknown) => void }).set(key, value)
+  }
+}
+
+const budgetFile = new Store<{ usage: BudgetUsageState | null }>({
+  name: 'palette-budget',
+  defaults: { usage: null }
+})
+
+class ElectronBudgetStore implements BudgetStore {
+  load(): BudgetUsageState | null {
+    return budgetFile.get('usage', null)
+  }
+  save(state: BudgetUsageState): void {
+    budgetFile.set('usage', state)
+  }
+}
+
+const settingsService = new ModelSettingsService(new ElectronSettingsStore(), {
+  isAsyncEncryptionAvailable: () => safeStorage.isAsyncEncryptionAvailable(),
+  encryptStringAsync: (s: string) => safeStorage.encryptStringAsync(s),
+  decryptStringAsync: (b: Buffer) => safeStorage.decryptStringAsync(b)
+})
+
+let budgetGuard: BudgetGuard | null = null
+/** Singleton guard; recreated (with counts carried over) when reset day changes. */
+function getGuard(): BudgetGuard {
+  const resetDay = settingsService.getConfig().resetDay ?? 1
+  if (!budgetGuard || budgetGuard.resetDay !== resetDay) {
+    const prev = budgetGuard?.status()
+    budgetGuard = new BudgetGuard({ store: new ElectronBudgetStore(), resetDay })
+    if (prev && prev.used > 0) {
+      const st = budgetGuard.status()
+      new ElectronBudgetStore().save({
+        periodKey: st.periodKey,
+        used: prev.used,
+        scheduledUsed: prev.scheduledUsed
+      })
+    }
+  }
+  return budgetGuard
+}
+
+interface ActiveRun {
+  controller: AbortController
+  pending: Map<string, (d: ApprovalDecision) => void>
+}
+const activeRuns = new Map<string, ActiveRun>()
+
+function emitToPalette(e: AgentEvent): void {
+  getPaletteWindow()?.webContents.send(IpcChannels.agentEvent, e)
+}
 
 let tray: Tray | null = null
 let hotkeyError: string | null = null
@@ -157,6 +227,125 @@ function wireIpc(): void {
 
   ipcMain.on(IpcChannels.paletteHide, () => hidePalette(true))
 
+  ipcMain.handle(IpcChannels.paletteResize, (_event, payload: unknown) => {
+    const parsed = PaletteResizeSchema.safeParse(payload)
+    if (!parsed.success) return { ok: false as const, error: 'Invalid resize payload.' }
+    const height = resizePaletteToContent(parsed.data.height)
+    return { ok: true as const, height }
+  })
+
+  ipcMain.handle(IpcChannels.getModelSettings, async () => settingsService.getPublicState())
+
+  ipcMain.handle(IpcChannels.setModelSettings, (_event, payload: unknown) => {
+    const parsed = ModelSettingsSchema.safeParse(payload)
+    if (!parsed.success) return { ok: false as const, error: 'Invalid model settings.' }
+    try {
+      const saved = settingsService.setConfig(parsed.data)
+      return { ok: true as const, settings: { ...saved, keySet: undefined, encryptionAvailable: undefined } }
+    } catch (err) {
+      return { ok: false as const, error: err instanceof Error ? err.message : String(err) }
+    }
+  })
+
+  ipcMain.handle(IpcChannels.setApiKey, async (_event, payload: unknown) => {
+    const parsed = ApiKeySchema.safeParse(payload)
+    if (!parsed.success) return { ok: false as const, error: 'Invalid API key.' }
+    try {
+      await settingsService.setApiKey(parsed.data.key)
+      return { ok: true as const }
+    } catch (err) {
+      return { ok: false as const, error: err instanceof Error ? err.message : String(err) }
+    }
+  })
+
+  ipcMain.handle(IpcChannels.clearApiKey, async () => {
+    await settingsService.clearApiKey()
+    return { ok: true as const }
+  })
+
+  ipcMain.handle(IpcChannels.getBudget, () => {
+    const st = getGuard().status()
+    return {
+      used: st.used,
+      budget: st.budget,
+      remaining: st.remaining,
+      warning: st.warning,
+      scheduledUsed: st.scheduledUsed,
+      scheduledBudget: st.scheduledBudget,
+      periodKey: st.periodKey
+    }
+  })
+
+  function startAgentRun(prompt: string, toolNames: string[], source: 'palette' | 'scheduled'): string {
+    const runId = randomUUID()
+    const controller = new AbortController()
+    const active: ActiveRun = { controller, pending: new Map() }
+    activeRuns.set(runId, active)
+    const tools = toolNames.filter((t): t is ToolId => (TOOL_IDS as readonly string[]).includes(t))
+    void runAgent({
+      prompt,
+      tools,
+      source,
+      signal: controller.signal,
+      runId,
+      emit: emitToPalette,
+      decideApproval: (req) =>
+        new Promise<ApprovalDecision>((resolve) => {
+          active.pending.set(req.approvalId, resolve)
+          // Re-emit is unnecessary (runner already emitted); just track.
+          // If the run is cancelled first, cancel resolves this as denied.
+        }),
+      deps: {
+        getConfig: () => settingsService.getConfig(),
+        getApiKey: () => settingsService.getApiKey()
+      }
+    })
+      .catch((err) => {
+        emitToPalette({
+          type: 'error',
+          runId,
+          message: err instanceof Error ? err.message : String(err)
+        })
+      })
+      .finally(() => {
+        activeRuns.delete(runId)
+        getGuard().endRun(runId)
+      })
+    return runId
+  }
+
+  ipcMain.handle(IpcChannels.agentRun, (_event, payload: unknown) => {
+    const parsed = AgentRunRequestSchema.safeParse(payload)
+    if (!parsed.success) return { ok: false as const, error: 'Invalid agent request.' }
+    const runId = startAgentRun(parsed.data.prompt, parsed.data.tools, parsed.data.source)
+    return { ok: true as const, runId }
+  })
+
+  ipcMain.handle(IpcChannels.agentCancel, (_event, payload: unknown) => {
+    const parsed = AgentCancelSchema.safeParse(payload)
+    if (!parsed.success) return { ok: false as const, error: 'Invalid cancel request.' }
+    const active = activeRuns.get(parsed.data.runId)
+    if (!active) return { ok: false as const, error: 'Run not found (it may have finished).' }
+    for (const resolve of active.pending.values()) {
+      resolve({ approved: false, reason: 'Run cancelled.' })
+    }
+    active.pending.clear()
+    active.controller.abort()
+    return { ok: true as const }
+  })
+
+  ipcMain.handle(IpcChannels.agentApproval, (_event, payload: unknown) => {
+    const parsed = AgentApprovalResponseSchema.safeParse(payload)
+    if (!parsed.success) return { ok: false as const, error: 'Invalid approval response.' }
+    const active = activeRuns.get(parsed.data.runId)
+    if (!active) return { ok: false as const, error: 'Run not found (it may have finished).' }
+    const resolve = active.pending.get(parsed.data.approvalId)
+    if (!resolve) return { ok: false as const, error: 'Approval request not found.' }
+    active.pending.delete(parsed.data.approvalId)
+    resolve({ approved: parsed.data.approved, reason: parsed.data.reason })
+    return { ok: true as const }
+  })
+
   ipcMain.on(IpcChannels.calendarMinimize, () => getCalendarWindow()?.minimize())
   ipcMain.on(IpcChannels.calendarMaximize, () => {
     const w = getCalendarWindow()
@@ -182,16 +371,10 @@ function wireIpc(): void {
       return { ok: true as const, action: 'calendar', tools: submit.tools }
     }
 
-    // M1: no agent yet. Renderer shows this placeholder under the input.
-    return {
-      ok: true as const,
-      action: 'placeholder',
-      tools: submit.tools,
-      message:
-        submit.tools.length === 0
-          ? 'Agent loop lands in Milestone 2. For now try @ to see the tool list, or @calendar <text> to open a task draft.'
-          : `Agent loop lands in Milestone 2 — would have used: ${submit.tools.map((t) => `@${t}`).join(', ')}.`
-    }
+    // Everything else runs the agent loop (Prompt 0 foundation: ToolLoopAgent
+    // + built-in echo tools). The renderer streams events via agent:event.
+    const runId = startAgentRun(parsed.data.text, submit.tools, 'palette')
+    return { ok: true as const, action: 'agent', tools: submit.tools, runId }
   })
 
   ipcMain.on('calendar:opened-with-window', () => {

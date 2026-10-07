@@ -18,8 +18,11 @@
     "test:e2e": "playwright test"
   },
   "dependencies": {
+    "@ai-sdk/anthropic": "^4.0.74",
+    "@ai-sdk/openai": "^4.0.86",
+    "ai": "^7.0.130",
     "electron-store": "^11.0.0",
-    "zod": "^4.1.0"
+    "zod": "^4.6.5"
   },
   "devDependencies": {
     "@playwright/test": "^1.63.0",

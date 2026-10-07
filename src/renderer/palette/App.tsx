@@ -7,7 +7,58 @@ interface SubmitResponse {
   action?: string
   tools?: string[]
   message?: string
+  runId?: string
   error?: string
+}
+
+interface ToolCallState {
+  toolCallId: string
+  toolName: string
+  input: unknown
+  status: 'running' | 'done' | 'needs-approval' | 'denied'
+  output?: unknown
+}
+
+interface ApprovalState {
+  approvalId: string
+  toolCallId: string
+  toolName: string
+  input: unknown
+  reason?: string
+}
+
+interface AgentEventMsg {
+  type: string
+  runId: string
+  delta?: string
+  toolCallId?: string
+  toolName?: string
+  input?: unknown
+  output?: unknown
+  approvalId?: string
+  reason?: string
+  text?: string
+  steps?: number
+  message?: string
+}
+
+interface BudgetState {
+  used: number
+  budget: number
+  remaining: number
+  warning: string
+  scheduledUsed: number
+  scheduledBudget: number
+  periodKey: string
+}
+
+interface ModelState {
+  provider: string
+  model: string
+  baseUrl?: string
+  resetDay?: number
+  keySet: boolean
+  encryptionAvailable: boolean
 }
 
 function mentionCandidates(typed: string): string[] {
@@ -27,16 +78,170 @@ function activeMention(value: string, caret: number): { start: number; typed: st
   return { start: at, typed: m[1] ?? '' }
 }
 
+/** Tiny markdown renderer (no deps, no raw HTML): fences, lists, bold, code, headings. */
+function Markdown({ text }: { text: string }): React.JSX.Element {
+  const blocks: React.JSX.Element[] = []
+  const lines = text.split('\n')
+  let i = 0
+  let key = 0
+  const inline = (s: string, k: string): React.ReactNode[] => {
+    const parts: React.ReactNode[] = []
+    const re = /(\*\*[^*]+\*\*|`[^`]+`)/g
+    let last = 0
+    let m: RegExpExecArray | null
+    let n = 0
+    while ((m = re.exec(s)) !== null) {
+      if (m.index > last) parts.push(s.slice(last, m.index))
+      const tok = m[0]
+      if (tok.startsWith('**')) parts.push(<strong key={`${k}-${n++}`}>{tok.slice(2, -2)}</strong>)
+      else parts.push(<code key={`${k}-${n++}`} className="rounded bg-neutral-800 px-1 font-mono text-[12px]">{tok.slice(1, -1)}</code>)
+      last = m.index + tok.length
+    }
+    if (last < s.length) parts.push(s.slice(last))
+    return parts
+  }
+  while (i < lines.length) {
+    const line = lines[i] ?? ''
+    if (line.trim().startsWith('```')) {
+      const buf: string[] = []
+      i++
+      while (i < lines.length && !((lines[i] ?? '').trim().startsWith('```'))) {
+        buf.push(lines[i] ?? '')
+        i++
+      }
+      i++
+      blocks.push(
+        <pre key={key++} className="overflow-x-auto rounded bg-neutral-950 p-2 font-mono text-[12px] text-neutral-200">{buf.join('\n')}</pre>
+      )
+      continue
+    }
+    const h = /^(#{1,3})\s+(.*)$/.exec(line)
+    if (h) {
+      blocks.push(<div key={key++} className="pt-1 font-semibold text-neutral-100">{inline(h[2], `h${key}`)}</div>)
+      i++
+      continue
+    }
+    if (/^\s*([-*]|\d+[.)])\s+/.test(line)) {
+      const items: string[] = []
+      while (i < lines.length && /^\s*([-*]|\d+[.)])\s+/.test(lines[i] ?? '')) {
+        items.push((lines[i] ?? '').replace(/^\s*([-*]|\d+[.)])\s+/, ''))
+        i++
+      }
+      blocks.push(
+        <ul key={key++} className="list-disc space-y-0.5 pl-5">
+          {items.map((it, n) => <li key={n}>{inline(it, `li${key}-${n}`)}</li>)}
+        </ul>
+      )
+      continue
+    }
+    if (line.trim() === '') {
+      i++
+      continue
+    }
+    blocks.push(<p key={key++} className="whitespace-pre-wrap break-words">{inline(line, `p${key}`)}</p>)
+  }
+  return <div className="space-y-1.5">{blocks}</div>
+}
+
+function shortJson(v: unknown, max = 300): string {
+  try {
+    const s = typeof v === 'string' ? v : JSON.stringify(v, null, 2)
+    return s.length > max ? `${s.slice(0, max)}…` : s
+  } catch {
+    return String(v)
+  }
+}
+
 export default function PaletteApp(): React.JSX.Element {
   const [value, setValue] = useState('')
   const [caret, setCaret] = useState(0)
   const [selected, setSelected] = useState(0)
-  const [result, setResult] = useState<string | null>(null)
+  const [notice, setNotice] = useState<string | null>(null)
   const [showSettings, setShowSettings] = useState(false)
   const [hotkey, setHotkey] = useState('')
   const [hotkeyMsg, setHotkeyMsg] = useState<string | null>(null)
   const [platformHint, setPlatformHint] = useState<string | null>(null)
   const inputRef = useRef<HTMLInputElement>(null)
+  const rootRef = useRef<HTMLDivElement>(null)
+  const lastHeightRef = useRef(0)
+
+  // Agent run state
+  const [runId, setRunId] = useState<string | null>(null)
+  const [running, setRunning] = useState(false)
+  const [answer, setAnswer] = useState('')
+  const [toolCalls, setToolCalls] = useState<ToolCallState[]>([])
+  const [approvals, setApprovals] = useState<ApprovalState[]>([])
+  const [runError, setRunError] = useState<string | null>(null)
+  const [runSteps, setRunSteps] = useState<number | null>(null)
+  const runIdRef = useRef<string | null>(null)
+  runIdRef.current = runId
+  // Events can arrive before the submit() invoke resolves (main emits on a
+  // microtask; the invoke reply is a macrotask). Buffer them and replay once
+  // the run id is known instead of dropping them.
+  const earlyEventsRef = useRef<AgentEventMsg[]>([])
+
+  function handleAgentEvent(e: AgentEventMsg): void {
+    switch (e.type) {
+      case 'text-delta':
+        setAnswer((a) => a + (e.delta ?? ''))
+        break
+      case 'tool-call':
+        setToolCalls((prev) => {
+          if (prev.some((t) => t.toolCallId === e.toolCallId)) return prev
+          return [...prev, { toolCallId: e.toolCallId ?? '', toolName: e.toolName ?? 'unknown', input: e.input ?? null, status: 'running' }]
+        })
+        break
+      case 'tool-result':
+        setToolCalls((prev) =>
+          prev.map((t) => (t.toolCallId === e.toolCallId ? { ...t, status: 'done', output: e.output } : t))
+        )
+        break
+      case 'approval-requested':
+        setApprovals((prev) => {
+          if (prev.some((a) => a.approvalId === e.approvalId)) return prev
+          return [...prev, { approvalId: e.approvalId ?? '', toolCallId: e.toolCallId ?? '', toolName: e.toolName ?? 'unknown', input: e.input ?? null, reason: e.reason }]
+        })
+        setToolCalls((prev) =>
+          prev.map((t) => (t.toolCallId === e.toolCallId ? { ...t, status: 'needs-approval' } : t))
+        )
+        break
+      case 'done':
+        setRunning(false)
+        setAnswer(e.text ?? '')
+        setRunSteps(e.steps ?? null)
+        void refreshBudget()
+        break
+      case 'error':
+        setRunning(false)
+        setRunError(e.message ?? 'Agent run failed.')
+        void refreshBudget()
+        break
+      case 'aborted':
+        setRunning(false)
+        setNotice('Run cancelled.')
+        break
+      default:
+        break
+    }
+  }
+
+  function adoptRunId(id: string): void {
+    runIdRef.current = id
+    setRunId(id)
+    const buffered = earlyEventsRef.current.filter((ev) => ev.runId === id)
+    earlyEventsRef.current = earlyEventsRef.current.filter((ev) => ev.runId !== id)
+    for (const ev of buffered) handleAgentEvent(ev)
+  }
+
+  // Settings state
+  const [modelState, setModelState] = useState<ModelState | null>(null)
+  const [provider, setProvider] = useState('anthropic')
+  const [model, setModel] = useState('')
+  const [baseUrl, setBaseUrl] = useState('')
+  const [resetDay, setResetDay] = useState('1')
+  const [apiKey, setApiKey] = useState('')
+  const [settingsMsg, setSettingsMsg] = useState<string | null>(null)
+  const [budget, setBudget] = useState<BudgetState | null>(null)
 
   const mention = useMemo(() => activeMention(value, caret), [value, caret])
   const candidates = useMemo(
@@ -45,14 +250,72 @@ export default function PaletteApp(): React.JSX.Element {
   )
   const tools = useMemo(() => parseMentionedTools(value), [value])
 
+  async function refreshSettings(): Promise<void> {
+    try {
+      const s = (await window.palette.getModelSettings()) as ModelState
+      setModelState(s)
+      setProvider(s.provider)
+      setModel(s.model)
+      setBaseUrl(s.baseUrl ?? '')
+      setResetDay(String(s.resetDay ?? 1))
+    } catch {
+      /* settings unavailable in this context */
+    }
+  }
+
+  async function refreshBudget(): Promise<void> {
+    try {
+      setBudget((await window.palette.getBudget()) as BudgetState)
+    } catch {
+      /* ignore */
+    }
+  }
+
+  // Auto-resize: report content height so main can setContentSize (clamped).
+  useEffect(() => {
+    const el = rootRef.current
+    if (!el) return
+    let raf = 0
+    const report = (): void => {
+      cancelAnimationFrame(raf)
+      raf = requestAnimationFrame(() => {
+        const h = Math.ceil(el.getBoundingClientRect().height) + 2
+        if (Math.abs(h - lastHeightRef.current) >= 1) {
+          lastHeightRef.current = h
+          void window.palette.resize(h)
+        }
+      })
+    }
+    report()
+    const ro = new ResizeObserver(report)
+    ro.observe(el)
+    return () => {
+      cancelAnimationFrame(raf)
+      ro.disconnect()
+    }
+  }, [])
+
   useEffect(() => {
     const offOpened = window.palette.onOpened(() => {
-      setResult(null)
+      setNotice(null)
       setShowSettings(false)
       inputRef.current?.focus()
     })
-    const offSettings = window.palette.onOpenSettings(() => setShowSettings(true))
+    const offSettings = window.palette.onOpenSettings(() => {
+      setShowSettings(true)
+      void refreshSettings()
+    })
     const offErr = window.palette.onHotkeyError((msg) => setHotkeyMsg(msg))
+    const offAgent = window.palette.onAgentEvent((raw) => {
+      const e = raw as AgentEventMsg
+      if (!e || !e.runId) return
+      if (e.runId !== runIdRef.current) {
+        // Unknown (usually early) run: buffer briefly, replay on adoptRunId.
+        if (earlyEventsRef.current.length < 200) earlyEventsRef.current.push(e)
+        return
+      }
+      handleAgentEvent(e)
+    })
     void window.palette.getHotkey().then((h) => {
       setHotkey(h.hotkey)
       if (h.error) setHotkeyMsg(h.error)
@@ -63,10 +326,15 @@ export default function PaletteApp(): React.JSX.Element {
           `Wayland session (${p.sessionType}): global hotkeys are unreliable. Bind a system shortcut to palette --toggle if the hotkey fails.`
         )
     })
+    void refreshSettings()
+    void refreshBudget()
+    const timer = setInterval(() => void refreshBudget(), 30_000)
     return () => {
       offOpened()
       offSettings()
       offErr()
+      offAgent()
+      clearInterval(timer)
     }
   }, [])
 
@@ -87,16 +355,67 @@ export default function PaletteApp(): React.JSX.Element {
 
   async function submit(): Promise<void> {
     const text = value.trim()
-    if (!text) return
+    if (!text || running) return
+    setNotice(null)
+    setRunError(null)
+    setAnswer('')
+    setToolCalls([])
+    setApprovals([])
+    setRunSteps(null)
+    setRunId(null)
     const res = (await window.palette.submit({
       text,
       tools: parseMentionedTools(text)
     })) as SubmitResponse
-    let message: string
-    if (!res.ok) message = res.error ?? 'Something went wrong.'
-    else if (res.action === 'calendar') message = 'Opening calendar with your draft…'
-    else message = res.message ?? ''
-    setResult(message)
+    if (!res.ok) {
+      setNotice(res.error ?? 'Something went wrong.')
+      return
+    }
+    if (res.action === 'calendar') {
+      setNotice('Opening calendar with your draft…')
+      return
+    }
+    if (res.action === 'agent' && res.runId) {
+      // Order matters: mark running first, then replay any events that
+      // arrived before the invoke resolved (a fast error/done must win).
+      setRunning(true)
+      adoptRunId(res.runId)
+      return
+    }
+    setNotice('Something went wrong.')
+  }
+
+  async function cancelRun(): Promise<void> {
+    if (runId) {
+      try {
+        await window.palette.agentCancel(runId)
+      } catch {
+        /* run already finished */
+      }
+    } else {
+      window.palette.hide()
+    }
+  }
+
+  async function decide(approvalId: string, approved: boolean): Promise<void> {
+    if (!runId) return
+    setApprovals((prev) => prev.filter((a) => a.approvalId !== approvalId))
+    await window.palette.agentApproval({ runId, approvalId, approved, reason: approved ? 'Approved in palette.' : 'Denied in palette.' })
+    if (!approved) {
+      setToolCalls((prev) =>
+        prev.map((t) => (t.status === 'needs-approval' ? { ...t, status: 'denied' } : t))
+      )
+    }
+  }
+
+  async function copyResult(): Promise<void> {
+    if (!answer) return
+    try {
+      await navigator.clipboard.writeText(answer)
+      setNotice('Copied to clipboard.')
+    } catch {
+      setNotice('Copy failed — select the text manually.')
+    }
   }
 
   async function saveHotkey(): Promise<void> {
@@ -108,7 +427,43 @@ export default function PaletteApp(): React.JSX.Element {
     setHotkeyMsg(res.ok ? 'Hotkey registered.' : (res.error ?? 'Registration failed.'))
   }
 
+  async function saveModelSettings(): Promise<void> {
+    setSettingsMsg(null)
+    const rd = Math.min(28, Math.max(1, parseInt(resetDay, 10) || 1))
+    const res = (await window.palette.setModelSettings({
+      provider,
+      model: model.trim(),
+      baseUrl: baseUrl.trim() || undefined,
+      resetDay: rd
+    })) as { ok: boolean; error?: string }
+    if (!res.ok) {
+      setSettingsMsg(res.error ?? 'Save failed.')
+      return
+    }
+    if (apiKey.trim()) {
+      const kr = (await window.palette.setApiKey(apiKey.trim())) as { ok: boolean; error?: string }
+      if (!kr.ok) {
+        setSettingsMsg(kr.error ?? 'Key save failed.')
+        return
+      }
+      setApiKey('')
+    }
+    setSettingsMsg('Saved.')
+    await refreshSettings()
+  }
+
+  async function clearKey(): Promise<void> {
+    await window.palette.clearApiKey()
+    setSettingsMsg('API key removed.')
+    await refreshSettings()
+  }
+
   function onKeyDown(e: React.KeyboardEvent<HTMLInputElement>): void {
+    if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) {
+      e.preventDefault()
+      void copyResult()
+      return
+    }
     if (candidates.length > 0 && mention) {
       if (e.key === 'ArrowDown' || e.key === 'Tab') {
         e.preventDefault()
@@ -123,7 +478,7 @@ export default function PaletteApp(): React.JSX.Element {
           return
         }
       }
-      if (e.key === 'Enter' && candidates.length > 0 && mention.typed.length > 0) {
+      if (e.key === 'Enter' && candidates.length > 0 && mention.typed.length > 0 && !e.metaKey && !e.ctrlKey) {
         const exact = candidates.find((c) => c === `@${mention.typed.toLowerCase()}`)
         if (!exact) {
           e.preventDefault()
@@ -139,13 +494,21 @@ export default function PaletteApp(): React.JSX.Element {
       return
     }
     if (e.key === 'Escape') {
+      if (running) {
+        e.preventDefault()
+        void cancelRun()
+        return
+      }
       window.palette.hide()
       return
     }
   }
 
+  const budgetLabel = budget ? `Composio: ${budget.used} / ${budget.budget}` : 'Composio: …'
+  const budgetWarn = budget?.warning === 'exceeded' || budget?.warning === 'warn90'
+
   return (
-    <div className="mx-auto w-[720px] overflow-hidden rounded-xl border border-neutral-700 bg-neutral-900/95 shadow-2xl backdrop-blur">
+    <div ref={rootRef} className="mx-auto w-[720px] overflow-hidden rounded-xl border border-neutral-700 bg-neutral-900/95 shadow-2xl backdrop-blur">
       <div className="flex items-center gap-2 px-4 pt-3">
         <span className="text-neutral-400">›</span>
         <input
@@ -161,8 +524,20 @@ export default function PaletteApp(): React.JSX.Element {
           placeholder="Type @ for tools…  (@calendar opens a task draft)"
           className="w-full bg-transparent text-[15px] text-neutral-100 outline-none placeholder:text-neutral-500"
         />
+        {running && (
+          <button
+            onClick={() => void cancelRun()}
+            className="rounded bg-red-700 px-2 py-0.5 text-xs text-white"
+            title="Cancel run (Esc)"
+          >
+            Stop
+          </button>
+        )}
         <button
-          onClick={() => setShowSettings((s) => !s)}
+          onClick={() => {
+            setShowSettings((s) => !s)
+            void refreshSettings()
+          }}
           className="rounded px-1 text-neutral-500 hover:text-neutral-200"
           title="Settings"
         >
@@ -211,15 +586,79 @@ export default function PaletteApp(): React.JSX.Element {
         </ul>
       )}
 
-      {result && (
-        <div className="border-t border-neutral-800 px-4 py-3 text-sm text-neutral-200">
-          {result}
+      {notice && (
+        <div className="border-t border-neutral-800 px-4 py-2 text-sm text-neutral-300">
+          {notice}
+        </div>
+      )}
+
+      {(running || answer || toolCalls.length > 0 || runError || approvals.length > 0) && (
+        <div className="max-h-80 overflow-y-auto border-t border-neutral-800 px-4 py-3 text-sm text-neutral-200">
+          {toolCalls.length > 0 && (
+            <div className="flex flex-wrap gap-1 pb-2">
+              {toolCalls.map((t) => (
+                <span
+                  key={t.toolCallId}
+                  title={shortJson(t.input)}
+                  className={`rounded px-1.5 py-0.5 font-mono text-xs ${
+                    t.status === 'running'
+                      ? 'bg-amber-600/30 text-amber-200'
+                      : t.status === 'needs-approval'
+                        ? 'bg-orange-600/40 text-orange-100'
+                        : t.status === 'denied'
+                          ? 'bg-red-800/50 text-red-200'
+                          : 'bg-emerald-700/30 text-emerald-200'
+                  }`}
+                >
+                  {t.toolName} · {t.status === 'running' ? 'running' : t.status === 'done' ? 'done' : t.status === 'needs-approval' ? 'needs approval' : 'denied'}
+                </span>
+              ))}
+            </div>
+          )}
+
+          {approvals.map((a) => (
+            <div key={a.approvalId} className="mb-2 rounded border border-orange-500/60 bg-orange-950/40 p-2">
+              <div className="font-medium text-orange-100">
+                Approval needed: <span className="font-mono">{a.toolName}</span>
+              </div>
+              {a.reason && <div className="text-xs text-orange-200/80">{a.reason}</div>}
+              <pre className="mt-1 max-h-32 overflow-y-auto whitespace-pre-wrap break-words rounded bg-black/40 p-2 font-mono text-xs text-neutral-200">
+                {shortJson(a.input, 2000)}
+              </pre>
+              <div className="flex gap-2 pt-2">
+                <button
+                  onClick={() => void decide(a.approvalId, true)}
+                  className="rounded bg-emerald-600 px-3 py-1 text-xs font-medium text-white"
+                >
+                  Approve
+                </button>
+                <button
+                  onClick={() => void decide(a.approvalId, false)}
+                  className="rounded bg-red-700 px-3 py-1 text-xs font-medium text-white"
+                >
+                  Deny
+                </button>
+              </div>
+            </div>
+          ))}
+
+          {runError && <div className="text-sm text-red-300">{runError}</div>}
+
+          {answer && <Markdown text={answer} />}
+          {running && !answer && (
+            <div className="text-sm text-neutral-400">Thinking…</div>
+          )}
+          {runSteps !== null && !running && (
+            <div className="pt-2 text-[11px] text-neutral-500">
+              done in {runSteps} step{runSteps === 1 ? '' : 's'} · ⌘/Ctrl+Enter copies the answer
+            </div>
+          )}
         </div>
       )}
 
       {showSettings && (
-        <div className="border-t border-neutral-800 px-4 py-3 text-sm text-neutral-200">
-          <div className="font-medium">Settings (M1: hotkey only)</div>
+        <div className="max-h-80 overflow-y-auto border-t border-neutral-800 px-4 py-3 text-sm text-neutral-200">
+          <div className="font-medium">Settings</div>
           {platformHint && <div className="pt-1 text-xs text-amber-300">{platformHint}</div>}
           <div className="flex items-center gap-2 pt-2">
             <label className="text-xs text-neutral-400">Global hotkey</label>
@@ -238,15 +677,104 @@ export default function PaletteApp(): React.JSX.Element {
           {hotkeyMsg && (
             <div className="whitespace-pre-wrap pt-2 text-xs text-amber-200">{hotkeyMsg}</div>
           )}
-          <div className="pt-1 text-xs text-neutral-500">
-            Providers, connections, granted folders and the Composio budget meter land in M2–M3.
+
+          <div className="pt-3 font-medium">Model</div>
+          <div className="grid grid-cols-2 gap-2 pt-1">
+            <label className="text-xs text-neutral-400">
+              Provider
+              <select
+                value={provider}
+                onChange={(e) => setProvider(e.target.value)}
+                className="mt-0.5 w-full rounded border border-neutral-700 bg-neutral-800 px-2 py-1 text-xs text-neutral-100"
+              >
+                <option value="anthropic">anthropic</option>
+                <option value="openai">openai</option>
+                <option value="openai-compatible">openai-compatible (custom base URL)</option>
+              </select>
+            </label>
+            <label className="text-xs text-neutral-400">
+              Model
+              <input
+                value={model}
+                onChange={(e) => setModel(e.target.value)}
+                placeholder="claude-sonnet-4-5"
+                className="mt-0.5 w-full rounded border border-neutral-700 bg-neutral-800 px-2 py-1 font-mono text-xs text-neutral-100"
+              />
+            </label>
+          </div>
+          {provider === 'openai-compatible' && (
+            <label className="block pt-2 text-xs text-neutral-400">
+              Base URL
+              <input
+                value={baseUrl}
+                onChange={(e) => setBaseUrl(e.target.value)}
+                placeholder="http://localhost:11434/v1"
+                className="mt-0.5 w-full rounded border border-neutral-700 bg-neutral-800 px-2 py-1 font-mono text-xs text-neutral-100"
+              />
+            </label>
+          )}
+          <div className="flex flex-wrap items-end gap-2 pt-2">
+            <label className="text-xs text-neutral-400">
+              API key {modelState?.keySet ? '(set ✓)' : '(not set)'}
+              <input
+                type="password"
+                value={apiKey}
+                onChange={(e) => setApiKey(e.target.value)}
+                placeholder={modelState?.keySet ? '•••••• (enter to replace)' : 'sk-…'}
+                className="mt-0.5 w-64 rounded border border-neutral-700 bg-neutral-800 px-2 py-1 font-mono text-xs text-neutral-100"
+              />
+            </label>
+            <label className="text-xs text-neutral-400">
+              Budget reset day
+              <input
+                value={resetDay}
+                onChange={(e) => setResetDay(e.target.value)}
+                inputMode="numeric"
+                className="mt-0.5 w-16 rounded border border-neutral-700 bg-neutral-800 px-2 py-1 font-mono text-xs text-neutral-100"
+              />
+            </label>
+            <button
+              onClick={() => void saveModelSettings()}
+              className="rounded bg-indigo-600 px-2 py-1 text-xs text-white"
+            >
+              Save model
+            </button>
+            {modelState?.keySet && (
+              <button
+                onClick={() => void clearKey()}
+                className="rounded border border-neutral-600 px-2 py-1 text-xs text-neutral-300"
+              >
+                Remove key
+              </button>
+            )}
+          </div>
+          {settingsMsg && <div className="pt-1 text-xs text-amber-200">{settingsMsg}</div>}
+          <div className="pt-1 text-[11px] text-neutral-500">
+            Keys are encrypted with the OS keychain (safeStorage) and never leave the main process.
+            {modelState && !modelState.encryptionAvailable && ' Warning: OS encryption unavailable on this machine.'}
+          </div>
+
+          <div className="pt-3 font-medium">Composio budget</div>
+          <div className="pt-1 text-xs text-neutral-300">
+            {budget ? (
+              <>
+                Used {budget.used} / {budget.budget} this period ({budget.periodKey}); scheduled share{' '}
+                {budget.scheduledUsed} / {budget.scheduledBudget}.{' '}
+                {budget.warning !== 'none' && (
+                  <span className="text-amber-300">Warning: {budget.warning}.</span>
+                )}{' '}
+                Source of truth: the Composio dashboard usage page.
+              </>
+            ) : (
+              'Loading…'
+            )}
           </div>
         </div>
       )}
 
       <div className="flex items-center justify-between border-t border-neutral-800 px-4 py-1.5 text-[11px] text-neutral-500">
-        <span>Enter run · Esc hide · @ tools: {TOOL_IDS.map((t) => `@${t}`).join(' ')}</span>
-        <span>Composio budget meter lands in M3</span>
+        <span>Enter run · Esc {running ? 'cancel' : 'hide'} · @ tools: {TOOL_IDS.map((t) => `@${t}`).join(' ')}</span>
+        <span className={budgetWarn ? 'text-amber-300' : undefined}>{budgetLabel}</span>
       </div>
     </div>
   )

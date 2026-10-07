@@ -1,9 +1,9 @@
 import { app, BrowserWindow, screen } from 'electron'
 import { existsSync } from 'node:fs'
 import { join } from 'path'
+import { clampPaletteHeight, PALETTE_MAX_HEIGHT, PALETTE_MIN_HEIGHT, PALETTE_WIDTH } from '../shared/agent.js'
 
-export const PALETTE_WIDTH = 720
-export const PALETTE_MIN_HEIGHT = 120
+export { PALETTE_WIDTH, PALETTE_MIN_HEIGHT, PALETTE_MAX_HEIGHT }
 
 /**
  * Preload must be CJS for the sandboxed renderer loader.
@@ -49,6 +49,11 @@ export function createPaletteWindow(): BrowserWindow {
     maximizable: false,
     fullscreenable: false,
     hiddenInMissionControl: true,
+    // Explicit min/max so Linux/Hyprland compositors honor the dynamic height.
+    minWidth: PALETTE_WIDTH,
+    maxWidth: PALETTE_WIDTH,
+    minHeight: PALETTE_MIN_HEIGHT,
+    maxHeight: PALETTE_MAX_HEIGHT,
     webPreferences: {
       preload: preloadPath(),
       contextIsolation: true,
@@ -123,4 +128,19 @@ export function togglePalette(): void {
   if (!win || win.isDestroyed()) return
   if (win.isVisible()) hidePalette(true)
   else showPalette()
+}
+
+/**
+ * Grow/shrink the palette to fit content. Called from the renderer's
+ * ResizeObserver over a zod-validated IPC channel. Height is clamped to
+ * [MIN, MAX] so a long result list can never cover the screen.
+ */
+export function resizePaletteToContent(requestedHeight: number): number {
+  if (!win || win.isDestroyed()) return PALETTE_MIN_HEIGHT
+  const height = clampPaletteHeight(requestedHeight)
+  const [w] = win.getContentSize()
+  if (w !== PALETTE_WIDTH || win.getContentBounds().height !== height) {
+    win.setContentSize(PALETTE_WIDTH, height)
+  }
+  return height
 }

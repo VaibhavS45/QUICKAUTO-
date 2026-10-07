@@ -7,17 +7,17 @@
   "license": "MIT",
   "main": "out/main/index.js",
   "scripts": {
+    "postinstall": "node node_modules/electron/install.js",
     "dev": "node scripts/build-preload.mjs && electron-vite dev",
     "build": "electron-vite build && node scripts/build-preload.mjs",
     "typecheck": "tsc --noEmit -p tsconfig.json",
     "lint": "eslint .",
-    "start": "electron-vite preview",
+    "start": "npm run build && electron .",
     "dist": "npm run build && electron-builder",
     "test": "vitest run",
     "test:e2e": "playwright test"
   },
   "dependencies": {
-    "croner": "^9.0.0",
     "electron-store": "^11.0.0",
     "zod": "^4.1.0"
   },
@@ -28,13 +28,11 @@
     "@types/react": "^19.0.0",
     "@types/react-dom": "^19.0.0",
     "@vitejs/plugin-react": "^4.3.0",
-    "autoprefixer": "^10.4.0",
     "electron": "^44.5.0",
     "electron-builder": "^26.0.12",
     "electron-vite": "^5.0.0",
     "esbuild": "^0.28.2",
     "eslint": "^9.0.0",
-    "postcss": "^8.4.0",
     "prettier": "^3.3.0",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",

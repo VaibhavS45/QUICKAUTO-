@@ -1,4 +1,4 @@
-import { BrowserWindow } from 'electron'
+import { app, BrowserWindow } from 'electron'
 import { join } from 'path'
 import { preloadPath } from './palette-window.js'
 
@@ -11,6 +11,8 @@ export function getCalendarWindow(): BrowserWindow | null {
 
 /** @calendar never runs an agent — it opens this window with a task draft. */
 export function openCalendar(draft?: string): void {
+  // ponytail: single place all callers route through — Dock + focus here, not per caller.
+  if (process.platform === 'darwin' && app.dock) app.dock.show()
   if (typeof draft === 'string' && draft.length > 0) pendingDraft = draft
   if (win && !win.isDestroyed()) {
     if (pendingDraft) {
@@ -22,17 +24,36 @@ export function openCalendar(draft?: string): void {
     return
   }
   win = new BrowserWindow({
-    width: 1100,
-    height: 750,
-    minWidth: 800,
-    minHeight: 550,
+    title: 'CalTen — Automations',
+    width: 1280,
+    height: 800,
+    minWidth: 900,
+    minHeight: 600,
     show: false,
+    // macOS: hidden title bar like the reference shot (traffic lights float over content).
+    // Elsewhere: native frame so minimize/maximize/close + title always exist.
+    frame: process.platform !== 'darwin',
+    titleBarStyle: process.platform === 'darwin' ? 'hidden' : 'default',
+    trafficLightPosition: process.platform === 'darwin' ? { x: 12, y: 12 } : undefined,
+    resizable: true,
+    movable: true,
+    minimizable: true,
+    maximizable: true,
+    fullscreenable: true,
+    backgroundColor: '#000000',
     webPreferences: {
       preload: preloadPath(),
       contextIsolation: true,
       nodeIntegration: false,
       sandbox: true
     }
+  })
+
+  win.webContents.on('did-fail-load', (_event, errorCode, errorDescription, validatedURL) => {
+    console.error(`Calendar renderer failed to load (${errorCode}): ${errorDescription} - ${validatedURL}`)
+  })
+  win.webContents.on('console-message', (_event, level, message, line, sourceId) => {
+    console.error(`Calendar renderer console [${level}] ${sourceId}:${line}: ${message}`)
   })
 
   const load = (): void => {
@@ -58,10 +79,4 @@ export function openCalendar(draft?: string): void {
   win.on('closed', () => {
     win = null
   })
-}
-
-export function takePendingDraft(): string | null {
-  const d = pendingDraft
-  pendingDraft = null
-  return d
 }

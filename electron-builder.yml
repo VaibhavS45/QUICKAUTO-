@@ -1,5 +1,5 @@
-appId: com.palette.app
-productName: Palette
+appId: com.calten.app
+productName: CalTen
 directories:
   output: dist
 files:

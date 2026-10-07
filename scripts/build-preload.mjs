@@ -4,12 +4,15 @@
 import { buildSync } from 'esbuild'
 import { fileURLToPath } from 'node:url'
 import { dirname, resolve } from 'node:path'
+import { mkdirSync } from 'node:fs'
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..')
+const output = resolve(root, 'preload/index.cjs')
+mkdirSync(dirname(output), { recursive: true })
 
 buildSync({
   entryPoints: [resolve(root, 'src/preload/index.ts')],
-  outfile: resolve(root, 'out/preload/index.cjs'),
+  outfile: output,
   bundle: true,
   format: 'cjs',
   platform: 'node',

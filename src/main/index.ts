@@ -90,11 +90,15 @@ function applyAutostart(): void {
 }
 
 function createTray(): void {
-  const icon = nativeImage.createEmpty()
+  // ponytail: 1px placeholder icon, real tray artwork lands in M6.
+  const icon =
+    nativeImage.createFromDataURL(
+      'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAA4AAAAOCAYAAAAfSC3RAAAAFElEQVR42mP8z8AARQMTEwMTAwMAJBYAAWzRRf4AAAAASUVORK5CYII='
+    ) || nativeImage.createEmpty()
   tray = new Tray(icon)
-  tray.setToolTip('Palette')
+  tray.setToolTip('CalTen')
   const menu = Menu.buildFromTemplate([
-    { label: 'Open palette', click: () => showPalette() },
+    { label: 'Toggle palette', click: () => togglePalette() },
     { label: 'Open calendar', click: () => openCalendar() },
     {
       label: 'Settings',
@@ -153,6 +157,15 @@ function wireIpc(): void {
 
   ipcMain.on(IpcChannels.paletteHide, () => hidePalette(true))
 
+  ipcMain.on(IpcChannels.calendarMinimize, () => getCalendarWindow()?.minimize())
+  ipcMain.on(IpcChannels.calendarMaximize, () => {
+    const w = getCalendarWindow()
+    if (!w) return
+    if (w.isMaximized()) w.unmaximize()
+    else w.maximize()
+  })
+  ipcMain.on(IpcChannels.calendarClose, () => getCalendarWindow()?.close())
+
   ipcMain.handle(IpcChannels.paletteSubmit, (_event, payload: unknown) => {
     const parsed = PaletteSubmitSchema.safeParse(payload)
     if (!parsed.success) return { ok: false as const, error: 'Invalid request.' }
@@ -191,6 +204,8 @@ function wireIpc(): void {
 }
 
 async function onReady(): Promise<void> {
+  app.setName('CalTen')
+
   // CLI flag through the single-instance lock.
   if (wantsToggle(process.argv)) {
     // First instance started with --toggle: start hidden (tray only).
@@ -212,11 +227,21 @@ async function onReady(): Promise<void> {
     }).show()
   }
 
-  // macOS: hide the Dock icon while only the palette is open.
-  if (process.platform === 'darwin' && app.dock) app.dock.hide()
+  // macOS: hide the Dock icon while only the palette is open (keep it in dev so the app is findable).
+  // ponytail: calendar is the main window now — dock stays visible whenever it is open.
+  if (process.platform === 'darwin' && app.dock && !process.env['ELECTRON_RENDERER_URL'] && !getCalendarWindow())
+    app.dock.hide()
+
+  // Calendar-first: CalTen opens on every launch (unless --toggle tray-only).
+  if (!wantsToggle(process.argv)) {
+    openCalendar()
+  }
 
   app.on('activate', () => {
+    // ponytail: Dock click must show something — recreate only if gone, then show.
     if (BrowserWindow.getAllWindows().length === 0) createPaletteWindow()
+    // ponytail: calendar-first; palette only via hotkey/tray.
+    openCalendar()
   })
 }
 

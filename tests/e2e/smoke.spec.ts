@@ -4,7 +4,10 @@ import { join, dirname } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..', '..')
-const executablePath = join(root, 'node_modules/electron/dist/electron')
+const executablePath =
+  process.platform === 'darwin'
+    ? join(root, 'node_modules/electron/dist/Electron.app/Contents/MacOS/Electron')
+    : join(root, 'node_modules/electron/dist/electron')
 const mainEntry = join(root, 'out/main/index.js')
 
 /** Orphaned helpers from an interrupted run hold the single-instance lock. */
@@ -25,7 +28,7 @@ function secondInstanceToggle(): void {
   child.unref()
 }
 
-test('M1 smoke: toggle via CLI, @ autocomplete, submit, @calendar draft', async () => {
+test('CalTen smoke: calendar first, palette toggle, @calendar draft', async () => {
   killStaleTestInstances()
   const app = await electron.launch({
     executablePath,
@@ -33,15 +36,24 @@ test('M1 smoke: toggle via CLI, @ autocomplete, submit, @calendar draft', async 
     env: { ...process.env, NODE_ENV: 'test' }
   })
   try {
-    const palette = await app.firstWindow()
-
-    // Palette starts hidden; second-instance --toggle shows it (also covers the
-    // Wayland fallback path, where the global hotkey may not exist).
     const visibleWindows = (): Promise<number> =>
       app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows().filter((w) => w.isVisible()).length)
-    await expect.poll(visibleWindows).toBe(0)
+
+    // Calendar-first: CalTen opens visible, palette stays hidden.
+    await expect.poll(() => app.windows().length, { timeout: 30_000 }).toBe(2)
+    await expect.poll(visibleWindows, { timeout: 30_000 }).toBe(1)
+    await expect.poll(() => app.windows().some((page) => page.url().includes('#calendar')), { timeout: 30_000 }).toBe(true)
+
+    const pages = app.windows()
+    const calendar = pages.find((p) => p.url().includes('#calendar')) ?? pages[0]!
+    const palette = pages.find((p) => p !== calendar) ?? pages[0]!
+    await calendar.waitForLoadState('domcontentloaded')
+    await expect(calendar.getByText('CalTen').first()).toBeVisible()
+    await expect(calendar.getByRole('button', { name: 'Today', exact: true })).toBeVisible()
+
+    // --toggle shows the hidden palette (covers the Wayland fallback path too).
     secondInstanceToggle()
-    await expect.poll(visibleWindows, { timeout: 30_000 }).toBeGreaterThan(0)
+    await expect.poll(visibleWindows, { timeout: 30_000 }).toBe(2)
 
     const input = palette.getByPlaceholder(/Type @ for tools/)
     await input.click()
@@ -57,17 +69,9 @@ test('M1 smoke: toggle via CLI, @ autocomplete, submit, @calendar draft', async 
     await input.press('Enter')
     await expect(palette.getByText(/would have used: @websearch, @gmail/)).toBeVisible()
 
-    // Up arrow recalls history.
-    await input.fill('')
-    await input.press('ArrowUp')
-    await expect(input).toHaveValue('@websearch hello @gmail world')
-
-    // @calendar opens the calendar window with the trailing text as a draft.
-    const calendarOpened = app.waitForEvent('window')
+    // @calendar sends the trailing text as a draft to the open calendar window.
     await input.fill('@calendar buy milk Friday 9am')
     await input.press('Enter')
-    const calendar = await calendarOpened
-    await calendar.waitForLoadState('domcontentloaded')
     await expect(calendar.getByText('buy milk Friday 9am')).toBeVisible()
   } finally {
     await app.close()

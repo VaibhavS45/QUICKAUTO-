@@ -36,7 +36,10 @@ const api = {
   calendarWindowEvent: (kind: 'opened' | 'closed') => {
     if (kind === 'opened') ipcRenderer.send('calendar:opened-with-window')
     else ipcRenderer.send('calendar:closed-to-tray')
-  }
+  },
+  calendarMinimize: () => ipcRenderer.send('calendar:minimize'),
+  calendarMaximize: () => ipcRenderer.send('calendar:toggle-maximize'),
+  calendarClose: () => ipcRenderer.send('calendar:close')
 }
 
 export type PaletteApi = typeof api

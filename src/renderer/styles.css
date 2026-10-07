@@ -1,4 +1,5 @@
 @import 'tailwindcss';
+@source inline("flex grid h-screen bg-black text-neutral-200");
 
 html,
 body {
@@ -7,3 +8,106 @@ body {
   font-family:
     -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
 }
+
+.window-titlebar {
+  -webkit-app-region: drag;
+  user-select: none;
+}
+
+.window-titlebar button,
+.window-titlebar input,
+.window-titlebar textarea,
+.window-titlebar select,
+.window-titlebar [role='button'] {
+  -webkit-app-region: no-drag;
+}
+
+/* Renderer layout primitives. Keep these local so Electron does not depend on
+   Tailwind's content scanner to paint the calendar shell. */
+[class~='flex'] { display: flex; }
+[class~='grid'] { display: grid; }
+[class~='flex-col'] { flex-direction: column; }
+[class~='items-center'] { align-items: center; }
+[class~='items-start'] { align-items: flex-start; }
+[class~='justify-center'] { justify-content: center; }
+[class~='justify-between'] { justify-content: space-between; }
+[class~='flex-1'] { flex: 1 1 0%; }
+[class~='min-h-0'] { min-height: 0; }
+[class~='h-screen'] { height: 100vh; }
+[class~='w-full'] { width: 100%; }
+[class~='shrink-0'] { flex-shrink: 0; }
+[class~='relative'] { position: relative; }
+[class~='absolute'] { position: absolute; }
+[class~='inset-x-0'] { left: 0; right: 0; }
+[class~='inset-x-1'] { left: 0.25rem; right: 0.25rem; }
+[class~='z-10'] { z-index: 10; }
+[class~='overflow-y-auto'] { overflow-y: auto; }
+[class~='overflow-hidden'] { overflow: hidden; }
+[class~='text-center'] { text-align: center; }
+[class~='text-left'] { text-align: left; }
+[class~='select-none'] { user-select: none; }
+[class~='cursor-grab'] { cursor: grab; }
+[class~='pointer-events-none'] { pointer-events: none; }
+
+[class~='grid-cols-7'] { grid-template-columns: repeat(7, minmax(0, 1fr)); }
+[class~='grid-cols-[64px_repeat(7,1fr)]'] { grid-template-columns: 64px repeat(7, minmax(0, 1fr)); }
+[class~='w-[280px]'] { width: 280px; }
+[class~='h-6'] { height: 1.5rem; }
+[class~='h-8'] { height: 2rem; }
+[class~='h-2'] { height: 0.5rem; }
+[class~='h-px'] { height: 1px; }
+[class~='w-11'] { width: 2.75rem; }
+[class~='w-8'] { width: 2rem; }
+[class~='w-7'] { width: 1.75rem; }
+[class~='w-2'] { width: 0.5rem; }
+[class~='w-2.5'] { width: 0.625rem; }
+
+[class~='px-4'] { padding-left: 1rem; padding-right: 1rem; }
+[class~='px-3'] { padding-left: 0.75rem; padding-right: 0.75rem; }
+[class~='px-2'] { padding-left: 0.5rem; padding-right: 0.5rem; }
+[class~='px-2.5'] { padding-left: 0.625rem; padding-right: 0.625rem; }
+[class~='py-3'] { padding-top: 0.75rem; padding-bottom: 0.75rem; }
+[class~='py-2'] { padding-top: 0.5rem; padding-bottom: 0.5rem; }
+[class~='py-1.5'] { padding-top: 0.375rem; padding-bottom: 0.375rem; }
+[class~='py-1'] { padding-top: 0.25rem; padding-bottom: 0.25rem; }
+[class~='pt-3'] { padding-top: 0.75rem; }
+[class~='pt-2'] { padding-top: 0.5rem; }
+[class~='gap-3'] { gap: 0.75rem; }
+[class~='gap-2'] { gap: 0.5rem; }
+[class~='gap-1'] { gap: 0.25rem; }
+[class~='mt-4'] { margin-top: 1rem; }
+[class~='mt-2'] { margin-top: 0.5rem; }
+[class~='mt-1'] { margin-top: 0.25rem; }
+[class~='mx-auto'] { margin-left: auto; margin-right: auto; }
+
+[class~='bg-black'] { background-color: #050608; }
+[class~='bg-neutral-950'] { background-color: #090a0c; }
+[class~='bg-neutral-900'] { background-color: #111316; }
+[class~='bg-blue-500'] { background-color: #3b82f6; }
+[class~='text-white'] { color: #f5f7fa; }
+[class~='text-neutral-200'] { color: #d7dbe2; }
+[class~='text-neutral-300'] { color: #b8bec9; }
+[class~='text-neutral-400'] { color: #9299a6; }
+[class~='text-neutral-500'] { color: #6f7785; }
+[class~='text-neutral-600'] { color: #555d6b; }
+[class~='text-blue-400'] { color: #60a5fa; }
+[class~='font-medium'] { font-weight: 500; }
+[class~='font-semibold'] { font-weight: 600; }
+[class~='text-sm'] { font-size: 0.875rem; line-height: 1.25rem; }
+[class~='text-[13px]'] { font-size: 13px; }
+[class~='text-[11px]'] { font-size: 11px; }
+[class~='text-[10px]'] { font-size: 10px; }
+[class~='text-[15px]'] { font-size: 15px; }
+[class~='text-[17px]'] { font-size: 17px; }
+[class~='border-neutral-900'] { border-color: #20242b; }
+[class~='border-neutral-800'] { border-color: #2a303a; }
+[class~='border-y'] { border-top-width: 1px; border-bottom-width: 1px; border-style: solid; }
+[class~='border-r'] { border-right-width: 1px; border-style: solid; }
+[class~='border-b'] { border-bottom-width: 1px; border-style: solid; }
+[class~='border'] { border-width: 1px; border-style: solid; }
+[class~='rounded-lg'] { border-radius: 0.5rem; }
+[class~='rounded-full'] { border-radius: 9999px; }
+[class~='rounded-md'] { border-radius: 0.375rem; }
+
+button, select, input { font: inherit; }
+button { color: inherit; }

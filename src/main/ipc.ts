@@ -9,12 +9,13 @@ import { HotkeySchema } from '../shared/types.js'
 export const IpcChannels = {
   paletteSubmit: 'palette:submit',
   paletteHide: 'palette:hide',
-  paletteOpened: 'palette:opened',
-  calendarNewDraft: 'calendar:new-draft',
   getHotkey: 'settings:get-hotkey',
   setHotkey: 'settings:set-hotkey',
   hotkeyError: 'settings:hotkey-error',
-  platformInfo: 'app:platform-info'
+  platformInfo: 'app:platform-info',
+  calendarMinimize: 'calendar:minimize',
+  calendarMaximize: 'calendar:toggle-maximize',
+  calendarClose: 'calendar:close'
 } as const
 
 export type IpcChannel = (typeof IpcChannels)[keyof typeof IpcChannels]

@@ -10,11 +10,6 @@ interface SubmitResponse {
   error?: string
 }
 
-interface HistoryEntry {
-  text: string
-  response: string
-}
-
 function mentionCandidates(typed: string): string[] {
   const q = typed.toLowerCase()
   const all = [...TOOL_IDS.map((id) => `@${id}`), ...Object.keys(TOOL_ALIASES).map((a) => `@${a}`)]
@@ -37,8 +32,6 @@ export default function PaletteApp(): React.JSX.Element {
   const [caret, setCaret] = useState(0)
   const [selected, setSelected] = useState(0)
   const [result, setResult] = useState<string | null>(null)
-  const [history, setHistory] = useState<HistoryEntry[]>([])
-  const [histIdx, setHistIdx] = useState(-1)
   const [showSettings, setShowSettings] = useState(false)
   const [hotkey, setHotkey] = useState('')
   const [hotkeyMsg, setHotkeyMsg] = useState<string | null>(null)
@@ -92,7 +85,7 @@ export default function PaletteApp(): React.JSX.Element {
     })
   }
 
-  async function submit(copy = false): Promise<void> {
+  async function submit(): Promise<void> {
     const text = value.trim()
     if (!text) return
     const res = (await window.palette.submit({
@@ -104,15 +97,6 @@ export default function PaletteApp(): React.JSX.Element {
     else if (res.action === 'calendar') message = 'Opening calendar with your draft…'
     else message = res.message ?? ''
     setResult(message)
-    setHistory((h) => [{ text, response: message }, ...h].slice(0, 50))
-    setHistIdx(-1)
-    if (copy) {
-      try {
-        await navigator.clipboard.writeText(message)
-      } catch {
-        /* clipboard unavailable — ignore */
-      }
-    }
   }
 
   async function saveHotkey(): Promise<void> {
@@ -131,7 +115,7 @@ export default function PaletteApp(): React.JSX.Element {
         setSelected((s) => (s + 1) % candidates.length)
         return
       }
-      if (e.key === 'ArrowUp' && document.activeElement === inputRef.current && candidates.length > 0 && histIdx === -1) {
+      if (e.key === 'ArrowUp' && document.activeElement === inputRef.current && candidates.length > 0) {
         // Prefer candidate navigation when the menu is open.
         if (value.includes('@')) {
           e.preventDefault()
@@ -149,29 +133,14 @@ export default function PaletteApp(): React.JSX.Element {
         }
       }
     }
-    if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) {
-      e.preventDefault()
-      void submit(true)
-      return
-    }
     if (e.key === 'Enter') {
       e.preventDefault()
-      void submit(false)
+      void submit()
       return
     }
     if (e.key === 'Escape') {
       window.palette.hide()
       return
-    }
-    if (e.key === 'ArrowUp' && history.length > 0 && candidates.length === 0) {
-      e.preventDefault()
-      const next = Math.min(histIdx + 1, history.length - 1)
-      setHistIdx(next)
-      const entry = history[next]
-      if (entry) {
-        setValue(entry.text)
-        setCaret(entry.text.length)
-      }
     }
   }
 
@@ -245,7 +214,6 @@ export default function PaletteApp(): React.JSX.Element {
       {result && (
         <div className="border-t border-neutral-800 px-4 py-3 text-sm text-neutral-200">
           {result}
-          <div className="pt-1 text-xs text-neutral-500">⌘/Ctrl+Enter copies the result.</div>
         </div>
       )}
 
@@ -277,7 +245,7 @@ export default function PaletteApp(): React.JSX.Element {
       )}
 
       <div className="flex items-center justify-between border-t border-neutral-800 px-4 py-1.5 text-[11px] text-neutral-500">
-        <span>Enter run · Esc hide · ↑ history · @ tools: {TOOL_IDS.map((t) => `@${t}`).join(' ')}</span>
+        <span>Enter run · Esc hide · @ tools: {TOOL_IDS.map((t) => `@${t}`).join(' ')}</span>
         <span>Composio budget meter lands in M3</span>
       </div>
     </div>

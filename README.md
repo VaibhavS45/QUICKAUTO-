@@ -21,7 +21,9 @@ Unit tests: `npm test`. E2E smoke: `npm run test:e2e` (build first).
 Installers: `npm run dist` (electron-builder: AppImage + deb, dmg, nsis).
 
 Press **Ctrl+Space** (macOS default: **Alt+Space**, configurable in palette
-Settings) to toggle the palette. Type `@` to see tools (`@calendar @websearch
+Settings) to toggle the palette. The calendar opens automatically on launch
+(uncheck "Show palette on launch" in palette Settings to start calendar-only;
+`--toggle` starts tray-only). Type `@` to see tools (`@calendar @websearch
 @notion @gmail @sheets @opencode @github @files`, aliases `@email`, `@sheet`).
 Enter runs, Esc hides, ↑ recalls history, ⌘/Ctrl+Enter copies the result.
 `@calendar <text>` opens the calendar with a task draft (it never runs an agent).

@@ -11,8 +11,8 @@ export const PALETTE_MIN_HEIGHT = 120
  */
 export function preloadPath(): string {
   const candidates = [
-    join(__dirname, '../preload/index.cjs'),
-    join(app.getAppPath(), 'out/preload/index.cjs'),
+    join(__dirname, '../../preload/index.cjs'),
+    join(app.getAppPath(), 'preload/index.cjs'),
     join(__dirname, '../preload/index.mjs'),
     join(__dirname, '../preload/index.js')
   ]
@@ -24,7 +24,7 @@ let lastFocusedWindowId: number | null = null
 
 function rendererUrl(page: string): string {
   if (process.env['ELECTRON_RENDERER_URL']) {
-    return `${process.env['ELECTRON_RENDERER_URL']}/${page}`
+    return `${process.env['ELECTRON_RENDERER_URL'].replace(/\/$/, '')}/${page}`
   }
   return join(__dirname, `../renderer/${page}`)
 }
@@ -74,6 +74,8 @@ export function createPaletteWindow(): BrowserWindow {
 
   win.on('blur', () => {
     // Esc or blur hides it (spec). Don't hide while devtools open.
+    // ponytail: no blur-hide in dev, the window would vanish while inspecting.
+    if (process.env['ELECTRON_RENDERER_URL']) return
     if (win && !win.webContents.isDevToolsOpened()) hidePalette(false)
   })
 
@@ -99,6 +101,8 @@ export function showPalette(): void {
   if (active && active !== win) lastFocusedWindowId = active.id
   const { x, y } = centerOnCursor()
   win.setPosition(x, y)
+  // ponytail: key-window steal; win.focus() alone doesn't activate the app on macOS.
+  if (process.platform === 'darwin') app.focus({ steal: true })
   win.show()
   win.focus()
   win.webContents.send('palette:opened')
@@ -119,8 +123,4 @@ export function togglePalette(): void {
   if (!win || win.isDestroyed()) return
   if (win.isVisible()) hidePalette(true)
   else showPalette()
-}
-
-export function isPaletteVisible(): boolean {
-  return !!win && !win.isDestroyed() && win.isVisible()
 }

@@ -35,7 +35,11 @@ export function createBuiltinTools() {
 export type BuiltinToolName = keyof ReturnType<typeof createBuiltinTools>
 
 /** Tools that need an in-app approve/deny card before they may run. */
-export const APPROVAL_REQUIRED_TOOLS: ReadonlySet<string> = new Set(['echo_write'])
+export const APPROVAL_REQUIRED_TOOLS: ReadonlySet<string> = new Set([
+  'echo_write',
+  'notion_create',
+  'gmail_draft'
+])
 
 /**
  * Build the `toolApproval` map for the agent. Write tools get 'user-approval';

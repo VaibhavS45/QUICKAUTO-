@@ -73,7 +73,6 @@ export default function CalendarApp(): React.JSX.Element {
   const [resize, setResize] = useState<{ id: number; edge: 'top' | 'bottom' } | null>(null)
   const movedRef = useRef(false)
   const downPos = useRef<{ x: number; y: number } | null>(null)
-  const [isMac, setIsMac] = useState(false)
   const scrollRef = useRef<HTMLDivElement>(null)
 
   const days = useMemo(() => weekDays(anchor), [anchor])
@@ -89,7 +88,6 @@ export default function CalendarApp(): React.JSX.Element {
     const off = window.palette.onCalendarDraft((text) => setDraft(text))
     const onUnload = (): void => window.palette.calendarWindowEvent('closed')
     window.addEventListener('beforeunload', onUnload)
-    void window.palette.platformInfo().then((p: { platform: string }) => setIsMac(p.platform === 'darwin')).catch(() => {})
     return () => {
       off()
       window.removeEventListener('beforeunload', onUnload)
@@ -278,38 +276,8 @@ export default function CalendarApp(): React.JSX.Element {
       {/* Sidebar — full height */}
       <aside className="flex w-[280px] shrink-0 flex-col border-r border-neutral-900 bg-neutral-950 px-4 pb-3">
         {/* Drag strip clearing the floating macOS traffic lights */}
-        <div className={`window-titlebar shrink-0 ${isMac ? 'h-11' : 'h-2'}`} />
-        <DayPicker
-          mode="single"
-          selected={anchor}
-          onSelect={pickDay}
-          month={miniMonth}
-          onMonthChange={(m) => setMiniCursor({ y: m.getFullYear(), m: m.getMonth() })}
-          weekStartsOn={1}
-          showOutsideDays
-          fixedWeeks
-          formatters={{ formatWeekdayName: (d) => d.toLocaleDateString('en-US', { weekday: 'narrow' }) }}
-          classNames={{
-            root: 'w-full',
-            months: 'w-full',
-            month: 'w-full',
-            month_caption: 'flex h-8 items-center justify-between px-1',
-            caption_label: 'text-[13px] font-medium text-neutral-300',
-            nav: 'flex gap-1',
-            button_previous: 'rounded px-1.5 py-0.5 text-neutral-400 hover:bg-neutral-900 hover:text-white',
-            button_next: 'rounded px-1.5 py-0.5 text-neutral-400 hover:bg-neutral-900 hover:text-white',
-            chevron: 'h-4 w-4',
-            month_grid: 'mt-1 w-full table-fixed border-collapse',
-            weekday: 'w-9 pb-1 text-center text-[11px] font-normal text-neutral-500',
-            day: 'p-0 text-center',
-            day_button:
-              'mx-auto flex h-9 w-9 items-center justify-center rounded-full text-[15px] text-neutral-200 hover:bg-neutral-800',
-            selected: 'mini-selected',
-            today: 'mini-today',
-            outside: 'mini-outside'
-          }}
-        />
-        <div className="mt-4 flex items-center border-t border-neutral-900 pt-3 text-[11px] font-semibold tracking-widest text-neutral-400">
+        <div className="window-titlebar shrink-0 h-11" />
+        <div className="flex items-center pt-1 text-[11px] font-semibold tracking-widest text-neutral-400">
           ⚇ MY BOTS
           <div className="flex-1" />
           <span className="rounded-full bg-neutral-800 px-1.5 text-neutral-300">{botsShown.length}</span>
@@ -342,7 +310,38 @@ export default function CalendarApp(): React.JSX.Element {
           {botsShown.length === 0 && <p className="px-2 py-2 text-[13px] text-neutral-600">No bots match.</p>}
         </div>
         <div className="flex-1" />
-        <p className="text-[11px] text-neutral-600">Drag across any day to create an event, or drag a bot to schedule it.</p>
+        <div className="border-t border-neutral-900 pt-3">
+          <DayPicker
+            mode="single"
+            selected={anchor}
+            onSelect={pickDay}
+            month={miniMonth}
+            onMonthChange={(m) => setMiniCursor({ y: m.getFullYear(), m: m.getMonth() })}
+            weekStartsOn={1}
+            showOutsideDays
+            fixedWeeks
+            formatters={{ formatWeekdayName: (d) => d.toLocaleDateString('en-US', { weekday: 'narrow' }) }}
+            classNames={{
+              root: 'w-full',
+              months: 'w-full',
+              month: 'w-full',
+              month_caption: 'flex h-8 items-center justify-between px-1',
+              caption_label: 'text-[13px] font-medium text-neutral-300',
+              nav: 'flex gap-1',
+              button_previous: 'rounded px-1.5 py-0.5 text-neutral-400 hover:bg-neutral-900 hover:text-white',
+              button_next: 'rounded px-1.5 py-0.5 text-neutral-400 hover:bg-neutral-900 hover:text-white',
+              chevron: 'h-4 w-4',
+              month_grid: 'mt-1 w-full table-fixed border-collapse',
+              weekday: 'w-9 pb-1 text-center text-[11px] font-normal text-neutral-500',
+              day: 'p-0 text-center',
+              day_button:
+                'mx-auto flex h-9 w-9 items-center justify-center rounded-full text-[15px] text-neutral-200 hover:bg-neutral-800',
+              selected: 'mini-selected',
+              today: 'mini-today',
+              outside: 'mini-outside'
+            }}
+          />
+        </div>
       </aside>
 
       {/* Main column */}

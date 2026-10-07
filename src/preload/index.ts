@@ -60,6 +60,36 @@ const api = {
     scheduledBudget: number
     periodKey: string
   }> => ipcRenderer.invoke('budget:get'),
+  getConnector: (): Promise<{
+    configured: boolean
+    encryptionAvailable: boolean
+    services: Array<{ id: string; connected: boolean; detail?: string }>
+  }> => ipcRenderer.invoke('connector:get'),
+  setConnectorKey: (key: string) => ipcRenderer.invoke('connector:set-key', { key }),
+  clearConnectorKey: () => ipcRenderer.invoke('connector:clear-key'),
+  routineList: (): Promise<{
+    ok: boolean
+    routines: Array<{
+      id: string
+      prompt: string
+      tools: string[]
+      runAt: number
+      repeat: string
+      enabled: boolean
+      lastStatus?: string
+    }>
+  }> => ipcRenderer.invoke('routine:list'),
+  routineCreate: (text: string) => ipcRenderer.invoke('routine:create', { text }),
+  routineRemove: (id: string) => ipcRenderer.invoke('routine:remove', { id }),
+  routineToggle: (id: string, enabled: boolean) => ipcRenderer.invoke('routine:toggle', { id, enabled }),
+  getAwake: (): Promise<{ ok: boolean; enabled: boolean; holding: boolean }> =>
+    ipcRenderer.invoke('awake:get'),
+  setAwake: (enabled: boolean): Promise<{ ok: boolean; enabled: boolean; holding: boolean }> =>
+    ipcRenderer.invoke('awake:set', { enabled }),
+  getProfile: (): Promise<{ name: string; email: string; about: string; language: string }> =>
+    ipcRenderer.invoke('settings:get-profile'),
+  setProfile: (p: { name: string; email: string; about: string; language: string }) =>
+    ipcRenderer.invoke('settings:set-profile', p),
   onCalendarDraft: (cb: (text: string) => void) => {
     const fn = (_e: unknown, text: string): void => cb(text)
     ipcRenderer.on('calendar:new-draft', fn)
@@ -71,7 +101,13 @@ const api = {
   },
   calendarMinimize: () => ipcRenderer.send('calendar:minimize'),
   calendarMaximize: () => ipcRenderer.send('calendar:toggle-maximize'),
-  calendarClose: () => ipcRenderer.send('calendar:close')
+  calendarClose: () => ipcRenderer.send('calendar:close'),
+  closeSettings: () => ipcRenderer.send('settings:hide'),
+  onSettingsClose: (cb: () => void) => {
+    const fn = (): void => cb()
+    ipcRenderer.on('settings:close', fn)
+    return () => ipcRenderer.removeListener('settings:close', fn)
+  }
 }
 
 export type PaletteApi = typeof api

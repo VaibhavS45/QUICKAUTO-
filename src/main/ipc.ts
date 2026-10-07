@@ -6,6 +6,7 @@ import {
   PaletteResizeSchema
 } from '../shared/agent.js'
 import { ModelSettingsSchema } from './settings/model-settings.js'
+import { ProfileSettingsSchema } from './agent/profile-settings.js'
 
 /**
  * Typed IPC contract. Renderers may only invoke these channels
@@ -32,7 +33,18 @@ export const IpcChannels = {
   agentApproval: 'agent:approval',
   /** Main -> renderer push channel for streaming agent events. */
   agentEvent: 'agent:event',
-  getBudget: 'budget:get'
+  getBudget: 'budget:get',
+  getConnector: 'connector:get',
+  setConnectorKey: 'connector:set-key',
+  clearConnectorKey: 'connector:clear-key',
+  routineList: 'routine:list',
+  routineCreate: 'routine:create',
+  routineRemove: 'routine:remove',
+  routineToggle: 'routine:toggle',
+  getAwake: 'awake:get',
+  setAwake: 'awake:set',
+  getProfile: 'settings:get-profile',
+  setProfile: 'settings:set-profile'
 } as const
 
 export type IpcChannel = (typeof IpcChannels)[keyof typeof IpcChannels]
@@ -58,7 +70,28 @@ export const AgentCancelSchema = z.object({
   runId: z.string().min(1).max(128)
 })
 
-export { AgentApprovalResponseSchema, AgentRunRequestSchema, PaletteResizeSchema, ModelSettingsSchema }
+export const ConnectorKeySchema = z.object({
+  key: z.string().min(1).max(10000)
+})
+
+export const RoutineCreateSchema = z.object({
+  text: z.string().min(1).max(8000)
+})
+
+export const RoutineIdSchema = z.object({
+  id: z.string().min(1).max(128)
+})
+
+export const RoutineToggleSchema = z.object({
+  id: z.string().min(1).max(128),
+  enabled: z.boolean()
+})
+
+export const AwakeSetSchema = z.object({
+  enabled: z.boolean()
+})
+
+export { AgentApprovalResponseSchema, AgentRunRequestSchema, PaletteResizeSchema, ModelSettingsSchema, ProfileSettingsSchema }
 
 export interface PlatformInfo {
   platform: NodeJS.Platform

@@ -31,6 +31,7 @@ import { ModelSettingsService, type SettingsStore } from './settings/model-setti
 import { SecretVault, COMPOSIO_API_KEY_NAME } from './settings/secret-vault.js'
 import { registerConnectorProvider } from './agent/registry.js'
 import { ComposioConnectorProvider } from './connectors/composio.js'
+import { GitHubCliProvider, validateRepoEntry } from './connectors/github-cli.js'
 import { BudgetGuard, type BudgetStore, type BudgetUsageState } from './connectors/budget-guard.js'
 
 const gotLock = app.requestSingleInstanceLock()
@@ -77,6 +78,17 @@ const composioProvider = new ComposioConnectorProvider({
   getGuard: () => getGuard()
 })
 registerConnectorProvider(composioProvider)
+
+const githubProvider = new GitHubCliProvider({
+  getRepos: () => settingsService.getConfig().githubRepos ?? []
+})
+registerConnectorProvider(githubProvider)
+
+function providerFor(toolId: string): { status: (t: ToolId) => Promise<{ connected: boolean; detail?: string }>; connect: (t: ToolId) => Promise<{ ok: boolean; url?: string; error?: string }> } | null {
+  if (toolId === 'gmail') return composioProvider
+  if (toolId === 'github') return githubProvider
+  return null
+}
 
 let budgetGuard: BudgetGuard | null = null
 /** Singleton guard; recreated (with counts carried over) when reset day changes. */
@@ -249,10 +261,18 @@ function wireIpc(): void {
 
   ipcMain.handle(IpcChannels.getModelSettings, async () => settingsService.getPublicState())
 
-  ipcMain.handle(IpcChannels.setModelSettings, (_event, payload: unknown) => {
+  ipcMain.handle(IpcChannels.setModelSettings, async (_event, payload: unknown) => {
     const parsed = ModelSettingsSchema.safeParse(payload)
     if (!parsed.success) return { ok: false as const, error: 'Invalid model settings.' }
     try {
+      // GitHub repos: validate path + git repo + origin match before storing.
+      // Only allowlisted repos are ever accessible to @github tools.
+      for (const entry of parsed.data.githubRepos ?? []) {
+        const checked = await validateRepoEntry(entry)
+        if (!checked.ok) {
+          return { ok: false as const, error: `GitHub repo "${entry.repo || entry.path}": ${checked.error}` }
+        }
+      }
       const saved = settingsService.setConfig(parsed.data)
       return { ok: true as const, settings: { ...saved, keySet: undefined, encryptionAvailable: undefined } }
     } catch (err) {
@@ -295,8 +315,10 @@ function wireIpc(): void {
   ipcMain.handle(IpcChannels.connectionStatus, async (_event, payload: unknown) => {
     const parsed = ConnectionToolSchema.safeParse(payload)
     if (!parsed.success) return { ok: false as const, error: 'Invalid connection request.' }
+    const provider = providerFor(parsed.data.toolId)
+    if (!provider) return { ok: false as const, error: 'Unknown tool.' }
     try {
-      const st = await composioProvider.status(parsed.data.toolId as ToolId)
+      const st = await provider.status(parsed.data.toolId as ToolId)
       return { ok: true as const, ...st }
     } catch (err) {
       return { ok: false as const, error: err instanceof Error ? err.message : String(err) }
@@ -306,8 +328,10 @@ function wireIpc(): void {
   ipcMain.handle(IpcChannels.connectionConnect, async (_event, payload: unknown) => {
     const parsed = ConnectionToolSchema.safeParse(payload)
     if (!parsed.success) return { ok: false as const, error: 'Invalid connection request.' }
+    const provider = providerFor(parsed.data.toolId)
+    if (!provider) return { ok: false as const, error: 'Unknown tool.' }
     try {
-      const res = await composioProvider.connect(parsed.data.toolId as ToolId)
+      const res = await provider.connect(parsed.data.toolId as ToolId)
       if (res.ok && res.url) {
         // Auth happens in the user's own browser; the Composio key and any
         // tokens stay in main. Renderer polls connectionStatus until ACTIVE.

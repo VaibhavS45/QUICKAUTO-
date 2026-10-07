@@ -28,7 +28,21 @@ export const ModelSettingsSchema = z.object({
    * non-write tools in palette runs — writes always need the approval card
    * and scheduled runs never auto-approve (see agent/tools.ts).
    */
-  autoApprove: z.array(z.string().min(1).max(64)).max(32).optional()
+  autoApprove: z.array(z.string().min(1).max(64)).max(32).optional(),
+  /**
+   * GitHub repos accessible to @github. Path checks (exists, git repo,
+   * origin match) run at settings-save time in main; the schema only checks
+   * shapes here.
+   */
+  githubRepos: z
+    .array(
+      z.object({
+        path: z.string().min(1).max(500),
+        repo: z.string().min(1).max(200)
+      })
+    )
+    .max(20)
+    .optional()
 })
 export type ModelSettings = z.infer<typeof ModelSettingsSchema>
 

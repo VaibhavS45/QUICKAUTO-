@@ -60,6 +60,7 @@ interface ModelState {
   keySet: boolean
   composioKeySet: boolean
   autoApprove?: string[]
+  githubRepos?: Array<{ path: string; repo: string }>
   encryptionAvailable: boolean
 }
 
@@ -324,6 +325,10 @@ export default function PaletteApp(): React.JSX.Element {
   const [gmailStatus, setGmailStatus] = useState<ConnectionState | null>(null)
   const [connecting, setConnecting] = useState(false)
   const [connectMsg, setConnectMsg] = useState<string | null>(null)
+  const [githubStatus, setGithubStatus] = useState<ConnectionState | null>(null)
+  const [githubRepos, setGithubRepos] = useState<Array<{ path: string; repo: string }>>([])
+  const [newRepoPath, setNewRepoPath] = useState('')
+  const [newRepoName, setNewRepoName] = useState('')
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null)
 
   const mention = useMemo(() => activeMention(value, caret), [value, caret])
@@ -342,6 +347,7 @@ export default function PaletteApp(): React.JSX.Element {
       setBaseUrl(s.baseUrl ?? '')
       setResetDay(String(s.resetDay ?? 1))
       setAutoApproveEcho((s.autoApprove ?? []).includes('echo'))
+      setGithubRepos(s.githubRepos ?? [])
     } catch {
       /* settings unavailable in this context */
     }
@@ -368,6 +374,34 @@ export default function PaletteApp(): React.JSX.Element {
       return st
     } catch {
       return null
+    }
+  }
+
+  async function refreshGithubStatus(): Promise<void> {
+    try {
+      const res = (await window.palette.connectionStatus('github')) as {
+        ok: boolean
+        connected?: boolean
+        detail?: string
+        error?: string
+      }
+      if (res.ok) setGithubStatus({ connected: res.connected ?? false, detail: res.detail })
+      else setGithubStatus({ connected: false, detail: res.error })
+    } catch {
+      /* ignore */
+    }
+  }
+
+  async function startGithubConnect(): Promise<void> {
+    // gh auth login is interactive in the user's terminal; surface the fix.
+    const res = (await window.palette.connectionConnect('github')) as {
+      ok: boolean
+      error?: string
+    }
+    if (res.ok) {
+      await refreshGithubStatus()
+    } else {
+      setGithubStatus({ connected: false, detail: res.error })
     }
   }
 
@@ -473,6 +507,7 @@ export default function PaletteApp(): React.JSX.Element {
       setShowSettings(true)
       void refreshSettings()
       void refreshGmailStatus()
+      void refreshGithubStatus()
     })
     const offErr = window.palette.onHotkeyError((msg) => setHotkeyMsg(msg))
     const offAgent = window.palette.onAgentEvent((raw) => {
@@ -498,6 +533,7 @@ export default function PaletteApp(): React.JSX.Element {
     void refreshSettings()
     void refreshBudget()
     void refreshGmailStatus()
+    void refreshGithubStatus()
     const timer = setInterval(() => void refreshBudget(), 30_000)
     return () => {
       offOpened()
@@ -606,7 +642,8 @@ export default function PaletteApp(): React.JSX.Element {
       model: model.trim(),
       baseUrl: baseUrl.trim() || undefined,
       resetDay: rd,
-      autoApprove: autoApproveEcho ? ['echo'] : []
+      autoApprove: autoApproveEcho ? ['echo'] : [],
+      githubRepos
     })) as { ok: boolean; error?: string }
     if (!res.ok) {
       setSettingsMsg(res.error ?? 'Save failed.')
@@ -710,6 +747,7 @@ export default function PaletteApp(): React.JSX.Element {
             setShowSettings((s) => !s)
             void refreshSettings()
             void refreshGmailStatus()
+            void refreshGithubStatus()
           }}
           className="rounded px-1 text-neutral-500 hover:text-neutral-200"
           title="Settings"
@@ -1037,6 +1075,74 @@ export default function PaletteApp(): React.JSX.Element {
           </div>
           {gmailStatus?.detail && <div className="pt-1 text-[11px] text-neutral-500">{gmailStatus.detail}</div>}
           {connectMsg && <div className="pt-1 text-xs text-amber-200">{connectMsg}</div>}
+
+          <div className="pt-3 font-medium">GitHub (local gh CLI — costs no Composio calls)</div>
+          <div className="flex flex-wrap items-center gap-2 pt-1 text-xs">
+            <span className="text-neutral-400">
+              {githubStatus ? (githubStatus.connected ? 'ready ✓' : 'not ready') : '…'}
+            </span>
+            <button
+              onClick={() => void startGithubConnect()}
+              className="rounded border border-neutral-600 px-2 py-1 text-xs text-neutral-300"
+            >
+              Check / fix
+            </button>
+            <button
+              onClick={() => void refreshGithubStatus()}
+              className="rounded border border-neutral-600 px-2 py-1 text-xs text-neutral-300"
+            >
+              Refresh
+            </button>
+          </div>
+          {githubStatus?.detail && <div className="pt-1 text-[11px] text-neutral-500">{githubStatus.detail}</div>}
+          <div className="pt-2 text-xs text-neutral-400">Repos (only these are accessible to @github)</div>
+          {githubRepos.map((r, i) => (
+            <div key={`${r.repo}-${i}`} className="flex items-center gap-2 pt-1 text-xs">
+              <span className="font-mono text-neutral-200">{r.repo}</span>
+              <span className="truncate font-mono text-[11px] text-neutral-500">{r.path}</span>
+              <button
+                onClick={() => setGithubRepos((prev) => prev.filter((_, j) => j !== i))}
+                className="rounded border border-neutral-600 px-1.5 py-0.5 text-[11px] text-neutral-300"
+              >
+                Remove
+              </button>
+            </div>
+          ))}
+          <div className="flex flex-wrap items-end gap-2 pt-2">
+            <label className="text-xs text-neutral-400">
+              Local path
+              <input
+                value={newRepoPath}
+                onChange={(e) => setNewRepoPath(e.target.value)}
+                placeholder="/home/user/code/repo"
+                className="mt-0.5 w-64 rounded border border-neutral-700 bg-neutral-800 px-2 py-1 font-mono text-xs text-neutral-100"
+              />
+            </label>
+            <label className="text-xs text-neutral-400">
+              owner/name
+              <input
+                value={newRepoName}
+                onChange={(e) => setNewRepoName(e.target.value)}
+                placeholder="owner/name"
+                className="mt-0.5 w-40 rounded border border-neutral-700 bg-neutral-800 px-2 py-1 font-mono text-xs text-neutral-100"
+              />
+            </label>
+            <button
+              onClick={() => {
+                if (!newRepoPath.trim() || !newRepoName.trim()) return
+                setGithubRepos((prev) => [...prev, { path: newRepoPath.trim(), repo: newRepoName.trim() }])
+                setNewRepoPath('')
+                setNewRepoName('')
+              }}
+              className="rounded bg-indigo-600 px-2 py-1 text-xs text-white"
+            >
+              Add
+            </button>
+          </div>
+          <div className="pt-1 text-[11px] text-neutral-500">
+            Press “Save model” above to validate and store the list. Paths must exist and be git repos;
+            a GitHub origin must match owner/name. Never reads your gh token.
+          </div>
         </div>
       )}
 

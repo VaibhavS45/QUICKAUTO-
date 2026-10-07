@@ -36,7 +36,7 @@ interface ModelState {
   model: string
   baseUrl?: string
   resetDay?: number
-  githubRepos?: Array<{ path: string; repo: string }>
+  githubRepos?: Array<{ path: string; repo: string; testCommand?: string }>
   autoApprove?: string[]
   keySet: boolean
   encryptionAvailable: boolean
@@ -373,9 +373,10 @@ interface GhStatus {
  */
 function GitHubPanel(): React.JSX.Element {
   const [gh, setGh] = useState<GhStatus | null>(null)
-  const [repos, setRepos] = useState<Array<{ path: string; repo: string }>>([])
+  const [repos, setRepos] = useState<Array<{ path: string; repo: string; testCommand?: string }>>([])
   const [newPath, setNewPath] = useState('')
   const [newRepo, setNewRepo] = useState('')
+  const [newTestCommand, setNewTestCommand] = useState('')
   const [msg, setMsg] = useState<string | null>(null)
 
   async function refresh(): Promise<void> {
@@ -396,7 +397,7 @@ function GitHubPanel(): React.JSX.Element {
     void refresh()
   }, [])
 
-  async function save(next: Array<{ path: string; repo: string }>): Promise<void> {
+  async function save(next: Array<{ path: string; repo: string; testCommand?: string }>): Promise<void> {
     setMsg(null)
     try {
       const m = (await window.palette.getModelSettings()) as ModelState
@@ -432,7 +433,9 @@ function GitHubPanel(): React.JSX.Element {
     }
     setNewPath('')
     setNewRepo('')
-    void save([...repos, { path, repo }])
+    const testCommand = newTestCommand.trim()
+    setNewTestCommand('')
+    void save([...repos, { path, repo, ...(testCommand ? { testCommand } : {}) }])
   }
 
   function remove(repo: string): void {
@@ -463,6 +466,7 @@ function GitHubPanel(): React.JSX.Element {
           <div key={r.repo.toLowerCase()} className="flex items-center gap-2 rounded-lg border border-neutral-800 bg-neutral-950 px-2.5 py-2 text-xs">
             <span className="font-mono text-neutral-200">{r.repo}</span>
             <span className="truncate font-mono text-neutral-500" title={r.path}>{r.path}</span>
+            {r.testCommand && <span className="truncate font-mono text-neutral-500" title={r.testCommand}>tests: {r.testCommand}</span>}
             <span className="flex-1" />
             <button onClick={() => remove(r.repo)} className="text-neutral-500 hover:text-red-400">
               Remove
@@ -479,6 +483,11 @@ function GitHubPanel(): React.JSX.Element {
         <div className="w-44">
           <Field label="owner/name">
             <input value={newRepo} onChange={(e) => setNewRepo(e.target.value)} placeholder="owner/name" className={`${inputCls} font-mono text-xs`} />
+          </Field>
+        </div>
+        <div className="min-w-40 flex-1">
+          <Field label="Test command (optional)">
+            <input value={newTestCommand} onChange={(e) => setNewTestCommand(e.target.value)} placeholder="npm test" className={`${inputCls} font-mono text-xs`} />
           </Field>
         </div>
         <button onClick={add} className="h-9 rounded-md bg-blue-500 px-4 text-sm font-medium text-white hover:bg-blue-400">

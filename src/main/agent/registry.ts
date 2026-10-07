@@ -3,6 +3,7 @@ import type { ToolId } from '../../shared/types.js'
 import { createBuiltinTools } from './tools.js'
 import { GITHUB_SYSTEM_PROMPT } from '../connectors/github-cli.js'
 import { GMAIL_SYSTEM_PROMPT, GMAIL_WRITE_PROMPT } from '../connectors/composio.js'
+import { GITHUB_RESOLVE_PROMPT } from '../connectors/github-resolve.js'
 import type { ConnectorProvider } from '../connectors/provider.js'
 
 /**
@@ -43,5 +44,6 @@ export function buildInstructions(source: 'palette' | 'scheduled', tools: ToolId
   ]
   if (tools.includes('github')) parts.push(GITHUB_SYSTEM_PROMPT)
   if (tools.includes('gmail')) parts.push(GMAIL_SYSTEM_PROMPT, GMAIL_WRITE_PROMPT)
+  if (tools.includes('github')) parts.push(GITHUB_RESOLVE_PROMPT)
   return parts.join(' ')
 }

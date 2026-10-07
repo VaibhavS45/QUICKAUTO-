@@ -34,7 +34,7 @@ const api = {
     model: string
     baseUrl?: string
     resetDay?: number
-    githubRepos?: Array<{ path: string; repo: string }>
+    githubRepos?: Array<{ path: string; repo: string; testCommand?: string }>
     autoApprove?: string[]
     keySet: boolean
     encryptionAvailable: boolean
@@ -44,7 +44,7 @@ const api = {
     model: string
     baseUrl?: string
     resetDay?: number
-    githubRepos?: Array<{ path: string; repo: string }>
+    githubRepos?: Array<{ path: string; repo: string; testCommand?: string }>
     autoApprove?: string[]
   }) =>
     ipcRenderer.invoke('settings:set-model', s),

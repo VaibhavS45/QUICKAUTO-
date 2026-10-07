@@ -34,6 +34,14 @@ import type { AgentEvent } from '../shared/agent.js'
 import { runAgent, type ApprovalDecision } from './agent/runner.js'
 import { ModelSettingsService, type SettingsStore } from './settings/model-settings.js'
 import { ProfileSettingsService } from './agent/profile-settings.js'
+import { GitHubResolveProvider } from './connectors/github-resolve.js'
+import { OpencodeServerManager } from './agent/opencode-server.js'
+import { runOpencodeResolve, type OpencodePermission } from './agent/opencode-resolve.js'
+import {
+  setNestedApprovalHandler,
+  nextNestedApprovalId,
+  requestNestedApprovalForCurrentRun
+} from './agent/nested-approval.js'
 import { BudgetGuard, type BudgetStore, type BudgetUsageState } from './connectors/budget-guard.js'
 import { ConnectorSettingsService, type ConnectorStore } from './connectors/connector-settings.js'
 import { ComposioProvider } from './connectors/composio-tools.js'
@@ -114,6 +122,25 @@ const githubProvider = new GitHubCliProvider({
 })
 registerConnectorProvider(githubProvider)
 
+const opencodeManager = new OpencodeServerManager()
+const githubResolveProvider = new GitHubResolveProvider({
+  getRepos: () => settingsService.getConfig().githubRepos ?? [],
+  getOpencode: () => opencodeManager,
+  opencodeResolve: (opts) =>
+    runOpencodeResolve({
+      ...opts,
+      onPermission: async (perm: OpencodePermission) =>
+        (
+          await requestNestedApprovalForCurrentRun({
+            toolName: `opencode: ${perm.type} ${perm.title}`,
+            input: { pattern: perm.pattern ?? null, metadata: perm.metadata ?? null },
+            reason: 'OpenCode requests permission while resolving conflicts.'
+          })
+        ).approved
+    })
+})
+registerConnectorProvider(githubResolveProvider)
+
 // Real read-only @gmail provider (feat/gmail-read). Registered after the stub
 // so its gmail_* tools are the ones served; distinct provider id avoids the
 // registry's duplicate-id ignore. Its tools guard themselves (with cache and
@@ -173,6 +200,28 @@ const activeRuns = new Map<string, ActiveRun>()
 function emitToPalette(e: AgentEvent): void {
   getPaletteWindow()?.webContents.send(IpcChannels.agentEvent, e)
 }
+
+setNestedApprovalHandler(
+  (req) =>
+    new Promise((resolve) => {
+      const active = activeRuns.get(req.runId)
+      if (!active) {
+        resolve({ approved: false, reason: 'Run ended.' })
+        return
+      }
+      const approvalId = nextNestedApprovalId()
+      active.pending.set(approvalId, resolve)
+      emitToPalette({
+        type: 'approval-requested',
+        runId: req.runId,
+        approvalId,
+        toolCallId: approvalId,
+        toolName: req.toolName,
+        input: req.input,
+        reason: req.reason
+      })
+    })
+)
 
 let tray: Tray | null = null
 let hotkeyError: string | null = null
@@ -417,7 +466,7 @@ function wireIpc(): void {
           const set = await getToolsForMentions(ids)
           for (const [name, t] of Object.entries(set)) {
             if (name === 'echo' || name === 'echo_write') continue
-            if (isZeroCostTool(t)) continue
+            if (name.startsWith('github_') || isZeroCostTool(t)) continue
             if (isPaletteGuarded(t)) continue
             const orig = (t as { execute?: unknown }).execute
             if (typeof orig !== 'function') continue
@@ -715,6 +764,8 @@ app.on('window-all-closed', () => {
 
 app.on('will-quit', () => {
   globalShortcut.unregisterAll()
+  setNestedApprovalHandler(null)
+  void opencodeManager.stop()
 })
 
 export { store }

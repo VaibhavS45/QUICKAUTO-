@@ -32,7 +32,14 @@ export const IpcChannels = {
   agentApproval: 'agent:approval',
   /** Main -> renderer push channel for streaming agent events. */
   agentEvent: 'agent:event',
-  getBudget: 'budget:get'
+  getBudget: 'budget:get',
+  getConnector: 'connector:get',
+  setConnectorKey: 'connector:set-key',
+  clearConnectorKey: 'connector:clear-key',
+  routineList: 'routine:list',
+  routineCreate: 'routine:create',
+  routineRemove: 'routine:remove',
+  routineToggle: 'routine:toggle'
 } as const
 
 export type IpcChannel = (typeof IpcChannels)[keyof typeof IpcChannels]
@@ -56,6 +63,23 @@ export const ApiKeySchema = z.object({
 
 export const AgentCancelSchema = z.object({
   runId: z.string().min(1).max(128)
+})
+
+export const ConnectorKeySchema = z.object({
+  key: z.string().min(1).max(10000)
+})
+
+export const RoutineCreateSchema = z.object({
+  text: z.string().min(1).max(8000)
+})
+
+export const RoutineIdSchema = z.object({
+  id: z.string().min(1).max(128)
+})
+
+export const RoutineToggleSchema = z.object({
+  id: z.string().min(1).max(128),
+  enabled: z.boolean()
 })
 
 export { AgentApprovalResponseSchema, AgentRunRequestSchema, PaletteResizeSchema, ModelSettingsSchema }

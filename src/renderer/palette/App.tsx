@@ -8,6 +8,7 @@ interface SubmitResponse {
   tools?: string[]
   message?: string
   runId?: string
+  routine?: { runAt: number; prompt: string }
   error?: string
 }
 
@@ -150,6 +151,152 @@ function shortJson(v: unknown, max = 300): string {
   } catch {
     return String(v)
   }
+}
+
+interface ConnectorState {
+  configured: boolean
+  encryptionAvailable: boolean
+  services: Array<{ id: string; connected: boolean; detail?: string }>
+}
+
+interface RoutineItem {
+  id: string
+  prompt: string
+  tools: string[]
+  runAt: number
+  repeat: string
+  enabled: boolean
+  lastStatus?: string
+}
+
+/** OpenMausBot-style connections: one Composio key, renderer sees flags only. */
+function ConnectionsPanel(): React.JSX.Element {
+  const [state, setState] = useState<ConnectorState | null>(null)
+  const [key, setKey] = useState('')
+  const [msg, setMsg] = useState<string | null>(null)
+  useEffect(() => {
+    window.palette
+      .getConnector()
+      .then((s) => setState(s as ConnectorState))
+      .catch(() => {})
+  }, [])
+  async function save(): Promise<void> {
+    setMsg(null)
+    const res = (await window.palette.setConnectorKey(key.trim())) as { ok: boolean; error?: string }
+    if (!res.ok) {
+      setMsg(res.error ?? 'Save failed.')
+      return
+    }
+    setKey('')
+    setMsg('Saved.')
+    setState((await window.palette.getConnector()) as ConnectorState)
+  }
+  async function remove(): Promise<void> {
+    await window.palette.clearConnectorKey()
+    setMsg('Removed.')
+    setState((await window.palette.getConnector()) as ConnectorState)
+  }
+  return (
+    <div className="pt-3">
+      <div className="font-medium">Connections {state && (state.configured ? '(connected ✓)' : '(not connected)')}</div>
+      <div className="pt-1 text-xs text-neutral-400">
+        One Composio project key unlocks @notion, @gmail, @sheets, @websearch. Keys stay encrypted in the main process.
+      </div>
+      <div className="flex flex-wrap items-end gap-2 pt-2">
+        <label className="text-xs text-neutral-400">
+          Composio project key
+          <input
+            type="password"
+            value={key}
+            onChange={(e) => setKey(e.target.value)}
+            placeholder={state?.configured ? '•••••• (enter to replace)' : 'ak_…'}
+            className="mt-0.5 w-64 rounded border border-neutral-700 bg-neutral-800 px-2 py-1 font-mono text-xs text-neutral-100"
+          />
+        </label>
+        <button onClick={() => void save()} className="rounded bg-indigo-600 px-2 py-1 text-xs text-white">
+          Save
+        </button>
+        {state?.configured && (
+          <button onClick={() => void remove()} className="rounded border border-neutral-600 px-2 py-1 text-xs text-neutral-300">
+            Remove
+          </button>
+        )}
+      </div>
+      {msg && <div className="pt-1 text-xs text-amber-200">{msg}</div>}
+      {state && (
+        <div className="flex flex-wrap gap-1 pt-2">
+          {state.services.map((s) => (
+            <span
+              key={s.id}
+              title={s.detail ?? ''}
+              className={`rounded px-1.5 py-0.5 font-mono text-xs ${s.connected ? 'bg-emerald-700/30 text-emerald-200' : 'bg-neutral-800 text-neutral-400'}`}
+            >
+              @{s.id} {s.connected ? '✓' : '○'}
+            </span>
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
+
+/** Scheduled routines: "@calendar @notion at 6:30pm do X" fires the agent later. */
+function RoutinesPanel(): React.JSX.Element {
+  const [items, setItems] = useState<RoutineItem[]>([])
+  const [msg, setMsg] = useState<string | null>(null)
+  async function refresh(): Promise<void> {
+    try {
+      const res = (await window.palette.routineList()) as { ok: boolean; routines: RoutineItem[] }
+      if (res.ok) setItems(res.routines)
+    } catch {
+      /* ignore */
+    }
+  }
+  useEffect(() => {
+    void refresh()
+  }, [])
+  async function toggle(r: RoutineItem): Promise<void> {
+    await window.palette.routineToggle(r.id, !r.enabled)
+    void refresh()
+  }
+  async function remove(id: string): Promise<void> {
+    const res = (await window.palette.routineRemove(id)) as { ok: boolean; error?: string }
+    if (!res.ok) setMsg(res.error ?? 'Remove failed.')
+    void refresh()
+  }
+  return (
+    <div className="pt-3">
+      <div className="font-medium">Routines ({items.length})</div>
+      <div className="pt-1 text-xs text-neutral-400">
+        Type <span className="font-mono">@calendar @notion at 6:30pm summarize my tasks</span> (or @websearch/@gmail) —
+        the agent runs it at that time. Scheduled runs never auto-approve writes.
+      </div>
+      {msg && <div className="pt-1 text-xs text-amber-200">{msg}</div>}
+      <div className="space-y-1 pt-2">
+        {items.length === 0 && <div className="text-xs text-neutral-500">No routines yet.</div>}
+        {items.map((r) => (
+          <div key={r.id} className="flex items-center gap-2 rounded border border-neutral-800 bg-neutral-950 px-2 py-1.5 text-xs">
+            <button
+              onClick={() => void toggle(r)}
+              className={`rounded px-1.5 py-0.5 ${r.enabled ? 'bg-emerald-700/40 text-emerald-100' : 'bg-neutral-800 text-neutral-400'}`}
+              title={r.enabled ? 'Pause' : 'Resume'}
+            >
+              {r.enabled ? 'on' : 'off'}
+            </button>
+            <span className="text-neutral-200">{new Date(r.runAt).toLocaleString()}</span>
+            <span className="truncate text-neutral-400" title={r.prompt}>
+              {r.prompt} · {r.tools.map((t) => `@${t}`).join(' ')}
+              {r.lastStatus ? ` · ${r.lastStatus}` : ''}
+            </span>
+            <div className="flex-1" />
+            <button onClick={() => void remove(r.id)} className="text-neutral-500 hover:text-red-400">
+              Remove
+            </button>
+          </div>
+        ))}
+      </div>
+    </div>
+  )
 }
 
 export default function PaletteApp(): React.JSX.Element {
@@ -375,6 +522,11 @@ export default function PaletteApp(): React.JSX.Element {
       setNotice('Opening calendar with your draft…')
       return
     }
+    if (res.action === 'scheduled' && res.routine) {
+      setNotice(`Scheduled for ${new Date(res.routine.runAt).toLocaleString()} — the agent runs it then.`)
+      setValue('')
+      return
+    }
     if (res.action === 'agent' && res.runId) {
       // Order matters: mark running first, then replay any events that
       // arrived before the invoke resolved (a fast error/done must win).
@@ -521,7 +673,7 @@ export default function PaletteApp(): React.JSX.Element {
           }}
           onSelect={(e) => setCaret(e.currentTarget.selectionStart ?? 0)}
           onKeyDown={onKeyDown}
-          placeholder="Type @ for tools…  (@calendar opens a task draft)"
+          placeholder="Type @ for tools…  (@calendar @notion at 6:30pm do X schedules it)"
           className="w-full bg-transparent text-[15px] text-neutral-100 outline-none placeholder:text-neutral-500"
         />
         {running && (
@@ -763,12 +915,24 @@ export default function PaletteApp(): React.JSX.Element {
                 {budget.warning !== 'none' && (
                   <span className="text-amber-300">Warning: {budget.warning}.</span>
                 )}{' '}
-                Source of truth: the Composio dashboard usage page.
+                Source of truth:{' '}
+                <a
+                  href="https://dashboard.composio.dev"
+                  target="_blank"
+                  rel="noreferrer"
+                  className="text-indigo-300 underline"
+                >
+                  Composio dashboard usage page
+                </a>
+                .
               </>
             ) : (
               'Loading…'
             )}
           </div>
+
+          <ConnectionsPanel />
+          <RoutinesPanel />
         </div>
       )}
 

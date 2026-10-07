@@ -60,6 +60,28 @@ const api = {
     scheduledBudget: number
     periodKey: string
   }> => ipcRenderer.invoke('budget:get'),
+  getConnector: (): Promise<{
+    configured: boolean
+    encryptionAvailable: boolean
+    services: Array<{ id: string; connected: boolean; detail?: string }>
+  }> => ipcRenderer.invoke('connector:get'),
+  setConnectorKey: (key: string) => ipcRenderer.invoke('connector:set-key', { key }),
+  clearConnectorKey: () => ipcRenderer.invoke('connector:clear-key'),
+  routineList: (): Promise<{
+    ok: boolean
+    routines: Array<{
+      id: string
+      prompt: string
+      tools: string[]
+      runAt: number
+      repeat: string
+      enabled: boolean
+      lastStatus?: string
+    }>
+  }> => ipcRenderer.invoke('routine:list'),
+  routineCreate: (text: string) => ipcRenderer.invoke('routine:create', { text }),
+  routineRemove: (id: string) => ipcRenderer.invoke('routine:remove', { id }),
+  routineToggle: (id: string, enabled: boolean) => ipcRenderer.invoke('routine:toggle', { id, enabled }),
   onCalendarDraft: (cb: (text: string) => void) => {
     const fn = (_e: unknown, text: string): void => cb(text)
     ipcRenderer.on('calendar:new-draft', fn)

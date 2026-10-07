@@ -16,6 +16,10 @@ import {
   CalendarDraftSchema,
   SetHotkeySchema,
   ApiKeySchema,
+  ConnectorKeySchema,
+  RoutineCreateSchema,
+  RoutineIdSchema,
+  RoutineToggleSchema,
   AgentCancelSchema,
   AgentRunRequestSchema,
   AgentApprovalResponseSchema,
@@ -28,6 +32,17 @@ import type { AgentEvent } from '../shared/agent.js'
 import { runAgent, type ApprovalDecision } from './agent/runner.js'
 import { ModelSettingsService, type SettingsStore } from './settings/model-settings.js'
 import { BudgetGuard, type BudgetStore, type BudgetUsageState } from './connectors/budget-guard.js'
+import { ConnectorSettingsService, type ConnectorStore } from './connectors/connector-settings.js'
+import { ComposioProvider } from './connectors/composio-tools.js'
+import { registerConnectorProvider, getToolsForMentions } from './agent/registry.js'
+import {
+  Scheduler,
+  parseScheduleFromText,
+  cleanPromptForRoutine,
+  type Routine,
+  type RoutineStore
+} from './agent/scheduler.js'
+import { parseMentionedTools } from '../shared/types.js'
 
 const gotLock = app.requestSingleInstanceLock()
 if (!gotLock) app.quit()
@@ -63,6 +78,45 @@ const settingsService = new ModelSettingsService(new ElectronSettingsStore(), {
   isAsyncEncryptionAvailable: () => safeStorage.isAsyncEncryptionAvailable(),
   encryptStringAsync: (s: string) => safeStorage.encryptStringAsync(s),
   decryptStringAsync: (b: Buffer) => safeStorage.decryptStringAsync(b)
+})
+
+const connectorFile = new Store<Record<string, unknown>>({ name: 'palette-connectors', defaults: {} })
+
+class ElectronConnectorStore implements ConnectorStore {
+  get(key: string): unknown {
+    return (connectorFile as unknown as { get: (k: string) => unknown }).get(key)
+  }
+  set(key: string, value: unknown): void {
+    ;(connectorFile as unknown as { set: (k: string, v: unknown) => void }).set(key, value)
+  }
+}
+
+const connectorSettings = new ConnectorSettingsService(new ElectronConnectorStore(), {
+  isAsyncEncryptionAvailable: () => safeStorage.isAsyncEncryptionAvailable(),
+  encryptStringAsync: (s: string) => safeStorage.encryptStringAsync(s),
+  decryptStringAsync: (b: Buffer) => safeStorage.decryptStringAsync(b)
+})
+
+registerConnectorProvider(new ComposioProvider(() => connectorSettings.getKey()))
+
+const routineFile = new Store<{ routines: Routine[] }>({ name: 'palette-routines', defaults: { routines: [] } })
+
+class ElectronRoutineStore implements RoutineStore {
+  load(): Routine[] {
+    return routineFile.get('routines', [])
+  }
+  save(routines: Routine[]): void {
+    routineFile.set('routines', routines)
+  }
+}
+
+const scheduledActive = new Set<string>()
+/** Assigned inside wireIpc (needs startAgentRun + Notification scope). */
+let fireRoutine: (r: Routine) => void = () => {}
+
+const scheduler = new Scheduler(new ElectronRoutineStore(), {
+  isRunning: (id) => scheduledActive.has(id),
+  fire: (routine) => fireRoutine(routine)
 })
 
 let budgetGuard: BudgetGuard | null = null
@@ -210,6 +264,10 @@ function applyStrictCsp(): void {
 }
 
 function wireIpc(): void {
+  fireRoutine = (routine) => {
+    startAgentRun(routine.prompt, routine.tools, 'scheduled', routine.id)
+    new Notification({ title: 'CalTen routine fired', body: routine.prompt.slice(0, 200) }).show()
+  }
   ipcMain.handle(IpcChannels.platformInfo, (): PlatformInfo => platformInfo())
 
   ipcMain.handle(IpcChannels.getHotkey, () => ({
@@ -276,12 +334,19 @@ function wireIpc(): void {
     }
   })
 
-  function startAgentRun(prompt: string, toolNames: string[], source: 'palette' | 'scheduled'): string {
+  function startAgentRun(
+    prompt: string,
+    toolNames: string[],
+    source: 'palette' | 'scheduled',
+    routineId?: string
+  ): string {
     const runId = randomUUID()
     const controller = new AbortController()
     const active: ActiveRun = { controller, pending: new Map() }
     activeRuns.set(runId, active)
+    if (routineId) scheduledActive.add(routineId)
     const tools = toolNames.filter((t): t is ToolId => (TOOL_IDS as readonly string[]).includes(t))
+    const guard = getGuard()
     void runAgent({
       prompt,
       tools,
@@ -297,7 +362,22 @@ function wireIpc(): void {
         }),
       deps: {
         getConfig: () => settingsService.getConfig(),
-        getApiKey: () => settingsService.getApiKey()
+        getApiKey: () => settingsService.getApiKey(),
+        // Every Composio tool execution goes through BudgetGuard here.
+        getTools: async (ids) => {
+          const set = await getToolsForMentions(ids)
+          for (const [name, t] of Object.entries(set)) {
+            if (name === 'echo' || name === 'echo_write') continue
+            const orig = (t as { execute?: unknown }).execute
+            if (typeof orig !== 'function') continue
+            const fn = orig as (args: never, opts: never) => Promise<unknown>
+            ;(t as { execute: unknown }).execute = (args: never, opts: never) =>
+              guard
+                .execute({ source, runId, label: name, fn: () => fn(args, opts) })
+                .then((r) => r.result)
+          }
+          return set
+        }
       }
     })
       .catch((err) => {
@@ -306,10 +386,16 @@ function wireIpc(): void {
           runId,
           message: err instanceof Error ? err.message : String(err)
         })
+        if (routineId) scheduler.markRan(routineId, `error: ${err instanceof Error ? err.message : String(err)}`.slice(0, 200))
       })
       .finally(() => {
         activeRuns.delete(runId)
         getGuard().endRun(runId)
+        if (routineId) {
+          scheduledActive.delete(routineId)
+          const r = scheduler.list().find((x) => x.id === routineId)
+          if (r && !r.lastStatus?.startsWith('error')) scheduler.markRan(routineId, 'done')
+        }
       })
     return runId
   }
@@ -360,9 +446,29 @@ function wireIpc(): void {
     if (!parsed.success) return { ok: false as const, error: 'Invalid request.' }
     const submit = toPaletteSubmit(parsed.data.text)
 
-    // @calendar never runs an agent — it opens the calendar with a draft.
+    // @calendar + @tools + a time ("@calendar @notion at 6:30pm summarize X")
+    // creates a scheduled routine that fires the agent later as source
+    // 'scheduled'. Plain "@calendar <draft>" keeps the old open-draft path.
     if (submit.tools.includes('calendar')) {
-      const draft = parsed.data.text.replace(/@calendar\s*/i, '').trim()
+      const withoutCal = parsed.data.text.replace(/@calendar\s*/gi, '').trim()
+      const others = parseMentionedTools(withoutCal)
+      const sched = parseScheduleFromText(parsed.data.text, new Date())
+      if (sched && others.length > 0) {
+        try {
+          const routine = scheduler.create(parsed.data.text, new Date())
+          const draft = cleanPromptForRoutine(withoutCal, sched.timePhrase)
+          const draftParsed = CalendarDraftSchema.safeParse({
+            text: `⏰ ${new Date(routine.runAt).toLocaleString()} — ${draft}`
+          })
+          openCalendar(draftParsed.success ? draftParsed.data.text : draft)
+          if (process.platform === 'darwin' && app.dock) app.dock.show()
+          hidePalette(false)
+          return { ok: true as const, action: 'scheduled', tools: submit.tools, routine }
+        } catch (err) {
+          return { ok: false as const, error: err instanceof Error ? err.message : String(err) }
+        }
+      }
+      const draft = withoutCal
       const draftParsed = CalendarDraftSchema.safeParse({ text: draft })
       openCalendar(draftParsed.success ? draftParsed.data.text : '')
       // macOS: showing the calendar restores the Dock icon.
@@ -375,6 +481,64 @@ function wireIpc(): void {
     // + built-in echo tools). The renderer streams events via agent:event.
     const runId = startAgentRun(parsed.data.text, submit.tools, 'palette')
     return { ok: true as const, action: 'agent', tools: submit.tools, runId }
+  })
+
+  ipcMain.handle(IpcChannels.getConnector, async () => {
+    const pub = await connectorSettings.getPublicState()
+    const ids = ['notion', 'gmail', 'sheets', 'websearch', 'github'] as const
+    const services = await Promise.all(
+      ids.map(async (id) => {
+        const s = await new ComposioProvider(() => connectorSettings.getKey()).status(id)
+        return { id, ...s }
+      })
+    )
+    return { ...pub, services }
+  })
+
+  ipcMain.handle(IpcChannels.setConnectorKey, async (_event, payload: unknown) => {
+    const parsed = ConnectorKeySchema.safeParse(payload)
+    if (!parsed.success) return { ok: false as const, error: 'Invalid key.' }
+    try {
+      await connectorSettings.setKey(parsed.data.key)
+      return { ok: true as const }
+    } catch (err) {
+      return { ok: false as const, error: err instanceof Error ? err.message : String(err) }
+    }
+  })
+
+  ipcMain.handle(IpcChannels.clearConnectorKey, async () => {
+    await connectorSettings.clearKey()
+    return { ok: true as const }
+  })
+
+  ipcMain.handle(IpcChannels.routineList, () => ({ ok: true as const, routines: scheduler.list() }))
+
+  ipcMain.handle(IpcChannels.routineCreate, (_event, payload: unknown) => {
+    const parsed = RoutineCreateSchema.safeParse(payload)
+    if (!parsed.success) return { ok: false as const, error: 'Invalid routine request.' }
+    try {
+      const routine = scheduler.create(parsed.data.text, new Date())
+      return { ok: true as const, routine }
+    } catch (err) {
+      return { ok: false as const, error: err instanceof Error ? err.message : String(err) }
+    }
+  })
+
+  ipcMain.handle(IpcChannels.routineRemove, (_event, payload: unknown) => {
+    const parsed = RoutineIdSchema.safeParse(payload)
+    if (!parsed.success) return { ok: false as const, error: 'Invalid routine id.' }
+    return scheduler.remove(parsed.data.id)
+      ? { ok: true as const }
+      : { ok: false as const, error: 'Routine not found.' }
+  })
+
+  ipcMain.handle(IpcChannels.routineToggle, (_event, payload: unknown) => {
+    const parsed = RoutineToggleSchema.safeParse(payload)
+    if (!parsed.success) return { ok: false as const, error: 'Invalid toggle request.' }
+    const routine = scheduler.setEnabled(parsed.data.id, parsed.data.enabled)
+    return routine
+      ? { ok: true as const, routine }
+      : { ok: false as const, error: 'Routine not found.' }
   })
 
   ipcMain.on('calendar:opened-with-window', () => {
@@ -398,6 +562,7 @@ async function onReady(): Promise<void> {
   applyStrictCsp()
   createPaletteWindow()
   wireIpc()
+  scheduler.startAll()
   createTray()
   applyAutostart()
 

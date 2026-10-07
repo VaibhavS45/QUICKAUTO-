@@ -43,6 +43,9 @@ export default function PaletteApp(): React.JSX.Element {
   const [hotkey, setHotkey] = useState('')
   const [hotkeyMsg, setHotkeyMsg] = useState<string | null>(null)
   const [platformHint, setPlatformHint] = useState<string | null>(null)
+  const [hyprCmd, setHyprCmd] = useState<string | null>(null)
+  const [isHyprland, setIsHyprland] = useState(false)
+  const [copied, setCopied] = useState(false)
   const inputRef = useRef<HTMLInputElement>(null)
 
   const mention = useMemo(() => activeMention(value, caret), [value, caret])
@@ -64,12 +67,20 @@ export default function PaletteApp(): React.JSX.Element {
       setHotkey(h.hotkey)
       if (h.error) setHotkeyMsg(h.error)
     })
-    void window.palette.platformInfo().then((p: { wayland: boolean; sessionType: string }) => {
-      if (p.wayland)
-        setPlatformHint(
-          `Wayland session (${p.sessionType}): global hotkeys are unreliable. Bind a system shortcut to palette --toggle if the hotkey fails.`
-        )
-    })
+    void window.palette.platformInfo().then(
+      (p: { wayland: boolean; sessionType: string; hyprland?: boolean; toggleCommand?: string }) => {
+        if (p.hyprland && p.toggleCommand) {
+          setIsHyprland(true)
+          setHyprCmd(p.toggleCommand)
+          setPlatformHint(
+            `Hyprland session: global hotkeys are unreliable, so bind a system key instead (the setup script adds it for you).`
+          )
+        } else if (p.wayland)
+          setPlatformHint(
+            `Wayland session (${p.sessionType}): global hotkeys are unreliable. Bind a system shortcut to quickauto --toggle if the hotkey fails.`
+          )
+      }
+    )
     return () => {
       offOpened()
       offSettings()
@@ -176,9 +187,9 @@ export default function PaletteApp(): React.JSX.Element {
   }
 
   return (
-    <div className="mx-auto w-[720px] overflow-hidden rounded-xl border border-neutral-700 bg-neutral-900/95 shadow-2xl backdrop-blur">
+    <div className="mx-auto w-[720px] overflow-hidden rounded-xl border-2 border-black bg-white text-black shadow-2xl">
       <div className="flex items-center gap-2 px-4 pt-3">
-        <span className="text-neutral-400">›</span>
+        <span className="font-bold text-black">›</span>
         <input
           ref={inputRef}
           autoFocus
@@ -190,11 +201,11 @@ export default function PaletteApp(): React.JSX.Element {
           onSelect={(e) => setCaret(e.currentTarget.selectionStart ?? 0)}
           onKeyDown={onKeyDown}
           placeholder="Type @ for tools…  (@calendar opens a task draft)"
-          className="w-full bg-transparent text-[15px] text-neutral-100 outline-none placeholder:text-neutral-500"
+          className="w-full bg-transparent text-[15px] text-black outline-none placeholder:text-neutral-500"
         />
         <button
           onClick={() => setShowSettings((s) => !s)}
-          className="rounded px-1 text-neutral-500 hover:text-neutral-200"
+          className="rounded px-1 text-neutral-600 hover:text-black"
           title="Settings"
         >
           ⚙
@@ -204,10 +215,10 @@ export default function PaletteApp(): React.JSX.Element {
       {tools.length > 0 && (
         <div className="flex flex-wrap gap-1 px-4 pt-2">
           {tools.map((t) => (
-            <span
-              key={t}
-              className="rounded bg-indigo-600/30 px-1.5 py-0.5 text-xs text-indigo-200"
-            >
+              <span
+                key={t}
+                className="rounded bg-neutral-200 px-1.5 py-0.5 text-xs font-medium text-black"
+              >
               @{t}
             </span>
           ))}
@@ -230,11 +241,11 @@ export default function PaletteApp(): React.JSX.Element {
                 <button
                   onClick={() => applyCandidate(c)}
                   className={`flex w-full items-center justify-between rounded px-3 py-1.5 text-left text-sm ${
-                    i === selected ? 'bg-indigo-600/40 text-white' : 'text-neutral-300'
+                    i === selected ? 'bg-black text-white' : 'text-black hover:bg-neutral-200'
                   }`}
                 >
                   <span className="font-mono">{c}</span>
-                  <span className="text-xs text-neutral-400">{meta?.hint ?? ''}</span>
+                  <span className={`text-xs ${i === selected ? 'text-neutral-300' : 'text-neutral-600'}`}>{meta?.hint ?? ''}</span>
                 </button>
               </li>
             )
@@ -243,40 +254,66 @@ export default function PaletteApp(): React.JSX.Element {
       )}
 
       {result && (
-        <div className="border-t border-neutral-800 px-4 py-3 text-sm text-neutral-200">
+        <div className="border-t border-neutral-300 px-4 py-3 text-sm text-black">
           {result}
-          <div className="pt-1 text-xs text-neutral-500">⌘/Ctrl+Enter copies the result.</div>
+          <div className="pt-1 text-xs text-neutral-600">⌘/Ctrl+Enter copies the result.</div>
         </div>
       )}
 
       {showSettings && (
-        <div className="border-t border-neutral-800 px-4 py-3 text-sm text-neutral-200">
+        <div className="border-t border-neutral-300 px-4 py-3 text-sm text-black">
           <div className="font-medium">Settings (M1: hotkey only)</div>
-          {platformHint && <div className="pt-1 text-xs text-amber-300">{platformHint}</div>}
+          {platformHint && <div className="pt-1 text-xs font-medium text-black">{platformHint}</div>}
+          {isHyprland && hyprCmd && (
+            <div className="flex items-center gap-2 pt-2">
+              <code className="flex-1 overflow-x-auto rounded border border-black bg-neutral-100 px-2 py-1 font-mono text-xs text-black">
+                {`o.bind("${hotkey
+                  .split('+')
+                  .map((s) => s.trim().toUpperCase())
+                  .join(' + ')}", "QUICKauto", "${hyprCmd}")`}
+              </code>
+              <button
+                onClick={() => {
+                  const line = `o.bind("${hotkey
+                    .split('+')
+                    .map((s) => s.trim().toUpperCase())
+                    .join(' + ')}", "QUICKauto", "${hyprCmd}")`
+                  void navigator.clipboard
+                    .writeText(line)
+                    .then(() => setCopied(true))
+                    .catch(() => setCopied(false))
+                  window.setTimeout(() => setCopied(false), 2000)
+                }}
+                className="rounded bg-black px-2 py-1 text-xs text-white"
+              >
+                {copied ? 'Copied' : 'Copy'}
+              </button>
+            </div>
+          )}
           <div className="flex items-center gap-2 pt-2">
-            <label className="text-xs text-neutral-400">Global hotkey</label>
+            <label className="text-xs text-neutral-600">Global hotkey</label>
             <input
               value={hotkey}
               onChange={(e) => setHotkey(e.target.value)}
-              className="rounded border border-neutral-700 bg-neutral-800 px-2 py-1 font-mono text-xs text-neutral-100"
+              className="rounded border border-black bg-white px-2 py-1 font-mono text-xs text-black"
             />
             <button
               onClick={() => void saveHotkey()}
-              className="rounded bg-indigo-600 px-2 py-1 text-xs text-white"
+              className="rounded bg-black px-2 py-1 text-xs text-white"
             >
               Save
             </button>
           </div>
           {hotkeyMsg && (
-            <div className="whitespace-pre-wrap pt-2 text-xs text-amber-200">{hotkeyMsg}</div>
+            <div className="whitespace-pre-wrap pt-2 text-xs font-medium text-black">{hotkeyMsg}</div>
           )}
-          <div className="pt-1 text-xs text-neutral-500">
+          <div className="pt-1 text-xs text-neutral-600">
             Providers, connections, granted folders and the Composio budget meter land in M2–M3.
           </div>
         </div>
       )}
 
-      <div className="flex items-center justify-between border-t border-neutral-800 px-4 py-1.5 text-[11px] text-neutral-500">
+      <div className="flex items-center justify-between border-t border-neutral-300 px-4 py-1.5 text-[11px] text-neutral-600">
         <span>Enter run · Esc hide · ↑ history · @ tools: {TOOL_IDS.map((t) => `@${t}`).join(' ')}</span>
         <span>Composio budget meter lands in M3</span>
       </div>

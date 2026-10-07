@@ -21,6 +21,12 @@ export function preloadPath(): string {
 
 let win: BrowserWindow | null = null
 let lastFocusedWindowId: number | null = null
+let lastToggleSignalAt: number | null = null
+
+/** QUICKAUTO_DEBUG=1 latency probe: mark when a --toggle signal arrived. */
+export function noteToggleSignal(): void {
+  lastToggleSignalAt = Date.now()
+}
 
 function rendererUrl(page: string): string {
   if (process.env['ELECTRON_RENDERER_URL']) {
@@ -101,8 +107,16 @@ export function showPalette(): void {
   const { x, y } = centerOnCursor()
   win.setPosition(x, y)
   win.show()
+  // Hyprland/Wayland: show() alone may leave the surface unfocused; the O3
+  // window rules (float + pin + stay focused) pair with this explicit focus.
   win.focus()
   win.webContents.send('palette:opened')
+  if (process.env['QUICKAUTO_DEBUG'] === '1' && lastToggleSignalAt !== null) {
+    process.stderr.write(
+      `[quickauto-debug] palette shown in ${Date.now() - lastToggleSignalAt}ms (signal -> show)\n`
+    )
+  }
+  lastToggleSignalAt = null
 }
 
 export function hidePalette(restoreFocus: boolean): void {

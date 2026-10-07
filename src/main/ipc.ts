@@ -32,9 +32,25 @@ export const SetHotkeySchema = z.object({
   hotkey: HotkeySchema
 })
 
+export const PlatformInfoSchema = z.object({
+  platform: z.string(),
+  sessionType: z.string(),
+  wayland: z.boolean(),
+  globalShortcutReliable: z.boolean(),
+  hyprland: z.boolean(),
+  toggleCommand: z.string()
+})
+
 export interface PlatformInfo {
   platform: NodeJS.Platform
   sessionType: string
   wayland: boolean
   globalShortcutReliable: boolean
+  /** Running inside Hyprland (HYPRLAND_INSTANCE_SIGNATURE or XDG_CURRENT_DESKTOP). */
+  hyprland: boolean
+  /**
+   * Exact command a system shortcut must run for --toggle.
+   * Packaged: process.execPath; dev: `electron <app-path>`.
+   */
+  toggleCommand: string
 }

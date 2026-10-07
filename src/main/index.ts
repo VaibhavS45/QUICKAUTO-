@@ -5,7 +5,8 @@ import {
   showPalette,
   hidePalette,
   togglePalette,
-  getPaletteWindow
+  getPaletteWindow,
+  noteToggleSignal
 } from './palette-window.js'
 import { openCalendar, getCalendarWindow } from './calendar-window.js'
 import {
@@ -13,14 +14,29 @@ import {
   PaletteSubmitSchema,
   CalendarDraftSchema,
   SetHotkeySchema,
+  PlatformInfoSchema,
   type PlatformInfo
 } from './ipc.js'
 import { defaultHotkey, toPaletteSubmit } from '../shared/types.js'
+import { wantsToggle, coldStartVisibility } from '../shared/startup.js'
+import { detectHyprland, electronHotkeyToHypr, hyprBindSnippet } from '../shared/hypr.js'
 
 // Stable Linux identity: predictable Wayland app_id / X11 WM_CLASS.
 // Must run before app.ready. electron-store's data dir follows this name
 // (~/.config/quickauto); no migration needed at M1 (fresh rename).
 app.setName('quickauto')
+
+// Prefer native Wayland when available (harmless elsewhere). Electron 44
+// already defaults to --ozone-platform=wayland on this machine; the hint
+// keeps dev/X11-fallback behavior predictable.
+app.commandLine.appendSwitch('ozone-platform-hint', 'auto')
+
+/** Debug timing for `--toggle` latency (QUICKAUTO_DEBUG=1): signal -> shown. */
+function debugLog(message: string): void {
+  if (process.env['QUICKAUTO_DEBUG'] === '1') {
+    process.stderr.write(`[quickauto-debug] ${message}\n`)
+  }
+}
 
 const gotLock = app.requestSingleInstanceLock()
 if (!gotLock) app.quit()
@@ -32,38 +48,80 @@ const store = new Store<{ hotkey: string; openAtLogin: boolean }>({
 let tray: Tray | null = null
 let hotkeyError: string | null = null
 
-function wantsToggle(argv: string[]): boolean {
-  return argv.includes('--toggle') || argv.includes('palette --toggle')
-}
+// Cold-start policy (O1): a `--toggle` launch must never do nothing. If this
+// process is the first instance AND was started with --toggle, show the
+// palette once ready. Plain launches (autostart) stay hidden in the tray.
+const coldStart = coldStartVisibility(process.argv)
 
-// Second-instance (palette --toggle CLI) routes through the single-instance lock.
+// Second-instance (quickauto --toggle CLI) routes through the single-instance lock.
 app.on('second-instance', (_event, argv) => {
-  if (wantsToggle(argv)) togglePalette()
-  else showPalette()
+  if (wantsToggle(argv)) {
+    noteToggleSignal()
+    debugLog('second-instance --toggle received')
+    togglePalette()
+  } else {
+    noteToggleSignal()
+    showPalette()
+  }
 })
 
 function sessionType(): string {
   return process.env['XDG_SESSION_TYPE'] ?? (process.platform === 'linux' ? 'unknown' : 'n/a')
 }
 
+function isHyprland(): boolean {
+  return detectHyprland({
+    HYPRLAND_INSTANCE_SIGNATURE: process.env['HYPRLAND_INSTANCE_SIGNATURE'],
+    XDG_CURRENT_DESKTOP: process.env['XDG_CURRENT_DESKTOP']
+  })
+}
+
+/**
+ * Exact command a system shortcut must run for --toggle.
+ * Packaged builds: the real executable path. Dev (`electron <app>`):
+ * `electron <app-path> --toggle`.
+ */
+export function toggleCommand(): string {
+  if (app.isPackaged) return `${process.execPath} --toggle`
+  return `electron ${app.getAppPath()} --toggle`
+}
+
 function platformInfo(): PlatformInfo {
   const st = sessionType()
   const wayland = process.platform === 'linux' && st === 'wayland'
-  return {
+  const info: PlatformInfo = {
     platform: process.platform,
     sessionType: st,
     wayland,
     // globalShortcut is unreliable on Wayland (Electron docs / portal path).
-    globalShortcutReliable: !wayland
+    globalShortcutReliable: !wayland,
+    hyprland: isHyprland(),
+    toggleCommand: toggleCommand()
   }
+  // Fail loud in dev if the contract drifts; never crash in production.
+  const parsed = PlatformInfoSchema.safeParse(info)
+  if (!parsed.success) debugLog(`platformInfo schema drift: ${parsed.error.message}`)
+  return info
 }
 
 function waylandToggleHint(): string {
-  const execPath = process.execPath
+  const cmd = toggleCommand()
+  if (isHyprland()) {
+    // Omarchy 4 uses Lua config (~/.config/hypr/bindings.lua); older setups
+    // use `bind = MOD, KEY, exec, <cmd>` in hyprland.conf. The Settings panel
+    // shows the Lua line with a Copy button; both are printed here for logs.
+    const hotkey = store.get('hotkey', defaultHotkey(process.platform))
+    const lua = hyprBindSnippet(electronHotkeyToHypr(hotkey), cmd, 'lua')
+    return (
+      `Global hotkeys don't work reliably on Wayland, so the hotkey was not registered.\n\n` +
+      `Hyprland fallback — add to ~/.config/hypr/bindings.lua (managed block or manual):\n${lua}\n\n` +
+      `Classic hyprland.conf fallback:\nbind = <MOD>, <KEY>, exec, ${cmd}`
+    )
+  }
   return (
     `Global hotkeys don't work reliably on Wayland, so the hotkey was not registered.\n\n` +
     `Fallback: bind a system shortcut in your desktop settings (GNOME: Settings → Keyboard → Custom Shortcut, ` +
-    `KDE: System Settings → Shortcuts) to run:\n${execPath} --toggle`
+    `KDE: System Settings → Shortcuts) to run:\n${cmd}`
   )
 }
 
@@ -95,34 +153,41 @@ function applyAutostart(): void {
 }
 
 function createTray(): void {
-  const icon = nativeImage.createEmpty()
-  tray = new Tray(icon)
-  tray.setToolTip('QUICKauto')
-  const menu = Menu.buildFromTemplate([
-    { label: 'Open palette', click: () => showPalette() },
-    { label: 'Open calendar', click: () => openCalendar() },
-    {
-      label: 'Settings',
-      click: () => {
-        showPalette()
-        getPaletteWindow()?.webContents.send('settings:open')
-      }
-    },
-    { type: 'separator' },
-    {
-      label: 'Start on login',
-      type: 'checkbox',
-      checked: store.get('openAtLogin', false),
-      click: (item) => {
-        store.set('openAtLogin', item.checked)
-        applyAutostart()
-      }
-    },
-    { type: 'separator' },
-    { label: 'Quit', click: () => app.quit() }
-  ])
-  tray.setContextMenu(menu)
-  tray.on('click', () => togglePalette())
+  try {
+    const icon = nativeImage.createEmpty()
+    tray = new Tray(icon)
+    tray.setToolTip('QUICKauto')
+    const menu = Menu.buildFromTemplate([
+      { label: 'Open palette', click: () => showPalette() },
+      { label: 'Open calendar', click: () => openCalendar() },
+      {
+        label: 'Settings',
+        click: () => {
+          showPalette()
+          getPaletteWindow()?.webContents.send('settings:open')
+        }
+      },
+      { type: 'separator' },
+      {
+        label: 'Start on login',
+        type: 'checkbox',
+        checked: store.get('openAtLogin', false),
+        click: (item) => {
+          store.set('openAtLogin', item.checked)
+          applyAutostart()
+        }
+      },
+      { type: 'separator' },
+      { label: 'Quit', click: () => app.quit() }
+    ])
+    tray.setContextMenu(menu)
+    tray.on('click', () => togglePalette())
+  } catch (err) {
+    // Headless / no StatusNotifier host (e.g. Waybar tray missing): stay alive
+    // on --toggle. One line, no crash.
+    debugLog(`tray unavailable, continuing without it: ${String(err)}`)
+    tray = null
+  }
 }
 
 function applyStrictCsp(): void {
@@ -196,17 +261,27 @@ function wireIpc(): void {
 }
 
 async function onReady(): Promise<void> {
-  // CLI flag through the single-instance lock.
-  if (wantsToggle(process.argv)) {
-    // First instance started with --toggle: start hidden (tray only).
-    // (No window to toggle yet; just don't show anything.)
-  }
-
   applyStrictCsp()
-  createPaletteWindow()
+  const palette = createPaletteWindow()
   wireIpc()
   createTray()
   applyAutostart()
+
+  // Cold start via --toggle (O1): a hotkey press must never do nothing. Show
+  // once the renderer finished loading (with a fallback timer in case the
+  // load event is missed). Plain launches stay hidden in the tray.
+  if (coldStart === 'show') {
+    noteToggleSignal()
+    debugLog('cold start with --toggle: will show palette once ready')
+    let shown = false
+    const showOnce = (): void => {
+      if (shown) return
+      shown = true
+      showPalette()
+    }
+    palette.webContents.once('did-finish-load', showOnce)
+    setTimeout(showOnce, 3000).unref?.()
+  }
 
   const hotkey = store.get('hotkey', defaultHotkey(process.platform))
   const registered = registerHotkey(hotkey)

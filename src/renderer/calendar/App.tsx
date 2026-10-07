@@ -18,18 +18,18 @@ export default function CalendarApp(): React.JSX.Element {
   }, [])
 
   return (
-    <div className="min-h-screen bg-neutral-950 p-6 text-neutral-100">
+    <div className="min-h-screen bg-white p-6 text-black">
       <h1 className="text-xl font-semibold">QUICKauto Calendar (M1 shell)</h1>
-      <p className="pt-1 text-sm text-neutral-400">
+      <p className="pt-1 text-sm text-neutral-600">
         Month / week / day views, drag-to-reschedule, run history and the scheduler land in
         Milestone 4. The app keeps running in the tray after windows close so schedules can fire.
       </p>
-      <div className="mt-4 rounded-lg border border-neutral-800 bg-neutral-900 p-4">
+      <div className="mt-4 rounded-lg border-2 border-black bg-neutral-100 p-4">
         <h2 className="text-sm font-medium">New task draft {'@calendar'}</h2>
         {draft ? (
-          <p className="whitespace-pre-wrap pt-2 text-sm text-neutral-200">{draft}</p>
+          <p className="whitespace-pre-wrap pt-2 text-sm text-black">{draft}</p>
         ) : (
-          <p className="pt-2 text-sm text-neutral-500">
+          <p className="pt-2 text-sm text-neutral-600">
             Empty. Type <span className="font-mono">@calendar buy milk Friday 9am</span> in the
             palette and press Enter — this panel opens with the text pre-filled.
           </p>

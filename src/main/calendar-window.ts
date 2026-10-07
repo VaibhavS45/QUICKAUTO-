@@ -27,6 +27,7 @@ export function openCalendar(draft?: string): void {
     minWidth: 800,
     minHeight: 550,
     show: false,
+    title: 'QUICKauto Calendar',
     webPreferences: {
       preload: preloadPath(),
       contextIsolation: true,

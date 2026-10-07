@@ -1,7 +1,7 @@
 {
-  "name": "palette",
+  "name": "quickauto",
   "version": "0.1.0",
-  "description": "Palette — Raycast-style command palette + agent task calendar",
+  "description": "QUICKauto — Raycast-style command palette + agent task calendar",
   "type": "module",
   "author": "",
   "license": "MIT",

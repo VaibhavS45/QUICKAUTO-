@@ -1,5 +1,5 @@
-appId: com.palette.app
-productName: Palette
+appId: com.quickauto.app
+productName: QUICKauto
 directories:
   output: dist
 files:

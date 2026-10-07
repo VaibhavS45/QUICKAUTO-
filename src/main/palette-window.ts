@@ -39,6 +39,7 @@ export function createPaletteWindow(): BrowserWindow {
     width: PALETTE_WIDTH,
     height: PALETTE_MIN_HEIGHT,
     show: false,
+    title: 'QUICKauto',
     frame: false,
     transparent: true,
     alwaysOnTop: true,

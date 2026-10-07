@@ -1,4 +1,4 @@
-# Palette
+# QUICKauto
 
 Raycast-style pop-up command palette (global hotkey) + calendar app for scheduling
 AI agent tasks. All data stays local except what your chosen model provider, web
@@ -34,7 +34,7 @@ app shows the exact fallback in Settings and as a notification: bind a system
 shortcut to:
 
 ```
-<path-to-palette> --toggle
+<path-to-quickauto> --toggle
 ```
 
 GNOME: Settings → Keyboard → Custom Shortcut.

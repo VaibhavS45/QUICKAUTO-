@@ -19,7 +19,7 @@ export default function CalendarApp(): React.JSX.Element {
 
   return (
     <div className="min-h-screen bg-neutral-950 p-6 text-neutral-100">
-      <h1 className="text-xl font-semibold">Palette Calendar (M1 shell)</h1>
+      <h1 className="text-xl font-semibold">QUICKauto Calendar (M1 shell)</h1>
       <p className="pt-1 text-sm text-neutral-400">
         Month / week / day views, drag-to-reschedule, run history and the scheduler land in
         Milestone 4. The app keeps running in the tray after windows close so schedules can fire.

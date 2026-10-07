@@ -17,6 +17,11 @@ import {
 } from './ipc.js'
 import { defaultHotkey, toPaletteSubmit } from '../shared/types.js'
 
+// Stable Linux identity: predictable Wayland app_id / X11 WM_CLASS.
+// Must run before app.ready. electron-store's data dir follows this name
+// (~/.config/quickauto); no migration needed at M1 (fresh rename).
+app.setName('quickauto')
+
 const gotLock = app.requestSingleInstanceLock()
 if (!gotLock) app.quit()
 
@@ -92,7 +97,7 @@ function applyAutostart(): void {
 function createTray(): void {
   const icon = nativeImage.createEmpty()
   tray = new Tray(icon)
-  tray.setToolTip('Palette')
+  tray.setToolTip('QUICKauto')
   const menu = Menu.buildFromTemplate([
     { label: 'Open palette', click: () => showPalette() },
     { label: 'Open calendar', click: () => openCalendar() },
@@ -207,8 +212,8 @@ async function onReady(): Promise<void> {
   const registered = registerHotkey(hotkey)
   if (!registered && platformInfo().wayland) {
     new Notification({
-      title: 'Palette: hotkey unavailable on Wayland',
-      body: 'Bind a system shortcut to palette --toggle. See Settings for the exact command.'
+      title: 'QUICKauto: hotkey unavailable on Wayland',
+      body: 'Bind a system shortcut to quickauto --toggle. See Settings for the exact command.'
     }).show()
   }
 

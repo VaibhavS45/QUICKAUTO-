@@ -59,15 +59,27 @@ test('CalTen smoke: calendar first, palette toggle, @calendar draft', async () =
     await input.click()
     await input.fill('@')
     await expect(palette.getByRole('button', { name: /@gmail/ }).first()).toBeVisible()
+
+    // Prompt 0: the palette window auto-resizes to fit content (was fixed 120px).
+    const paletteHeight = (): Promise<number> =>
+      app.evaluate(({ BrowserWindow }) => {
+        const wins = BrowserWindow.getAllWindows()
+        const pal = wins.find((w) => w.webContents.getURL().includes('#palette'))
+        return pal ? pal.getContentBounds().height : -1
+      })
+    await expect.poll(paletteHeight, { timeout: 10_000 }).toBeGreaterThan(120)
+
     // Alias @email resolves to @gmail.
     await input.fill('@ema')
     await expect(palette.getByRole('button', { name: /@email/ }).first()).toBeVisible()
 
-    // Chained tools + natural language submit (M1: placeholder result, no agent yet).
+    // Chained tools + natural language submit starts an agent run. With no API
+    // key configured in the test env, the run fails with a clear message
+    // (never silently, never crashing the window).
     await input.fill('@websearch hello @gmail world')
     await expect(palette.getByText('@websearch', { exact: true }).first()).toBeVisible()
     await input.press('Enter')
-    await expect(palette.getByText(/would have used: @websearch, @gmail/)).toBeVisible()
+    await expect(palette.getByText(/No model API key set/)).toBeVisible({ timeout: 30_000 })
 
     // @calendar sends the trailing text as a draft to the open calendar window.
     await input.fill('@calendar buy milk Friday 9am')

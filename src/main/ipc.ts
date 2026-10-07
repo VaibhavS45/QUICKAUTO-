@@ -1,5 +1,11 @@
 import { z } from 'zod'
 import { HotkeySchema } from '../shared/types.js'
+import {
+  AgentApprovalResponseSchema,
+  AgentRunRequestSchema,
+  PaletteResizeSchema
+} from '../shared/agent.js'
+import { ModelSettingsSchema } from './settings/model-settings.js'
 
 /**
  * Typed IPC contract. Renderers may only invoke these channels
@@ -9,13 +15,24 @@ import { HotkeySchema } from '../shared/types.js'
 export const IpcChannels = {
   paletteSubmit: 'palette:submit',
   paletteHide: 'palette:hide',
+  paletteResize: 'palette:resize',
   getHotkey: 'settings:get-hotkey',
   setHotkey: 'settings:set-hotkey',
   hotkeyError: 'settings:hotkey-error',
   platformInfo: 'app:platform-info',
   calendarMinimize: 'calendar:minimize',
   calendarMaximize: 'calendar:toggle-maximize',
-  calendarClose: 'calendar:close'
+  calendarClose: 'calendar:close',
+  getModelSettings: 'settings:get-model',
+  setModelSettings: 'settings:set-model',
+  setApiKey: 'settings:set-api-key',
+  clearApiKey: 'settings:clear-api-key',
+  agentRun: 'agent:run',
+  agentCancel: 'agent:cancel',
+  agentApproval: 'agent:approval',
+  /** Main -> renderer push channel for streaming agent events. */
+  agentEvent: 'agent:event',
+  getBudget: 'budget:get'
 } as const
 
 export type IpcChannel = (typeof IpcChannels)[keyof typeof IpcChannels]
@@ -32,6 +49,16 @@ export const CalendarDraftSchema = z.object({
 export const SetHotkeySchema = z.object({
   hotkey: HotkeySchema
 })
+
+export const ApiKeySchema = z.object({
+  key: z.string().min(1).max(10000)
+})
+
+export const AgentCancelSchema = z.object({
+  runId: z.string().min(1).max(128)
+})
+
+export { AgentApprovalResponseSchema, AgentRunRequestSchema, PaletteResizeSchema, ModelSettingsSchema }
 
 export interface PlatformInfo {
   platform: NodeJS.Platform

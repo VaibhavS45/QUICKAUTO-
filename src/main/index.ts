@@ -1,0 +1,234 @@
+import { app, BrowserWindow, Tray, Menu, globalShortcut, ipcMain, nativeImage, session, Notification } from 'electron'
+import Store from 'electron-store'
+import {
+  createPaletteWindow,
+  showPalette,
+  hidePalette,
+  togglePalette,
+  getPaletteWindow
+} from './palette-window.js'
+import { openCalendar, getCalendarWindow } from './calendar-window.js'
+import {
+  IpcChannels,
+  PaletteSubmitSchema,
+  CalendarDraftSchema,
+  SetHotkeySchema,
+  type PlatformInfo
+} from './ipc.js'
+import { defaultHotkey, toPaletteSubmit } from '../shared/types.js'
+
+const gotLock = app.requestSingleInstanceLock()
+if (!gotLock) app.quit()
+
+const store = new Store<{ hotkey: string; openAtLogin: boolean }>({
+  defaults: { hotkey: defaultHotkey(process.platform), openAtLogin: false }
+})
+
+let tray: Tray | null = null
+let hotkeyError: string | null = null
+
+function wantsToggle(argv: string[]): boolean {
+  return argv.includes('--toggle') || argv.includes('palette --toggle')
+}
+
+// Second-instance (palette --toggle CLI) routes through the single-instance lock.
+app.on('second-instance', (_event, argv) => {
+  if (wantsToggle(argv)) togglePalette()
+  else showPalette()
+})
+
+function sessionType(): string {
+  return process.env['XDG_SESSION_TYPE'] ?? (process.platform === 'linux' ? 'unknown' : 'n/a')
+}
+
+function platformInfo(): PlatformInfo {
+  const st = sessionType()
+  const wayland = process.platform === 'linux' && st === 'wayland'
+  return {
+    platform: process.platform,
+    sessionType: st,
+    wayland,
+    // globalShortcut is unreliable on Wayland (Electron docs / portal path).
+    globalShortcutReliable: !wayland
+  }
+}
+
+function waylandToggleHint(): string {
+  const execPath = process.execPath
+  return (
+    `Global hotkeys don't work reliably on Wayland, so the hotkey was not registered.\n\n` +
+    `Fallback: bind a system shortcut in your desktop settings (GNOME: Settings → Keyboard → Custom Shortcut, ` +
+    `KDE: System Settings → Shortcuts) to run:\n${execPath} --toggle`
+  )
+}
+
+function registerHotkey(hotkey: string): boolean {
+  globalShortcut.unregisterAll()
+  try {
+    const ok = globalShortcut.register(hotkey, () => togglePalette())
+    if (!ok) {
+      hotkeyError =
+        process.platform === 'linux' && platformInfo().wayland
+          ? waylandToggleHint()
+          : `Could not register hotkey "${hotkey}". It may be in use by another app. ` +
+            `Pick a different hotkey in Settings, or run with --toggle.`
+      getPaletteWindow()?.webContents.send(IpcChannels.hotkeyError, hotkeyError)
+      return false
+    }
+    hotkeyError = null
+    return true
+  } catch (err) {
+    hotkeyError = `Could not register hotkey "${hotkey}": ${String(err)}`
+    getPaletteWindow()?.webContents.send(IpcChannels.hotkeyError, hotkeyError)
+    return false
+  }
+}
+
+function applyAutostart(): void {
+  const openAtLogin = store.get('openAtLogin', false)
+  app.setLoginItemSettings({ openAtLogin })
+}
+
+function createTray(): void {
+  const icon = nativeImage.createEmpty()
+  tray = new Tray(icon)
+  tray.setToolTip('Palette')
+  const menu = Menu.buildFromTemplate([
+    { label: 'Open palette', click: () => showPalette() },
+    { label: 'Open calendar', click: () => openCalendar() },
+    {
+      label: 'Settings',
+      click: () => {
+        showPalette()
+        getPaletteWindow()?.webContents.send('settings:open')
+      }
+    },
+    { type: 'separator' },
+    {
+      label: 'Start on login',
+      type: 'checkbox',
+      checked: store.get('openAtLogin', false),
+      click: (item) => {
+        store.set('openAtLogin', item.checked)
+        applyAutostart()
+      }
+    },
+    { type: 'separator' },
+    { label: 'Quit', click: () => app.quit() }
+  ])
+  tray.setContextMenu(menu)
+  tray.on('click', () => togglePalette())
+}
+
+function applyStrictCsp(): void {
+  session.defaultSession.webRequest.onHeadersReceived((details, callback) => {
+    const dev = !!process.env['ELECTRON_RENDERER_URL']
+    const csp = dev
+      ? `default-src 'self' 'unsafe-inline' 'unsafe-eval' data: http://localhost:* ws://localhost:*; script-src 'self' 'unsafe-inline' 'unsafe-eval' http://localhost:*; style-src 'self' 'unsafe-inline' http://localhost:*; img-src 'self' data: blob:; font-src 'self' data:;`
+      : `default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self' data:;`
+    callback({
+      responseHeaders: {
+        ...details.responseHeaders,
+        'Content-Security-Policy': [csp]
+      }
+    })
+  })
+}
+
+function wireIpc(): void {
+  ipcMain.handle(IpcChannels.platformInfo, (): PlatformInfo => platformInfo())
+
+  ipcMain.handle(IpcChannels.getHotkey, () => ({
+    hotkey: store.get('hotkey', defaultHotkey(process.platform)),
+    error: hotkeyError
+  }))
+
+  ipcMain.handle(IpcChannels.setHotkey, (_event, payload: unknown) => {
+    const parsed = SetHotkeySchema.safeParse(payload)
+    if (!parsed.success) return { ok: false, error: 'Invalid hotkey format.' }
+    store.set('hotkey', parsed.data.hotkey)
+    const ok = registerHotkey(parsed.data.hotkey)
+    return { ok, error: ok ? null : hotkeyError }
+  })
+
+  ipcMain.on(IpcChannels.paletteHide, () => hidePalette(true))
+
+  ipcMain.handle(IpcChannels.paletteSubmit, (_event, payload: unknown) => {
+    const parsed = PaletteSubmitSchema.safeParse(payload)
+    if (!parsed.success) return { ok: false as const, error: 'Invalid request.' }
+    const submit = toPaletteSubmit(parsed.data.text)
+
+    // @calendar never runs an agent — it opens the calendar with a draft.
+    if (submit.tools.includes('calendar')) {
+      const draft = parsed.data.text.replace(/@calendar\s*/i, '').trim()
+      const draftParsed = CalendarDraftSchema.safeParse({ text: draft })
+      openCalendar(draftParsed.success ? draftParsed.data.text : '')
+      // macOS: showing the calendar restores the Dock icon.
+      if (process.platform === 'darwin' && app.dock) app.dock.show()
+      hidePalette(false)
+      return { ok: true as const, action: 'calendar', tools: submit.tools }
+    }
+
+    // M1: no agent yet. Renderer shows this placeholder under the input.
+    return {
+      ok: true as const,
+      action: 'placeholder',
+      tools: submit.tools,
+      message:
+        submit.tools.length === 0
+          ? 'Agent loop lands in Milestone 2. For now try @ to see the tool list, or @calendar <text> to open a task draft.'
+          : `Agent loop lands in Milestone 2 — would have used: ${submit.tools.map((t) => `@${t}`).join(', ')}.`
+    }
+  })
+
+  ipcMain.on('calendar:opened-with-window', () => {
+    if (process.platform === 'darwin' && app.dock) app.dock.show()
+  })
+  ipcMain.on('calendar:closed-to-tray', () => {
+    // macOS: back to accessory-style when only palette/tray remain.
+    if (process.platform === 'darwin' && app.dock && !getCalendarWindow()) app.dock.hide()
+  })
+}
+
+async function onReady(): Promise<void> {
+  // CLI flag through the single-instance lock.
+  if (wantsToggle(process.argv)) {
+    // First instance started with --toggle: start hidden (tray only).
+    // (No window to toggle yet; just don't show anything.)
+  }
+
+  applyStrictCsp()
+  createPaletteWindow()
+  wireIpc()
+  createTray()
+  applyAutostart()
+
+  const hotkey = store.get('hotkey', defaultHotkey(process.platform))
+  const registered = registerHotkey(hotkey)
+  if (!registered && platformInfo().wayland) {
+    new Notification({
+      title: 'Palette: hotkey unavailable on Wayland',
+      body: 'Bind a system shortcut to palette --toggle. See Settings for the exact command.'
+    }).show()
+  }
+
+  // macOS: hide the Dock icon while only the palette is open.
+  if (process.platform === 'darwin' && app.dock) app.dock.hide()
+
+  app.on('activate', () => {
+    if (BrowserWindow.getAllWindows().length === 0) createPaletteWindow()
+  })
+}
+
+app.whenReady().then(() => void onReady())
+
+// Keep running in the tray after windows close so schedules can fire (M4).
+app.on('window-all-closed', () => {
+  // Do not quit — tray keeps the app alive.
+})
+
+app.on('will-quit', () => {
+  globalShortcut.unregisterAll()
+})
+
+export { store }

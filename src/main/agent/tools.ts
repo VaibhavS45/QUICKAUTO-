@@ -35,24 +35,42 @@ export function createBuiltinTools() {
 export type BuiltinToolName = keyof ReturnType<typeof createBuiltinTools>
 
 /** Tools that need an in-app approve/deny card before they may run. */
-export const APPROVAL_REQUIRED_TOOLS: ReadonlySet<string> = new Set(['echo_write'])
+export const APPROVAL_REQUIRED_TOOLS: ReadonlySet<string> = new Set([
+  'echo_write',
+  'gmail_draft',
+  'gmail_send',
+  'gmail_reply',
+  'gmail_modify_labels'
+])
+
+export type ToolApprovalValue = 'user-approval' | 'approved' | { type: 'denied'; reason: string }
 
 /**
- * Build the `toolApproval` map for the agent. Write tools get 'user-approval';
- * scheduled runs deny them outright (writes are queued for review, never run
- * silently). Everything else is 'not-applicable' (runs normally).
+ * Build the `toolApproval` map for the agent.
+ * - Write tools: 'user-approval' in palette runs, ALWAYS — the per-tool
+ *   auto-approve setting never applies to writes. Scheduled runs deny them
+ *   outright (queued for review, never run silently).
+ * - Other tools: 'approved' when the user enabled per-tool auto-approve for
+ *   palette runs, otherwise omitted ('not-applicable', runs normally).
+ *   Auto-approve is ignored for every scheduled run.
  */
 export function buildToolApproval(
   source: 'palette' | 'scheduled',
-  toolNames: string[]
-): Record<string, 'user-approval' | { type: 'denied'; reason: string }> {
-  const out: Record<string, 'user-approval' | { type: 'denied'; reason: string }> = {}
+  toolNames: string[],
+  autoApprove: ReadonlySet<string> = new Set()
+): Record<string, ToolApprovalValue> {
+  const out: Record<string, ToolApprovalValue> = {}
   for (const name of toolNames) {
-    if (!APPROVAL_REQUIRED_TOOLS.has(name)) continue
-    out[name] =
-      source === 'scheduled'
-        ? { type: 'denied', reason: 'Scheduled runs cannot auto-approve writes; queued for review.' }
-        : 'user-approval'
+    if (APPROVAL_REQUIRED_TOOLS.has(name)) {
+      out[name] =
+        source === 'scheduled'
+          ? { type: 'denied', reason: 'Scheduled runs cannot auto-approve writes; queued for review.' }
+          : 'user-approval'
+      continue
+    }
+    if (source === 'palette' && autoApprove.has(name)) {
+      out[name] = 'approved'
+    }
   }
   return out
 }

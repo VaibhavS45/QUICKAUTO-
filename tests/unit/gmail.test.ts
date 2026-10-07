@@ -9,6 +9,7 @@ import {
   GMAIL_READ_TOOLS,
   GMAIL_SEARCH_SLUG,
   GMAIL_SYSTEM_PROMPT,
+  GMAIL_WRITE_TOOLS,
   type ComposioClientLike
 } from '../../src/main/connectors/composio.js'
 import { BudgetGuard, MemoryBudgetStore } from '../../src/main/connectors/budget-guard.js'
@@ -65,10 +66,10 @@ function getTools(p: ComposioConnectorProvider, ids: Array<'gmail'> = ['gmail'])
 }
 
 describe('Gmail tool surface (read-only, fixed slugs)', () => {
-  it('exposes exactly the three read tools for @gmail', () => {
+  it('exposes exactly the read tools plus the four writes for @gmail', () => {
     const { provider } = providerWith(fakeClient())
     const tools = getTools(provider)
-    expect(Object.keys(tools).sort()).toEqual([...GMAIL_READ_TOOLS].sort())
+    expect(Object.keys(tools).sort()).toEqual([...GMAIL_READ_TOOLS, ...GMAIL_WRITE_TOOLS].sort())
   })
 
   it('exposes nothing without the gmail mention', () => {
@@ -77,10 +78,10 @@ describe('Gmail tool surface (read-only, fixed slugs)', () => {
     expect(provider.getTools(['github'])).toEqual({})
   })
 
-  it('contains no write/send/draft/delete slugs anywhere', () => {
+  it('contains no destructive tools beyond the four sanctioned writes', () => {
     const { provider } = providerWith(fakeClient())
     const src = JSON.stringify(Object.keys(getTools(provider)))
-    expect(src).not.toMatch(/send|draft|delete|trash|modify|patch|create|forward/i)
+    expect(src).not.toMatch(/delete|trash|forward|filter|patch|create_label|batch/i)
   })
 })
 

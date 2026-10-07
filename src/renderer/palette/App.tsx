@@ -59,6 +59,7 @@ interface ModelState {
   resetDay?: number
   keySet: boolean
   composioKeySet: boolean
+  autoApprove?: string[]
   encryptionAvailable: boolean
 }
 
@@ -158,6 +159,74 @@ function shortJson(v: unknown, max = 300): string {
   }
 }
 
+function asRecord(v: unknown): Record<string, unknown> {
+  return typeof v === 'object' && v !== null ? (v as Record<string, unknown>) : {}
+}
+
+function strList(v: unknown): string {
+  if (Array.isArray(v)) return v.map((x) => String(x)).join(', ')
+  return typeof v === 'string' ? v : ''
+}
+
+/**
+ * Structured approve/deny card for Gmail writes: always shows To, Subject
+ * and the FULL body before anything is sent. Falls back to raw JSON.
+ */
+function ApprovalDetail({ toolName, input }: { toolName: string; input: unknown }): React.JSX.Element {
+  const o = asRecord(input)
+  const rows: Array<[string, string]> = []
+  let body: string | null = null
+  if (toolName === 'gmail_send' || toolName === 'gmail_draft') {
+    if (o['to']) rows.push(['To', String(o['to'])])
+    if (o['cc']) rows.push(['Cc', strList(o['cc'])])
+    if (o['bcc']) rows.push(['Bcc', strList(o['bcc'])])
+    if (o['subject']) rows.push(['Subject', String(o['subject'])])
+    if (o['threadId']) rows.push(['Thread', String(o['threadId'])])
+    if (typeof o['body'] === 'string') body = o['body']
+  } else if (toolName === 'gmail_reply') {
+    if (o['threadId']) rows.push(['Thread', String(o['threadId'])])
+    if (o['to']) rows.push(['To', String(o['to'])])
+    if (o['cc']) rows.push(['Cc', strList(o['cc'])])
+    if (o['bcc']) rows.push(['Bcc', strList(o['bcc'])])
+    if (typeof o['body'] === 'string') body = o['body']
+  } else if (toolName === 'gmail_modify_labels') {
+    if (o['messageId']) rows.push(['Message', String(o['messageId'])])
+    if (o['addLabelIds']) rows.push(['Add labels', strList(o['addLabelIds'])])
+    if (o['removeLabelIds']) rows.push(['Remove labels', strList(o['removeLabelIds'])])
+  }
+  if (rows.length === 0 && body === null) {
+    return (
+      <pre className="mt-1 max-h-32 overflow-y-auto whitespace-pre-wrap break-words rounded bg-black/40 p-2 font-mono text-xs text-neutral-200">
+        {shortJson(input, 2000)}
+      </pre>
+    )
+  }
+  return (
+    <div className="mt-1 rounded bg-black/40 p-2 text-xs">
+      {rows.map(([k, v]) => (
+        <div key={k} className="flex gap-2 py-0.5">
+          <span className="w-16 shrink-0 text-neutral-400">{k}</span>
+          <span className="break-words text-neutral-100">{v || '—'}</span>
+        </div>
+      ))}
+      {body !== null && (
+        <div className="pt-1">
+          <div className="pb-0.5 text-neutral-400">Body</div>
+          <pre className="max-h-48 overflow-y-auto whitespace-pre-wrap break-words rounded bg-black/60 p-2 font-mono text-xs text-neutral-100">
+            {body || '(empty)'}
+          </pre>
+        </div>
+      )}
+      <details className="pt-1 text-neutral-500">
+        <summary className="cursor-pointer">Raw request</summary>
+        <pre className="max-h-32 overflow-y-auto whitespace-pre-wrap break-words pt-1 font-mono text-[11px]">
+          {shortJson(input, 2000)}
+        </pre>
+      </details>
+    </div>
+  )
+}
+
 export default function PaletteApp(): React.JSX.Element {
   const [value, setValue] = useState('')
   const [caret, setCaret] = useState(0)
@@ -246,6 +315,7 @@ export default function PaletteApp(): React.JSX.Element {
   const [baseUrl, setBaseUrl] = useState('')
   const [resetDay, setResetDay] = useState('1')
   const [apiKey, setApiKey] = useState('')
+  const [autoApproveEcho, setAutoApproveEcho] = useState(false)
   const [settingsMsg, setSettingsMsg] = useState<string | null>(null)
   const [budget, setBudget] = useState<BudgetState | null>(null)
 
@@ -271,6 +341,7 @@ export default function PaletteApp(): React.JSX.Element {
       setModel(s.model)
       setBaseUrl(s.baseUrl ?? '')
       setResetDay(String(s.resetDay ?? 1))
+      setAutoApproveEcho((s.autoApprove ?? []).includes('echo'))
     } catch {
       /* settings unavailable in this context */
     }
@@ -534,7 +605,8 @@ export default function PaletteApp(): React.JSX.Element {
       provider,
       model: model.trim(),
       baseUrl: baseUrl.trim() || undefined,
-      resetDay: rd
+      resetDay: rd,
+      autoApprove: autoApproveEcho ? ['echo'] : []
     })) as { ok: boolean; error?: string }
     if (!res.ok) {
       setSettingsMsg(res.error ?? 'Save failed.')
@@ -721,11 +793,15 @@ export default function PaletteApp(): React.JSX.Element {
             <div key={a.approvalId} className="mb-2 rounded border border-orange-500/60 bg-orange-950/40 p-2">
               <div className="font-medium text-orange-100">
                 Approval needed: <span className="font-mono">{a.toolName}</span>
+                {(a.toolName === 'gmail_send' || a.toolName === 'gmail_reply') && (
+                  <span className="ml-2 rounded bg-red-700 px-1.5 py-0.5 text-[11px]">sends immediately</span>
+                )}
+                {a.toolName === 'gmail_draft' && (
+                  <span className="ml-2 rounded bg-sky-700 px-1.5 py-0.5 text-[11px]">draft only — nothing sent</span>
+                )}
               </div>
               {a.reason && <div className="text-xs text-orange-200/80">{a.reason}</div>}
-              <pre className="mt-1 max-h-32 overflow-y-auto whitespace-pre-wrap break-words rounded bg-black/40 p-2 font-mono text-xs text-neutral-200">
-                {shortJson(a.input, 2000)}
-              </pre>
+              <ApprovalDetail toolName={a.toolName} input={a.input} />
               <div className="flex gap-2 pt-2">
                 <button
                   onClick={() => void decide(a.approvalId, true)}
@@ -868,6 +944,20 @@ export default function PaletteApp(): React.JSX.Element {
           <div className="pt-1 text-[11px] text-neutral-500">
             Keys are encrypted with the OS keychain (safeStorage) and never leave the main process.
             {modelState && !modelState.encryptionAvailable && ' Warning: OS encryption unavailable on this machine.'}
+          </div>
+
+          <div className="pt-3 font-medium">Auto-approve</div>
+          <label className="flex items-center gap-2 pt-1 text-xs text-neutral-300">
+            <input
+              type="checkbox"
+              checked={autoApproveEcho}
+              onChange={(e) => setAutoApproveEcho(e.target.checked)}
+            />
+            echo (harmless test tool) — runs without asking
+          </label>
+          <div className="pt-1 text-[11px] text-neutral-500">
+            Default: everything asks. Writes (email send/draft/reply/labels) always need approval
+            and can never auto-approve; scheduled runs never auto-approve anything.
           </div>
 
           <div className="pt-3 font-medium">Composio budget</div>

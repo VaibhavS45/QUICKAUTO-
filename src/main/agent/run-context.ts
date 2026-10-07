@@ -12,6 +12,8 @@ import type { RunSource } from '../../shared/agent.js'
 export interface RunContext {
   runId: string
   source: RunSource
+  /** AbortSignal of the agent run; long tools must poll it and stop. */
+  signal?: AbortSignal
 }
 
 const storage = new AsyncLocalStorage<RunContext>()

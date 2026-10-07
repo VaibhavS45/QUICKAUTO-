@@ -20,6 +20,8 @@ export interface GitHubRepoEntry {
   path: string
   /** Canonical 'owner/name'. */
   repo: string
+  /** Optional test command, run by OpenCode after conflict resolution. */
+  testCommand?: string
 }
 
 export const GITHUB_TOOLS = ['github_list_prs', 'github_pr_details', 'github_pr_diff', 'github_pr_comments'] as const
@@ -136,6 +138,19 @@ interface CheckResult {
   detail: string
 }
 
+/** Canonical allowlisted 'owner/name' for user input, or an error message. */
+export function resolveRepoEntry(
+  repos: GitHubRepoEntry[],
+  input: string
+): { repo?: string; error?: string } {
+  const t = input.trim()
+  if (!REPO_RE.test(t)) return { error: `Repo "${input}" must be owner/name.` }
+  const found = repos.find((e) => e.repo.trim().toLowerCase() === t.toLowerCase())
+  if (!found)
+    return { error: `Repository "${t}" is not in the configured GitHub repos list. Add it in Settings → Connections first.` }
+  return { repo: found.repo.trim() }
+}
+
 export class GitHubCliProvider implements ConnectorProvider {
   readonly id = 'github-cli'
 
@@ -174,11 +189,7 @@ export class GitHubCliProvider implements ConnectorProvider {
 
   /** Canonical allowlisted 'owner/name' for user input, or an error message. */
   private resolveRepo(input: string): { repo?: string; error?: string } {
-    const t = input.trim()
-    if (!REPO_RE.test(t)) return { error: `Repo "${input}" must be owner/name.` }
-    const found = this.deps.getRepos().find((e) => e.repo.trim().toLowerCase() === t.toLowerCase())
-    if (!found) return { error: `Repository "${t}" is not in the configured GitHub repos list. Add it in Settings → Connections first.` }
-    return { repo: found.repo.trim() }
+    return resolveRepoEntry(this.deps.getRepos(), input)
   }
 
   private async ghJson(args: string[]): Promise<{ ok: true; value: unknown } | { ok: false; message: string }> {

@@ -118,8 +118,9 @@ export async function runAgent(opts: RunAgentOptions): Promise<{ text: string; s
       toolApproval: buildToolApproval(source, toolNames, new Set(config.autoApprove ?? [])) as never
     })
 
-  // Carry { runId, source } to tool execute functions (BudgetGuard metering).
-  return runWithContext({ runId, source }, async () => {
+  // Carry { runId, source, signal } to tool execute functions (BudgetGuard
+  // metering, nested approvals, abort checks).
+  return runWithContext({ runId, source, signal }, async () => {
     const messages: ModelMessage[] = [{ role: 'user', content: prompt }]
   // eslint-disable-next-line no-constant-condition
   while (true) {

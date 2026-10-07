@@ -60,7 +60,7 @@ interface ModelState {
   keySet: boolean
   composioKeySet: boolean
   autoApprove?: string[]
-  githubRepos?: Array<{ path: string; repo: string }>
+  githubRepos?: Array<{ path: string; repo: string; testCommand?: string }>
   encryptionAvailable: boolean
 }
 
@@ -326,9 +326,10 @@ export default function PaletteApp(): React.JSX.Element {
   const [connecting, setConnecting] = useState(false)
   const [connectMsg, setConnectMsg] = useState<string | null>(null)
   const [githubStatus, setGithubStatus] = useState<ConnectionState | null>(null)
-  const [githubRepos, setGithubRepos] = useState<Array<{ path: string; repo: string }>>([])
+  const [githubRepos, setGithubRepos] = useState<Array<{ path: string; repo: string; testCommand?: string }>>([])
   const [newRepoPath, setNewRepoPath] = useState('')
   const [newRepoName, setNewRepoName] = useState('')
+  const [newRepoTests, setNewRepoTests] = useState('')
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null)
 
   const mention = useMemo(() => activeMention(value, caret), [value, caret])
@@ -1100,6 +1101,7 @@ export default function PaletteApp(): React.JSX.Element {
             <div key={`${r.repo}-${i}`} className="flex items-center gap-2 pt-1 text-xs">
               <span className="font-mono text-neutral-200">{r.repo}</span>
               <span className="truncate font-mono text-[11px] text-neutral-500">{r.path}</span>
+              {r.testCommand && <span className="truncate font-mono text-[11px] text-neutral-500">tests: {r.testCommand}</span>}
               <button
                 onClick={() => setGithubRepos((prev) => prev.filter((_, j) => j !== i))}
                 className="rounded border border-neutral-600 px-1.5 py-0.5 text-[11px] text-neutral-300"
@@ -1127,12 +1129,29 @@ export default function PaletteApp(): React.JSX.Element {
                 className="mt-0.5 w-40 rounded border border-neutral-700 bg-neutral-800 px-2 py-1 font-mono text-xs text-neutral-100"
               />
             </label>
+            <label className="text-xs text-neutral-400">
+              Test command (optional)
+              <input
+                value={newRepoTests}
+                onChange={(e) => setNewRepoTests(e.target.value)}
+                placeholder="npm test"
+                className="mt-0.5 w-40 rounded border border-neutral-700 bg-neutral-800 px-2 py-1 font-mono text-xs text-neutral-100"
+              />
+            </label>
             <button
               onClick={() => {
                 if (!newRepoPath.trim() || !newRepoName.trim()) return
-                setGithubRepos((prev) => [...prev, { path: newRepoPath.trim(), repo: newRepoName.trim() }])
+                setGithubRepos((prev) => [
+                  ...prev,
+                  {
+                    path: newRepoPath.trim(),
+                    repo: newRepoName.trim(),
+                    ...(newRepoTests.trim() ? { testCommand: newRepoTests.trim() } : {})
+                  }
+                ])
                 setNewRepoPath('')
                 setNewRepoName('')
+                setNewRepoTests('')
               }}
               className="rounded bg-indigo-600 px-2 py-1 text-xs text-white"
             >

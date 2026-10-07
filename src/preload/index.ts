@@ -38,7 +38,7 @@ const api = {
     composioKeySet: boolean
     encryptionAvailable: boolean
   }> => ipcRenderer.invoke('settings:get-model'),
-  setModelSettings: (s: { provider: string; model: string; baseUrl?: string; resetDay?: number; autoApprove?: string[]; githubRepos?: Array<{ path: string; repo: string }> }) =>
+  setModelSettings: (s: { provider: string; model: string; baseUrl?: string; resetDay?: number; autoApprove?: string[]; githubRepos?: Array<{ path: string; repo: string; testCommand?: string }> }) =>
     ipcRenderer.invoke('settings:set-model', s),
   setApiKey: (key: string) => ipcRenderer.invoke('settings:set-api-key', { key }),
   clearApiKey: () => ipcRenderer.invoke('settings:clear-api-key'),

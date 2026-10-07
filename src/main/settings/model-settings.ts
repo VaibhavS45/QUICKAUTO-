@@ -38,7 +38,8 @@ export const ModelSettingsSchema = z.object({
     .array(
       z.object({
         path: z.string().min(1).max(500),
-        repo: z.string().min(1).max(200)
+        repo: z.string().min(1).max(200),
+        testCommand: z.string().min(1).max(500).optional()
       })
     )
     .max(20)

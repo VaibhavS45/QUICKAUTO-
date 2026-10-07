@@ -32,6 +32,14 @@ import { SecretVault, COMPOSIO_API_KEY_NAME } from './settings/secret-vault.js'
 import { registerConnectorProvider } from './agent/registry.js'
 import { ComposioConnectorProvider } from './connectors/composio.js'
 import { GitHubCliProvider, validateRepoEntry } from './connectors/github-cli.js'
+import { GitHubResolveProvider } from './connectors/github-resolve.js'
+import { OpencodeServerManager } from './agent/opencode-server.js'
+import { runOpencodeResolve, type OpencodePermission } from './agent/opencode-resolve.js'
+import {
+  setNestedApprovalHandler,
+  nextNestedApprovalId,
+  requestNestedApprovalForCurrentRun
+} from './agent/nested-approval.js'
 import { BudgetGuard, type BudgetStore, type BudgetUsageState } from './connectors/budget-guard.js'
 
 const gotLock = app.requestSingleInstanceLock()
@@ -84,6 +92,28 @@ const githubProvider = new GitHubCliProvider({
 })
 registerConnectorProvider(githubProvider)
 
+// One OpenCode server for the app lifetime; started lazily on first
+// conflict-resolution run, killed on quit.
+const opencodeManager = new OpencodeServerManager()
+
+const githubResolveProvider = new GitHubResolveProvider({
+  getRepos: () => settingsService.getConfig().githubRepos ?? [],
+  getOpencode: () => opencodeManager,
+  opencodeResolve: (opts) =>
+    runOpencodeResolve({
+      ...opts,
+      onPermission: async (perm: OpencodePermission) =>
+        (
+          await requestNestedApprovalForCurrentRun({
+            toolName: `opencode: ${perm.type} ${perm.title}`,
+            input: { pattern: perm.pattern ?? null, metadata: perm.metadata ?? null },
+            reason: 'OpenCode requests permission while resolving conflicts.'
+          })
+        ).approved
+    })
+})
+registerConnectorProvider(githubResolveProvider)
+
 function providerFor(toolId: string): { status: (t: ToolId) => Promise<{ connected: boolean; detail?: string }>; connect: (t: ToolId) => Promise<{ ok: boolean; url?: string; error?: string }> } | null {
   if (toolId === 'gmail') return composioProvider
   if (toolId === 'github') return githubProvider
@@ -118,6 +148,30 @@ const activeRuns = new Map<string, ActiveRun>()
 function emitToPalette(e: AgentEvent): void {
   getPaletteWindow()?.webContents.send(IpcChannels.agentEvent, e)
 }
+
+// Nested (in-tool) approvals — e.g. OpenCode permission requests mid-run —
+// reuse the same approve/deny card + agent:approval channel as tool approvals.
+setNestedApprovalHandler(
+  (req) =>
+    new Promise((resolve) => {
+      const active = activeRuns.get(req.runId)
+      if (!active) {
+        resolve({ approved: false, reason: 'Run ended.' })
+        return
+      }
+      const approvalId = nextNestedApprovalId()
+      active.pending.set(approvalId, resolve)
+      emitToPalette({
+        type: 'approval-requested',
+        runId: req.runId,
+        approvalId,
+        toolCallId: approvalId,
+        toolName: req.toolName,
+        input: req.input,
+        reason: req.reason
+      })
+    })
+)
 
 let tray: Tray | null = null
 let hotkeyError: string | null = null
@@ -517,6 +571,8 @@ app.on('window-all-closed', () => {
 
 app.on('will-quit', () => {
   globalShortcut.unregisterAll()
+  setNestedApprovalHandler(null)
+  void opencodeManager.stop()
 })
 
 export { store }

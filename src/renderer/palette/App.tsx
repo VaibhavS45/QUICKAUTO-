@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { TOOL_IDS, TOOL_META, TOOL_ALIASES, parseMentionedTools } from '../../shared/types.js'
+import SettingsDialog from '../settings/SettingsDialog.js'
 import '../styles.css'
 
 interface SubmitResponse {
@@ -51,15 +52,6 @@ interface BudgetState {
   scheduledUsed: number
   scheduledBudget: number
   periodKey: string
-}
-
-interface ModelState {
-  provider: string
-  model: string
-  baseUrl?: string
-  resetDay?: number
-  keySet: boolean
-  encryptionAvailable: boolean
 }
 
 function mentionCandidates(typed: string): string[] {
@@ -153,161 +145,12 @@ function shortJson(v: unknown, max = 300): string {
   }
 }
 
-interface ConnectorState {
-  configured: boolean
-  encryptionAvailable: boolean
-  services: Array<{ id: string; connected: boolean; detail?: string }>
-}
-
-interface RoutineItem {
-  id: string
-  prompt: string
-  tools: string[]
-  runAt: number
-  repeat: string
-  enabled: boolean
-  lastStatus?: string
-}
-
-/** OpenMausBot-style connections: one Composio key, renderer sees flags only. */
-function ConnectionsPanel(): React.JSX.Element {
-  const [state, setState] = useState<ConnectorState | null>(null)
-  const [key, setKey] = useState('')
-  const [msg, setMsg] = useState<string | null>(null)
-  useEffect(() => {
-    window.palette
-      .getConnector()
-      .then((s) => setState(s as ConnectorState))
-      .catch(() => {})
-  }, [])
-  async function save(): Promise<void> {
-    setMsg(null)
-    const res = (await window.palette.setConnectorKey(key.trim())) as { ok: boolean; error?: string }
-    if (!res.ok) {
-      setMsg(res.error ?? 'Save failed.')
-      return
-    }
-    setKey('')
-    setMsg('Saved.')
-    setState((await window.palette.getConnector()) as ConnectorState)
-  }
-  async function remove(): Promise<void> {
-    await window.palette.clearConnectorKey()
-    setMsg('Removed.')
-    setState((await window.palette.getConnector()) as ConnectorState)
-  }
-  return (
-    <div className="pt-3">
-      <div className="font-medium">Connections {state && (state.configured ? '(connected ✓)' : '(not connected)')}</div>
-      <div className="pt-1 text-xs text-neutral-400">
-        One Composio project key unlocks @notion, @gmail, @sheets, @websearch. Keys stay encrypted in the main process.
-      </div>
-      <div className="flex flex-wrap items-end gap-2 pt-2">
-        <label className="text-xs text-neutral-400">
-          Composio project key
-          <input
-            type="password"
-            value={key}
-            onChange={(e) => setKey(e.target.value)}
-            placeholder={state?.configured ? '•••••• (enter to replace)' : 'ak_…'}
-            className="mt-0.5 w-64 rounded border border-neutral-700 bg-neutral-800 px-2 py-1 font-mono text-xs text-neutral-100"
-          />
-        </label>
-        <button onClick={() => void save()} className="rounded bg-indigo-600 px-2 py-1 text-xs text-white">
-          Save
-        </button>
-        {state?.configured && (
-          <button onClick={() => void remove()} className="rounded border border-neutral-600 px-2 py-1 text-xs text-neutral-300">
-            Remove
-          </button>
-        )}
-      </div>
-      {msg && <div className="pt-1 text-xs text-amber-200">{msg}</div>}
-      {state && (
-        <div className="flex flex-wrap gap-1 pt-2">
-          {state.services.map((s) => (
-            <span
-              key={s.id}
-              title={s.detail ?? ''}
-              className={`rounded px-1.5 py-0.5 font-mono text-xs ${s.connected ? 'bg-emerald-700/30 text-emerald-200' : 'bg-neutral-800 text-neutral-400'}`}
-            >
-              @{s.id} {s.connected ? '✓' : '○'}
-            </span>
-          ))}
-        </div>
-      )}
-    </div>
-  )
-}
-
-/** Scheduled routines: "@calendar @notion at 6:30pm do X" fires the agent later. */
-function RoutinesPanel(): React.JSX.Element {
-  const [items, setItems] = useState<RoutineItem[]>([])
-  const [msg, setMsg] = useState<string | null>(null)
-  async function refresh(): Promise<void> {
-    try {
-      const res = (await window.palette.routineList()) as { ok: boolean; routines: RoutineItem[] }
-      if (res.ok) setItems(res.routines)
-    } catch {
-      /* ignore */
-    }
-  }
-  useEffect(() => {
-    void refresh()
-  }, [])
-  async function toggle(r: RoutineItem): Promise<void> {
-    await window.palette.routineToggle(r.id, !r.enabled)
-    void refresh()
-  }
-  async function remove(id: string): Promise<void> {
-    const res = (await window.palette.routineRemove(id)) as { ok: boolean; error?: string }
-    if (!res.ok) setMsg(res.error ?? 'Remove failed.')
-    void refresh()
-  }
-  return (
-    <div className="pt-3">
-      <div className="font-medium">Routines ({items.length})</div>
-      <div className="pt-1 text-xs text-neutral-400">
-        Type <span className="font-mono">@calendar @notion at 6:30pm summarize my tasks</span> (or @websearch/@gmail) —
-        the agent runs it at that time. Scheduled runs never auto-approve writes.
-      </div>
-      {msg && <div className="pt-1 text-xs text-amber-200">{msg}</div>}
-      <div className="space-y-1 pt-2">
-        {items.length === 0 && <div className="text-xs text-neutral-500">No routines yet.</div>}
-        {items.map((r) => (
-          <div key={r.id} className="flex items-center gap-2 rounded border border-neutral-800 bg-neutral-950 px-2 py-1.5 text-xs">
-            <button
-              onClick={() => void toggle(r)}
-              className={`rounded px-1.5 py-0.5 ${r.enabled ? 'bg-emerald-700/40 text-emerald-100' : 'bg-neutral-800 text-neutral-400'}`}
-              title={r.enabled ? 'Pause' : 'Resume'}
-            >
-              {r.enabled ? 'on' : 'off'}
-            </button>
-            <span className="text-neutral-200">{new Date(r.runAt).toLocaleString()}</span>
-            <span className="truncate text-neutral-400" title={r.prompt}>
-              {r.prompt} · {r.tools.map((t) => `@${t}`).join(' ')}
-              {r.lastStatus ? ` · ${r.lastStatus}` : ''}
-            </span>
-            <div className="flex-1" />
-            <button onClick={() => void remove(r.id)} className="text-neutral-500 hover:text-red-400">
-              Remove
-            </button>
-          </div>
-        ))}
-      </div>
-    </div>
-  )
-}
-
 export default function PaletteApp(): React.JSX.Element {
   const [value, setValue] = useState('')
   const [caret, setCaret] = useState(0)
   const [selected, setSelected] = useState(0)
   const [notice, setNotice] = useState<string | null>(null)
   const [showSettings, setShowSettings] = useState(false)
-  const [hotkey, setHotkey] = useState('')
-  const [hotkeyMsg, setHotkeyMsg] = useState<string | null>(null)
-  const [platformHint, setPlatformHint] = useState<string | null>(null)
   const inputRef = useRef<HTMLInputElement>(null)
   const rootRef = useRef<HTMLDivElement>(null)
   const lastHeightRef = useRef(0)
@@ -380,14 +223,7 @@ export default function PaletteApp(): React.JSX.Element {
     for (const ev of buffered) handleAgentEvent(ev)
   }
 
-  // Settings state
-  const [modelState, setModelState] = useState<ModelState | null>(null)
-  const [provider, setProvider] = useState('anthropic')
-  const [model, setModel] = useState('')
-  const [baseUrl, setBaseUrl] = useState('')
-  const [resetDay, setResetDay] = useState('1')
-  const [apiKey, setApiKey] = useState('')
-  const [settingsMsg, setSettingsMsg] = useState<string | null>(null)
+  // Budget for the footer (full details live in Settings → Usage).
   const [budget, setBudget] = useState<BudgetState | null>(null)
 
   const mention = useMemo(() => activeMention(value, caret), [value, caret])
@@ -396,19 +232,6 @@ export default function PaletteApp(): React.JSX.Element {
     [mention]
   )
   const tools = useMemo(() => parseMentionedTools(value), [value])
-
-  async function refreshSettings(): Promise<void> {
-    try {
-      const s = (await window.palette.getModelSettings()) as ModelState
-      setModelState(s)
-      setProvider(s.provider)
-      setModel(s.model)
-      setBaseUrl(s.baseUrl ?? '')
-      setResetDay(String(s.resetDay ?? 1))
-    } catch {
-      /* settings unavailable in this context */
-    }
-  }
 
   async function refreshBudget(): Promise<void> {
     try {
@@ -450,9 +273,7 @@ export default function PaletteApp(): React.JSX.Element {
     })
     const offSettings = window.palette.onOpenSettings(() => {
       setShowSettings(true)
-      void refreshSettings()
     })
-    const offErr = window.palette.onHotkeyError((msg) => setHotkeyMsg(msg))
     const offAgent = window.palette.onAgentEvent((raw) => {
       const e = raw as AgentEventMsg
       if (!e || !e.runId) return
@@ -463,23 +284,11 @@ export default function PaletteApp(): React.JSX.Element {
       }
       handleAgentEvent(e)
     })
-    void window.palette.getHotkey().then((h) => {
-      setHotkey(h.hotkey)
-      if (h.error) setHotkeyMsg(h.error)
-    })
-    void window.palette.platformInfo().then((p: { wayland: boolean; sessionType: string }) => {
-      if (p.wayland)
-        setPlatformHint(
-          `Wayland session (${p.sessionType}): global hotkeys are unreliable. Bind a system shortcut to palette --toggle if the hotkey fails.`
-        )
-    })
-    void refreshSettings()
     void refreshBudget()
     const timer = setInterval(() => void refreshBudget(), 30_000)
     return () => {
       offOpened()
       offSettings()
-      offErr()
       offAgent()
       clearInterval(timer)
     }
@@ -570,46 +379,6 @@ export default function PaletteApp(): React.JSX.Element {
     }
   }
 
-  async function saveHotkey(): Promise<void> {
-    setHotkeyMsg(null)
-    const res = (await window.palette.setHotkey(hotkey)) as {
-      ok: boolean
-      error: string | null
-    }
-    setHotkeyMsg(res.ok ? 'Hotkey registered.' : (res.error ?? 'Registration failed.'))
-  }
-
-  async function saveModelSettings(): Promise<void> {
-    setSettingsMsg(null)
-    const rd = Math.min(28, Math.max(1, parseInt(resetDay, 10) || 1))
-    const res = (await window.palette.setModelSettings({
-      provider,
-      model: model.trim(),
-      baseUrl: baseUrl.trim() || undefined,
-      resetDay: rd
-    })) as { ok: boolean; error?: string }
-    if (!res.ok) {
-      setSettingsMsg(res.error ?? 'Save failed.')
-      return
-    }
-    if (apiKey.trim()) {
-      const kr = (await window.palette.setApiKey(apiKey.trim())) as { ok: boolean; error?: string }
-      if (!kr.ok) {
-        setSettingsMsg(kr.error ?? 'Key save failed.')
-        return
-      }
-      setApiKey('')
-    }
-    setSettingsMsg('Saved.')
-    await refreshSettings()
-  }
-
-  async function clearKey(): Promise<void> {
-    await window.palette.clearApiKey()
-    setSettingsMsg('API key removed.')
-    await refreshSettings()
-  }
-
   function onKeyDown(e: React.KeyboardEvent<HTMLInputElement>): void {
     if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) {
       e.preventDefault()
@@ -660,7 +429,7 @@ export default function PaletteApp(): React.JSX.Element {
   const budgetWarn = budget?.warning === 'exceeded' || budget?.warning === 'warn90'
 
   return (
-    <div ref={rootRef} className="mx-auto w-[720px] overflow-hidden rounded-xl border border-neutral-700 bg-neutral-900/95 shadow-2xl backdrop-blur">
+    <div ref={rootRef} className="relative mx-auto w-[720px] overflow-hidden rounded-xl border border-neutral-700 bg-neutral-900/95 shadow-2xl backdrop-blur">
       <div className="flex items-center gap-2 px-4 pt-3">
         <span className="text-neutral-400">›</span>
         <input
@@ -686,10 +455,7 @@ export default function PaletteApp(): React.JSX.Element {
           </button>
         )}
         <button
-          onClick={() => {
-            setShowSettings((s) => !s)
-            void refreshSettings()
-          }}
+          onClick={() => setShowSettings((s) => !s)}
           className="rounded px-1 text-neutral-500 hover:text-neutral-200"
           title="Settings"
         >
@@ -808,133 +574,7 @@ export default function PaletteApp(): React.JSX.Element {
         </div>
       )}
 
-      {showSettings && (
-        <div className="max-h-80 overflow-y-auto border-t border-neutral-800 px-4 py-3 text-sm text-neutral-200">
-          <div className="font-medium">Settings</div>
-          {platformHint && <div className="pt-1 text-xs text-amber-300">{platformHint}</div>}
-          <div className="flex items-center gap-2 pt-2">
-            <label className="text-xs text-neutral-400">Global hotkey</label>
-            <input
-              value={hotkey}
-              onChange={(e) => setHotkey(e.target.value)}
-              className="rounded border border-neutral-700 bg-neutral-800 px-2 py-1 font-mono text-xs text-neutral-100"
-            />
-            <button
-              onClick={() => void saveHotkey()}
-              className="rounded bg-indigo-600 px-2 py-1 text-xs text-white"
-            >
-              Save
-            </button>
-          </div>
-          {hotkeyMsg && (
-            <div className="whitespace-pre-wrap pt-2 text-xs text-amber-200">{hotkeyMsg}</div>
-          )}
-
-          <div className="pt-3 font-medium">Model</div>
-          <div className="grid grid-cols-2 gap-2 pt-1">
-            <label className="text-xs text-neutral-400">
-              Provider
-              <select
-                value={provider}
-                onChange={(e) => setProvider(e.target.value)}
-                className="mt-0.5 w-full rounded border border-neutral-700 bg-neutral-800 px-2 py-1 text-xs text-neutral-100"
-              >
-                <option value="anthropic">anthropic</option>
-                <option value="openai">openai</option>
-                <option value="openai-compatible">openai-compatible (custom base URL)</option>
-              </select>
-            </label>
-            <label className="text-xs text-neutral-400">
-              Model
-              <input
-                value={model}
-                onChange={(e) => setModel(e.target.value)}
-                placeholder="claude-sonnet-4-5"
-                className="mt-0.5 w-full rounded border border-neutral-700 bg-neutral-800 px-2 py-1 font-mono text-xs text-neutral-100"
-              />
-            </label>
-          </div>
-          {provider === 'openai-compatible' && (
-            <label className="block pt-2 text-xs text-neutral-400">
-              Base URL
-              <input
-                value={baseUrl}
-                onChange={(e) => setBaseUrl(e.target.value)}
-                placeholder="http://localhost:11434/v1"
-                className="mt-0.5 w-full rounded border border-neutral-700 bg-neutral-800 px-2 py-1 font-mono text-xs text-neutral-100"
-              />
-            </label>
-          )}
-          <div className="flex flex-wrap items-end gap-2 pt-2">
-            <label className="text-xs text-neutral-400">
-              API key {modelState?.keySet ? '(set ✓)' : '(not set)'}
-              <input
-                type="password"
-                value={apiKey}
-                onChange={(e) => setApiKey(e.target.value)}
-                placeholder={modelState?.keySet ? '•••••• (enter to replace)' : 'sk-…'}
-                className="mt-0.5 w-64 rounded border border-neutral-700 bg-neutral-800 px-2 py-1 font-mono text-xs text-neutral-100"
-              />
-            </label>
-            <label className="text-xs text-neutral-400">
-              Budget reset day
-              <input
-                value={resetDay}
-                onChange={(e) => setResetDay(e.target.value)}
-                inputMode="numeric"
-                className="mt-0.5 w-16 rounded border border-neutral-700 bg-neutral-800 px-2 py-1 font-mono text-xs text-neutral-100"
-              />
-            </label>
-            <button
-              onClick={() => void saveModelSettings()}
-              className="rounded bg-indigo-600 px-2 py-1 text-xs text-white"
-            >
-              Save model
-            </button>
-            {modelState?.keySet && (
-              <button
-                onClick={() => void clearKey()}
-                className="rounded border border-neutral-600 px-2 py-1 text-xs text-neutral-300"
-              >
-                Remove key
-              </button>
-            )}
-          </div>
-          {settingsMsg && <div className="pt-1 text-xs text-amber-200">{settingsMsg}</div>}
-          <div className="pt-1 text-[11px] text-neutral-500">
-            Keys are encrypted with the OS keychain (safeStorage) and never leave the main process.
-            {modelState && !modelState.encryptionAvailable && ' Warning: OS encryption unavailable on this machine.'}
-          </div>
-
-          <div className="pt-3 font-medium">Composio budget</div>
-          <div className="pt-1 text-xs text-neutral-300">
-            {budget ? (
-              <>
-                Used {budget.used} / {budget.budget} this period ({budget.periodKey}); scheduled share{' '}
-                {budget.scheduledUsed} / {budget.scheduledBudget}.{' '}
-                {budget.warning !== 'none' && (
-                  <span className="text-amber-300">Warning: {budget.warning}.</span>
-                )}{' '}
-                Source of truth:{' '}
-                <a
-                  href="https://dashboard.composio.dev"
-                  target="_blank"
-                  rel="noreferrer"
-                  className="text-indigo-300 underline"
-                >
-                  Composio dashboard usage page
-                </a>
-                .
-              </>
-            ) : (
-              'Loading…'
-            )}
-          </div>
-
-          <ConnectionsPanel />
-          <RoutinesPanel />
-        </div>
-      )}
+      <SettingsDialog open={showSettings} onClose={() => setShowSettings(false)} />
 
       <div className="flex items-center justify-between border-t border-neutral-800 px-4 py-1.5 text-[11px] text-neutral-500">
         <span>Enter run · Esc {running ? 'cancel' : 'hide'} · @ tools: {TOOL_IDS.map((t) => `@${t}`).join(' ')}</span>

@@ -342,7 +342,6 @@ export default function CalendarApp(): React.JSX.Element {
             }}
           />
         </div>
-        <p className="pt-2 text-[11px] text-neutral-600">Drag across any day to create an event, or drag a bot to schedule it.</p>
       </aside>
 
       {/* Main column */}

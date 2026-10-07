@@ -86,6 +86,10 @@ const api = {
     ipcRenderer.invoke('awake:get'),
   setAwake: (enabled: boolean): Promise<{ ok: boolean; enabled: boolean; holding: boolean }> =>
     ipcRenderer.invoke('awake:set', { enabled }),
+  getProfile: (): Promise<{ name: string; email: string; about: string; language: string }> =>
+    ipcRenderer.invoke('settings:get-profile'),
+  setProfile: (p: { name: string; email: string; about: string; language: string }) =>
+    ipcRenderer.invoke('settings:set-profile', p),
   onCalendarDraft: (cb: (text: string) => void) => {
     const fn = (_e: unknown, text: string): void => cb(text)
     ipcRenderer.on('calendar:new-draft', fn)

@@ -6,6 +6,7 @@ import {
   PaletteResizeSchema
 } from '../shared/agent.js'
 import { ModelSettingsSchema } from './settings/model-settings.js'
+import { ProfileSettingsSchema } from './agent/profile-settings.js'
 
 /**
  * Typed IPC contract. Renderers may only invoke these channels
@@ -41,7 +42,9 @@ export const IpcChannels = {
   routineRemove: 'routine:remove',
   routineToggle: 'routine:toggle',
   getAwake: 'awake:get',
-  setAwake: 'awake:set'
+  setAwake: 'awake:set',
+  getProfile: 'settings:get-profile',
+  setProfile: 'settings:set-profile'
 } as const
 
 export type IpcChannel = (typeof IpcChannels)[keyof typeof IpcChannels]
@@ -88,7 +91,7 @@ export const AwakeSetSchema = z.object({
   enabled: z.boolean()
 })
 
-export { AgentApprovalResponseSchema, AgentRunRequestSchema, PaletteResizeSchema, ModelSettingsSchema }
+export { AgentApprovalResponseSchema, AgentRunRequestSchema, PaletteResizeSchema, ModelSettingsSchema, ProfileSettingsSchema }
 
 export interface PlatformInfo {
   platform: NodeJS.Platform

@@ -25,12 +25,14 @@ import {
   AgentApprovalResponseSchema,
   PaletteResizeSchema,
   ModelSettingsSchema,
+  ProfileSettingsSchema,
   type PlatformInfo
 } from './ipc.js'
 import { defaultHotkey, toPaletteSubmit, TOOL_IDS, type ToolId } from '../shared/types.js'
 import type { AgentEvent } from '../shared/agent.js'
 import { runAgent, type ApprovalDecision } from './agent/runner.js'
 import { ModelSettingsService, type SettingsStore } from './settings/model-settings.js'
+import { ProfileSettingsService } from './agent/profile-settings.js'
 import { BudgetGuard, type BudgetStore, type BudgetUsageState } from './connectors/budget-guard.js'
 import { ConnectorSettingsService, type ConnectorStore } from './connectors/connector-settings.js'
 import { ComposioProvider } from './connectors/composio-tools.js'
@@ -79,6 +81,8 @@ const settingsService = new ModelSettingsService(new ElectronSettingsStore(), {
   encryptStringAsync: (s: string) => safeStorage.encryptStringAsync(s),
   decryptStringAsync: (b: Buffer) => safeStorage.decryptStringAsync(b)
 })
+
+const profileService = new ProfileSettingsService(new ElectronSettingsStore())
 
 const connectorFile = new Store<Record<string, unknown>>({ name: 'palette-connectors', defaults: {} })
 
@@ -293,6 +297,19 @@ function wireIpc(): void {
   })
 
   ipcMain.handle(IpcChannels.getModelSettings, async () => settingsService.getPublicState())
+
+  ipcMain.handle(IpcChannels.getProfile, () => profileService.get())
+
+  ipcMain.handle(IpcChannels.setProfile, (_event, payload: unknown) => {
+    const parsed = ProfileSettingsSchema.safeParse(payload)
+    if (!parsed.success) return { ok: false as const, error: 'Invalid profile settings.' }
+    try {
+      const profile = profileService.set(parsed.data)
+      return { ok: true as const, profile }
+    } catch (err) {
+      return { ok: false as const, error: err instanceof Error ? err.message : String(err) }
+    }
+  })
 
   ipcMain.handle(IpcChannels.setModelSettings, (_event, payload: unknown) => {
     const parsed = ModelSettingsSchema.safeParse(payload)

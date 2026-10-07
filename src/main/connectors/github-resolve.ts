@@ -212,7 +212,9 @@ export class GitHubResolveProvider implements ConnectorProvider {
       await this.run('git', ['checkout', branch], cwd)
       let mergeConflicted = false
       try {
-        await this.run('git', ['merge', `origin/${base}`, '--no-edit'], cwd)
+        // rerere disabled: a recorded auto-resolution must never silently
+        // stand in for a real conflict here.
+        await this.run('git', ['-c', 'rerere.enabled=false', 'merge', `origin/${base}`, '--no-edit'], cwd)
       } catch {
         mergeConflicted = true
       }
@@ -259,8 +261,10 @@ export class GitHubResolveProvider implements ConnectorProvider {
         const lines = outcome.unresolved.map((u) => `- ${u.file}: ${u.reason}`).join('\n')
         return `OpenCode could not resolve all conflicts, stopping (nothing committed):\n${lines}`
       }
-      const diffStat = (await this.run('git', ['diff', '--stat'], cwd)).stdout.slice(0, 2000)
-      const fullDiff = (await this.run('git', ['diff'], cwd)).stdout
+      // Diff against HEAD: OpenCode's edits may be staged already, and plain
+      // `git diff` only shows unstaged changes.
+      const diffStat = (await this.run('git', ['diff', 'HEAD', '--stat'], cwd)).stdout.slice(0, 2000)
+      const fullDiff = (await this.run('git', ['diff', 'HEAD'], cwd)).stdout
       const truncated = fullDiff.length > RESOLVE_DIFF_CAP
       return {
         branch,

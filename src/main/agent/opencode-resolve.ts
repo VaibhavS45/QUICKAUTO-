@@ -73,12 +73,14 @@ export interface OpencodeResolveResult {
 }
 
 function unwrapData<T>(res: unknown, what: string): T {
-  const r = res as { data?: T; error?: unknown } | T
-  if (r !== null && typeof r === 'object' && 'data' in r && 'error' in r) {
+  // hey-api 'fields' style: { data, error, request, response }. Note success
+  // responses carry NO error key at all, so check truthiness, not presence.
+  if (res !== null && typeof res === 'object' && 'data' in res) {
+    const r = res as { data?: T; error?: unknown }
     if (r.error) throw new Error(`OpenCode ${what} failed: ${JSON.stringify(r.error).slice(0, 500)}`)
-    return (r as { data: T }).data
+    return r.data as T
   }
-  return r as T
+  return res as T
 }
 
 function assistantText(promptResult: unknown): string {

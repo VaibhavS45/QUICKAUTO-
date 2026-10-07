@@ -1,0 +1,21 @@
+appId: com.palette.app
+productName: Palette
+directories:
+  output: dist
+files:
+  - out/**/*
+  - package.json
+linux:
+  category: Utility
+  target:
+    - AppImage
+    - deb
+  maintainer: ""
+mac:
+  category: public.app-category.productivity
+win:
+  target:
+    - nsis
+nsis:
+  oneClick: false
+  allowToChangeInstallationDirectory: true

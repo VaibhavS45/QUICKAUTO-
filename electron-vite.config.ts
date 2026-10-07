@@ -1,6 +1,5 @@
 import { defineConfig, externalizeDepsPlugin } from 'electron-vite'
 import react from '@vitejs/plugin-react'
-import tailwindcss from '@tailwindcss/vite'
 import { resolve } from 'path'
 
 export default defineConfig({
@@ -26,7 +25,9 @@ export default defineConfig({
   },
   renderer: {
     root: 'src/renderer',
-    plugins: [react(), tailwindcss()],
+    // NOTE: Tailwind runs via postcss.config.mjs (@tailwindcss/postcss), NOT
+    // the @tailwindcss/vite plugin (dropped by electron-vite's config merge).
+    plugins: [react()],
     build: {
       outDir: '../../out/renderer'
     }

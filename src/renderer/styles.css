@@ -1,5 +1,9 @@
 @import 'tailwindcss';
 
+/* Explicit content sources: automatic detection misses files under
+   electron-vite builds, which leaves zero utilities in the output. */
+@source '.';
+
 html,
 body {
   background: transparent;

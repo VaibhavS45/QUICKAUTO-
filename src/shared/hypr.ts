@@ -72,6 +72,15 @@ export function hyprSyntaxFor(
   return 'conf-old'
 }
 
+/** Shell-friendly wrapper: takes raw `hyprctl version` output. */
+export function hyprSyntaxForVersionString(
+  versionOutput: string | null,
+  luaManaged: boolean
+): HyprSyntax {
+  const version = versionOutput ? parseHyprVersion(versionOutput) : null
+  return hyprSyntaxFor(version, luaManaged)
+}
+
 /** "ALT, SPACE" (conf style) -> "ALT + SPACE" (Lua o.bind style). */
 export function hyprKeyToLua(key: string): string {
   return key

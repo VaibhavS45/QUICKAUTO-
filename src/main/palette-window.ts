@@ -22,6 +22,20 @@ export function preloadPath(): string {
 let win: BrowserWindow | null = null
 let lastFocusedWindowId: number | null = null
 let lastToggleSignalAt: number | null = null
+/**
+ * Wayland focus guard: compositors routinely deny focus-stealing, so a
+ * freshly shown palette may fire `blur` without ever having focus. Only
+ * auto-hide on blur when the window actually held focus; Esc/explicit
+ * hidePalette() calls are unaffected.
+ */
+let hadFocus = false
+/**
+ * Spurious blurs fire within milliseconds of show() when the compositor
+ * withholds activation. Blurs after GRACE_MS are real (user clicked
+ * elsewhere) and always hide — even if Electron never saw 'focus'.
+ */
+const BLUR_GRACE_MS = 500
+let shownAt = 0
 
 /** QUICKAUTO_DEBUG=1 latency probe: mark when a --toggle signal arrived. */
 export function noteToggleSignal(): void {
@@ -79,8 +93,22 @@ export function createPaletteWindow(): BrowserWindow {
     void win.loadFile(rendererUrl(page), { hash: 'palette' })
   }
 
+  win.on('focus', () => {
+    hadFocus = true
+  })
+
   win.on('blur', () => {
     // Esc or blur hides it (spec). Don't hide while devtools open.
+    if (process.env['QUICKAUTO_DEBUG'] === '1') {
+      process.stderr.write(
+        `[quickauto-debug] palette blur event (hadFocus=${hadFocus}, ageMs=${Date.now() - shownAt})\n`
+      )
+    }
+    // Ignore the spurious blur when focus was never granted right after show
+    // (Wayland withholds activation); otherwise the palette hides the instant
+    // it appears. Any later blur means "clicked somewhere else" -> hide.
+    if (!hadFocus && Date.now() - shownAt < BLUR_GRACE_MS) return
+    hadFocus = false
     if (win && !win.webContents.isDevToolsOpened()) hidePalette(false)
   })
 
@@ -102,6 +130,8 @@ function centerOnCursor(): { x: number; y: number } {
 
 export function showPalette(): void {
   if (!win) return
+  hadFocus = false // reset: a later blur only hides if focus was really granted
+  shownAt = Date.now()
   const active = BrowserWindow.getFocusedWindow()
   if (active && active !== win) lastFocusedWindowId = active.id
   const { x, y } = centerOnCursor()
@@ -121,7 +151,13 @@ export function showPalette(): void {
 
 export function hidePalette(restoreFocus: boolean): void {
   if (!win || win.isDestroyed()) return
+  if (process.env['QUICKAUTO_DEBUG'] === '1') {
+    process.stderr.write(
+      `[quickauto-debug] hidePalette (restoreFocus=${restoreFocus}) trace: ${new Error().stack?.split('\n').slice(2, 5).join(' <- ')}\n`
+    )
+  }
   win.hide()
+  hadFocus = false
   if (restoreFocus && process.platform === 'win32' && lastFocusedWindowId !== null) {
     const prev = BrowserWindow.fromId(lastFocusedWindowId)
     // Windows: restore focus to the previously active window on hide.
@@ -132,6 +168,9 @@ export function hidePalette(restoreFocus: boolean): void {
 
 export function togglePalette(): void {
   if (!win || win.isDestroyed()) return
+  if (process.env['QUICKAUTO_DEBUG'] === '1') {
+    process.stderr.write(`[quickauto-debug] togglePalette (visible=${win.isVisible()})\n`)
+  }
   if (win.isVisible()) hidePalette(true)
   else showPalette()
 }

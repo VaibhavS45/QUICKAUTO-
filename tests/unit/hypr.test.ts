@@ -9,7 +9,8 @@ import {
   electronHotkeyToHypr,
   hyprBindSnippet,
   hyprWindowRuleSnippet,
-  hyprAutostartSnippet
+  hyprAutostartSnippet,
+  hyprSyntaxForVersionString
 } from '../../src/shared/hypr.js'
 
 describe('detectHyprland', () => {
@@ -64,6 +65,13 @@ describe('hyprSyntaxFor', () => {
   it('falls back to windowrulev2 on old/unknown versions', () => {
     expect(hyprSyntaxFor({ major: 0, minor: 44, patch: 1 }, false)).toBe('conf-old')
     expect(hyprSyntaxFor(null, false)).toBe('conf-old')
+  })
+
+  it('resolves syntax straight from hyprctl output (shell path)', () => {
+    expect(hyprSyntaxForVersionString('Hyprland 0.56.2 built from branch v0.56.2', true)).toBe('lua')
+    expect(hyprSyntaxForVersionString('Hyprland 0.56.2 built from branch v0.56.2', false)).toBe('conf-new')
+    expect(hyprSyntaxForVersionString('Hyprland 0.44.1 foo', false)).toBe('conf-old')
+    expect(hyprSyntaxForVersionString(null, false)).toBe('conf-old')
   })
 })
 

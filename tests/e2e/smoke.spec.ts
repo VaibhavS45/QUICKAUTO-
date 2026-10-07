@@ -9,10 +9,14 @@ const mainEntry = join(root, 'out/main/index.js')
 
 /** Orphaned helpers from an interrupted run hold the single-instance lock. */
 function killStaleTestInstances(): void {
-  try {
-    execSync(`pkill -f "${mainEntry}"`)
-  } catch {
-    /* no stale processes — pkill exits 1 */
+  // 'out/mai[n]' matches absolute, relative, and launcher command lines
+  // (pkill -f uses regex: 'mai[n]' matches 'main' but not the bracketed self).
+  for (const pattern of ['out/mai[n]', 'quickauto --togg[l]e']) {
+    try {
+      execSync(`pkill -f "${pattern}"`)
+    } catch {
+      /* no stale processes — pkill exits 1 */
+    }
   }
 }
 

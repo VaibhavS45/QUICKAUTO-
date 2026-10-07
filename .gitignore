@@ -1,0 +1,53 @@
+# Dependencies
+node_modules/
+.pnp
+.pnp.*
+
+# Build output
+out/
+dist/
+*.local
+
+# Electron
+*.AppImage
+*.dmg
+*.exe
+*.snap
+*.deb
+*.rpm
+
+# Test results / coverage
+test-results/
+playwright-report/
+playwright/.cache/
+coverage/
+.nyc_output/
+
+# Vite
+.vite/
+vite.config.*.timestamp*
+
+# Logs
+logs/
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# OS / Editor
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/*
+!.vscode/extensions.json
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
+
+# Env
+.env
+.env.*
+!.env.example

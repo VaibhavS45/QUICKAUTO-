@@ -115,7 +115,7 @@ export async function runAgent(opts: RunAgentOptions): Promise<{ text: string; s
       instructions: buildInstructions(source, tools),
       tools: toolSet,
       stopWhen: isStepCount(AGENT_STEP_LIMIT),
-      toolApproval: buildToolApproval(source, toolNames) as never
+      toolApproval: buildToolApproval(source, toolNames, new Set(config.autoApprove ?? [])) as never
     })
 
   // Carry { runId, source } to tool execute functions (BudgetGuard metering).

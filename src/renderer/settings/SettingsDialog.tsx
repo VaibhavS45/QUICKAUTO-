@@ -36,6 +36,7 @@ interface ModelState {
   model: string
   baseUrl?: string
   resetDay?: number
+  autoApprove?: string[]
   keySet: boolean
   encryptionAvailable: boolean
 }
@@ -193,6 +194,7 @@ function ModelPanel(): React.JSX.Element {
   const [model, setModel] = useState('')
   const [baseUrl, setBaseUrl] = useState('')
   const [resetDay, setResetDay] = useState('1')
+  const [autoApproveEcho, setAutoApproveEcho] = useState(false)
   const [apiKey, setApiKey] = useState('')
   const [msg, setMsg] = useState<string | null>(null)
 
@@ -206,6 +208,7 @@ function ModelPanel(): React.JSX.Element {
         setModel(m.model)
         setBaseUrl(m.baseUrl ?? '')
         setResetDay(String(m.resetDay ?? 1))
+        setAutoApproveEcho((m.autoApprove ?? []).includes('echo'))
       })
       .catch(() => {})
   }, [])
@@ -217,7 +220,8 @@ function ModelPanel(): React.JSX.Element {
       provider,
       model: model.trim(),
       baseUrl: baseUrl.trim() || undefined,
-      resetDay: rd
+      resetDay: rd,
+      autoApprove: autoApproveEcho ? ['echo'] : []
     })) as { ok: boolean; error?: string }
     if (!res.ok) {
       setMsg(res.error ?? 'Save failed.')
@@ -280,6 +284,21 @@ function ModelPanel(): React.JSX.Element {
         </div>
         {msg && <p className="pt-2 text-xs text-amber-200">{msg}</p>}
         <p className={hintCls}>Keys are encrypted with the OS keychain (safeStorage) and never leave the main process.</p>
+      </section>
+      <section className={cardCls}>
+        <h3 className="text-sm font-semibold text-neutral-100">Auto-approve</h3>
+        <label className="flex items-center gap-2 pt-2 text-xs text-neutral-300">
+          <input
+            type="checkbox"
+            checked={autoApproveEcho}
+            onChange={(e) => setAutoApproveEcho(e.target.checked)}
+          />
+          echo (harmless test tool) — runs without asking
+        </label>
+        <p className={hintCls}>
+          Default: everything asks. Writes (email draft/send/reply/labels) always need approval
+          and can never auto-approve; scheduled runs never auto-approve anything.
+        </p>
       </section>
     </div>
   )

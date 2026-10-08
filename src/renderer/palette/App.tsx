@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { TOOL_IDS, TOOL_META, TOOL_ALIASES, activeMention, parseMentionedTools } from '../../shared/types.js'
 import SettingsDialog from '../settings/SettingsDialog.js'
+import { useGmailConnect } from '../hooks/useGmailConnect.js'
 import '../styles.css'
 
 interface SubmitResponse {
@@ -134,6 +135,75 @@ function shortJson(v: unknown, max = 300): string {
   }
 }
 
+function asRecord(v: unknown): Record<string, unknown> {
+  return typeof v === 'object' && v !== null ? (v as Record<string, unknown>) : {}
+}
+
+function strList(v: unknown): string {
+  if (Array.isArray(v)) return v.map((x) => String(x)).join(', ')
+  return typeof v === 'string' ? v : ''
+}
+
+/**
+ * Structured approve/deny card for Gmail writes: always shows To, Subject
+ * and the FULL body before anything is sent. Falls back to raw JSON for
+ * non-write tools.
+ */
+function ApprovalDetail({ toolName, input }: { toolName: string; input: unknown }): React.JSX.Element {
+  const o = asRecord(input)
+  const rows: Array<[string, string]> = []
+  let body: string | null = null
+  if (toolName === 'gmail_send' || toolName === 'gmail_draft') {
+    if (o['to']) rows.push(['To', String(o['to'])])
+    if (o['cc']) rows.push(['Cc', strList(o['cc'])])
+    if (o['bcc']) rows.push(['Bcc', strList(o['bcc'])])
+    if (o['subject']) rows.push(['Subject', String(o['subject'])])
+    if (o['threadId']) rows.push(['Thread', String(o['threadId'])])
+    if (typeof o['body'] === 'string') body = o['body']
+  } else if (toolName === 'gmail_reply') {
+    if (o['threadId']) rows.push(['Thread', String(o['threadId'])])
+    if (o['to']) rows.push(['To', String(o['to'])])
+    if (o['cc']) rows.push(['Cc', strList(o['cc'])])
+    if (o['bcc']) rows.push(['Bcc', strList(o['bcc'])])
+    if (typeof o['body'] === 'string') body = o['body']
+  } else if (toolName === 'gmail_modify_labels') {
+    if (o['messageId']) rows.push(['Message', String(o['messageId'])])
+    if (o['addLabelIds']) rows.push(['Add labels', strList(o['addLabelIds'])])
+    if (o['removeLabelIds']) rows.push(['Remove labels', strList(o['removeLabelIds'])])
+  }
+  if (rows.length === 0 && body === null) {
+    return (
+      <pre className="mt-1 max-h-32 overflow-y-auto whitespace-pre-wrap break-words rounded bg-black/40 p-2 font-mono text-xs text-neutral-200">
+        {shortJson(input, 2000)}
+      </pre>
+    )
+  }
+  return (
+    <div className="mt-1 rounded bg-black/40 p-2 text-xs">
+      {rows.map(([k, v]) => (
+        <div key={k} className="flex gap-2 py-0.5">
+          <span className="w-16 shrink-0 text-neutral-400">{k}</span>
+          <span className="break-words text-neutral-100">{v || '—'}</span>
+        </div>
+      ))}
+      {body !== null && (
+        <div className="pt-1">
+          <div className="pb-0.5 text-neutral-400">Body</div>
+          <pre className="max-h-48 overflow-y-auto whitespace-pre-wrap break-words rounded bg-black/60 p-2 font-mono text-xs text-neutral-100">
+            {body || '(empty)'}
+          </pre>
+        </div>
+      )}
+      <details className="pt-1 text-neutral-500">
+        <summary className="cursor-pointer">Raw request</summary>
+        <pre className="max-h-32 overflow-y-auto whitespace-pre-wrap break-words pt-1 font-mono text-[11px]">
+          {shortJson(input, 2000)}
+        </pre>
+      </details>
+    </div>
+  )
+}
+
 export default function PaletteApp(): React.JSX.Element {
   const [value, setValue] = useState('')
   const [caret, setCaret] = useState(0)
@@ -214,6 +284,9 @@ export default function PaletteApp(): React.JSX.Element {
 
   // Budget for the footer (full details live in Settings → Usage).
   const [budget, setBudget] = useState<BudgetState | null>(null)
+
+  // Gmail connect state for the not-connected card below (polling shared with Settings).
+  const gmail = useGmailConnect()
 
   const mention = useMemo(() => activeMention(value, caret), [value, caret])
   const candidates = useMemo(
@@ -527,11 +600,15 @@ export default function PaletteApp(): React.JSX.Element {
             <div key={a.approvalId} className="mb-2 rounded border border-orange-500/60 bg-orange-950/40 p-2">
               <div className="font-medium text-orange-100">
                 Approval needed: <span className="font-mono">{a.toolName}</span>
+                {(a.toolName === 'gmail_send' || a.toolName === 'gmail_reply') && (
+                  <span className="ml-2 rounded bg-red-700 px-1.5 py-0.5 text-[11px]">sends immediately</span>
+                )}
+                {a.toolName === 'gmail_draft' && (
+                  <span className="ml-2 rounded bg-sky-700 px-1.5 py-0.5 text-[11px]">draft only — nothing sent</span>
+                )}
               </div>
               {a.reason && <div className="text-xs text-orange-200/80">{a.reason}</div>}
-              <pre className="mt-1 max-h-32 overflow-y-auto whitespace-pre-wrap break-words rounded bg-black/40 p-2 font-mono text-xs text-neutral-200">
-                {shortJson(a.input, 2000)}
-              </pre>
+              <ApprovalDetail toolName={a.toolName} input={a.input} />
               <div className="flex gap-2 pt-2">
                 <button
                   onClick={() => void decide(a.approvalId, true)}
@@ -550,6 +627,21 @@ export default function PaletteApp(): React.JSX.Element {
           ))}
 
           {runError && <div className="text-sm text-red-300">{runError}</div>}
+
+          {!running &&
+            toolCalls.some((t) => t.toolName.startsWith('gmail_')) &&
+            /not connected/i.test(`${answer} ${runError ?? ''}`) && (
+              <div className="mb-2">
+                <button
+                  onClick={() => void gmail.connect()}
+                  disabled={gmail.connecting}
+                  className="rounded bg-emerald-600 px-3 py-1 text-xs font-medium text-white disabled:opacity-50"
+                >
+                  {gmail.connecting ? 'Waiting for Gmail…' : 'Connect Gmail'}
+                </button>
+                {gmail.message && <div className="pt-1 text-xs text-amber-200">{gmail.message}</div>}
+              </div>
+            )}
 
           {answer && <Markdown text={answer} />}
           {running && !answer && (

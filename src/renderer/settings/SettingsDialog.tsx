@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
+import { useGmailConnect } from '../hooks/useGmailConnect.js'
 
 export type SettingsTabId = 'general' | 'model' | 'connections' | 'routines' | 'shortcuts' | 'usage'
 
@@ -36,6 +37,7 @@ interface ModelState {
   baseUrl?: string
   resetDay?: number
   githubRepos?: Array<{ path: string; repo: string }>
+  autoApprove?: string[]
   keySet: boolean
   encryptionAvailable: boolean
 }
@@ -193,6 +195,7 @@ function ModelPanel(): React.JSX.Element {
   const [model, setModel] = useState('')
   const [baseUrl, setBaseUrl] = useState('')
   const [resetDay, setResetDay] = useState('1')
+  const [autoApproveEcho, setAutoApproveEcho] = useState(false)
   const [apiKey, setApiKey] = useState('')
   const [msg, setMsg] = useState<string | null>(null)
 
@@ -206,6 +209,7 @@ function ModelPanel(): React.JSX.Element {
         setModel(m.model)
         setBaseUrl(m.baseUrl ?? '')
         setResetDay(String(m.resetDay ?? 1))
+        setAutoApproveEcho((m.autoApprove ?? []).includes('echo'))
       })
       .catch(() => {})
   }, [])
@@ -213,11 +217,14 @@ function ModelPanel(): React.JSX.Element {
   async function save(): Promise<void> {
     setMsg(null)
     const rd = Math.min(28, Math.max(1, parseInt(resetDay, 10) || 1))
+    const current = (await window.palette.getModelSettings()) as ModelState
     const res = (await window.palette.setModelSettings({
       provider,
       model: model.trim(),
       baseUrl: baseUrl.trim() || undefined,
-      resetDay: rd
+      resetDay: rd,
+      githubRepos: current.githubRepos,
+      autoApprove: autoApproveEcho ? ['echo'] : []
     })) as { ok: boolean; error?: string }
     if (!res.ok) {
       setMsg(res.error ?? 'Save failed.')
@@ -281,6 +288,21 @@ function ModelPanel(): React.JSX.Element {
         {msg && <p className="pt-2 text-xs text-amber-200">{msg}</p>}
         <p className={hintCls}>Keys are encrypted with the OS keychain (safeStorage) and never leave the main process.</p>
       </section>
+      <section className={cardCls}>
+        <h3 className="text-sm font-semibold text-neutral-100">Auto-approve</h3>
+        <label className="flex items-center gap-2 pt-2 text-xs text-neutral-300">
+          <input
+            type="checkbox"
+            checked={autoApproveEcho}
+            onChange={(e) => setAutoApproveEcho(e.target.checked)}
+          />
+          echo (harmless test tool) — runs without asking
+        </label>
+        <p className={hintCls}>
+          Default: everything asks. Writes (email draft/send/reply/labels) always need approval
+          and can never auto-approve; scheduled runs never auto-approve anything.
+        </p>
+      </section>
     </div>
   )
 }
@@ -330,6 +352,7 @@ function ConnectionsPanel(): React.JSX.Element {
         </div>
       )}
       <GitHubPanel />
+      <GmailConnectBlock />
     </section>
   )
 }
@@ -382,7 +405,8 @@ function GitHubPanel(): React.JSX.Element {
         model: m.model,
         baseUrl: m.baseUrl,
         resetDay: m.resetDay,
-        githubRepos: next
+        githubRepos: next,
+        autoApprove: m.autoApprove
       })) as { ok: boolean; error?: string }
       if (!res.ok) {
         setMsg(res.error ?? 'Save failed.')
@@ -462,6 +486,36 @@ function GitHubPanel(): React.JSX.Element {
         </button>
       </div>
       {msg && <p className="pt-2 text-xs text-amber-200">{msg}</p>}
+    </div>
+  )
+}
+
+function GmailConnectBlock(): React.JSX.Element {
+  const g = useGmailConnect()
+  return (
+    <div className="pt-3">
+      <div className="flex flex-wrap items-center gap-2 text-xs">
+        <span className="text-neutral-400">
+          Gmail {g.status ? (g.status.connected ? 'connected ✓' : 'not connected') : '…'}
+        </span>
+        {g.status && !g.status.connected && (
+          <button
+            onClick={() => void g.connect()}
+            disabled={g.connecting}
+            className="rounded-md bg-emerald-600 px-3 py-1.5 text-xs font-medium text-white disabled:opacity-50"
+          >
+            {g.connecting ? 'Waiting…' : 'Connect Gmail'}
+          </button>
+        )}
+        <button
+          onClick={() => void g.refresh()}
+          className="rounded-md border border-neutral-700 px-3 py-1.5 text-xs text-neutral-300"
+        >
+          Refresh
+        </button>
+      </div>
+      {g.status?.detail && <p className="pt-1 text-[11px] text-neutral-500">{g.status.detail}</p>}
+      {g.message && <p className="pt-1 text-xs text-amber-200">{g.message}</p>}
     </div>
   )
 }

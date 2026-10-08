@@ -20,11 +20,7 @@ export const ModelSettingsSchema = z.object({
   baseUrl: z.string().url().max(500).optional().or(z.literal('').transform(() => undefined)),
   /** Budget reset day 1-28. */
   resetDay: z.number().int().min(1).max(28).optional(),
-  /**
-   * GitHub repos accessible to @github (local `gh` CLI, zero Composio cost).
-   * Path checks (exists, git repo, origin match) run at settings-save time in
-   * main; the schema only checks shapes here.
-   */
+  /** GitHub repos accessible to @github via the local CLI. */
   githubRepos: z
     .array(
       z.object({
@@ -33,7 +29,13 @@ export const ModelSettingsSchema = z.object({
       })
     )
     .max(20)
-    .optional()
+    .optional(),
+  /**
+   * Per-tool auto-approve list. Default OFF (empty). Applies only to
+   * non-write tools in palette runs — writes always need the approval card
+   * and scheduled runs never auto-approve (see agent/tools.ts).
+   */
+  autoApprove: z.array(z.string().min(1).max(64)).max(32).optional()
 })
 export type ModelSettings = z.infer<typeof ModelSettingsSchema>
 

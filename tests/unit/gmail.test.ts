@@ -6,7 +6,9 @@ import {
   GMAIL_GET_SLUG,
   GMAIL_LABELS_SLUG,
   GMAIL_MAX_RESULTS,
+  GMAIL_READ_TOOLS,
   GMAIL_SEARCH_SLUG,
+  GMAIL_WRITE_TOOLS,
   isPaletteGuarded,
   type ComposioClientLike
 } from '../../src/main/connectors/composio.js'
@@ -67,12 +69,12 @@ async function searchEmails(provider: ComposioConnectorProvider, input: Record<s
 }
 
 describe('gmail read-only tools', () => {
-  it('exposes exactly search/get/labels and no write tools', () => {
+  it('exposes exactly the read tools plus the four approval-gated writes', () => {
     const fake = fakeClient()
     const { provider } = providerWith(fake)
     const names = Object.keys(provider.getTools(['gmail']))
-    expect(names.sort()).toEqual(['gmail_get', 'gmail_labels', 'gmail_search'])
-    expect(names.some((n) => /draft|send|delete|create|modify|trash/i.test(n))).toBe(false)
+    expect(names.sort()).toEqual([...GMAIL_READ_TOOLS, ...GMAIL_WRITE_TOOLS].sort())
+    expect(names.some((n) => /delete|trash|forward|filter|batch/i.test(n))).toBe(false)
   })
 
   it('returns nothing for other mentions', () => {

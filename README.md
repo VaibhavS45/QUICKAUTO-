@@ -28,6 +28,18 @@ Settings) to toggle the palette. The calendar opens automatically on launch
 Enter runs, Esc hides, ↑ recalls history, ⌘/Ctrl+Enter copies the result.
 `@calendar <text>` opens the calendar with a task draft (it never runs an agent).
 
+## GitHub pull-request conflict resolution
+
+GitHub PR tools require the GitHub CLI to be installed and authenticated
+(`gh auth login`). In Settings → Connections, add the local clone path and its
+`owner/name`; optionally set a test command for the resolver to run. Ask the
+palette to resolve conflicts on a conflicting PR with `@github`. The resolver
+creates a separate `palette/resolve-pr-*` branch in that clone, asks OpenCode
+to resolve the merge conflicts, and shows the resulting diff for approval.
+Committing the resolution and pushing its branch are separate actions, each
+with its own approval. It never force-pushes or writes directly to the default
+branch. OpenCode must be installed and available as `opencode` on `PATH`.
+
 ## Linux / Wayland hotkey
 
 `globalShortcut` is unreliable on Wayland (Electron docs; the portal-based
@@ -52,7 +64,7 @@ itself runs a Wayland session.
 | Electron | `^44.5.0` (installed 44.6.0) | Wayland native since 38.2, but `globalShortcut` still restricted → CLI fallback stands. Latest 3 majors supported. |
 | Vercel AI SDK `ai` | **v7** (`^7`, needs Node 22+) | `ToolLoopAgent` exists; per-call `needsApproval` on `tool()` is **deprecated** → use `toolApproval` on the agent/generate call. Spec updated accordingly (M2). |
 | `@composio/core` / `@composio/vercel` | `^0.13` / `^0.11` (M3) | `@composio/vercel@0.11+` supports `ai@^6 \|\| ^7`. REST API is v3.1; manual `execute()` now requires a toolkit version (agentic flows set the skip flag internally). |
-| `@opencode-ai/sdk` | `^1.17` (M5) | `createOpencode()` spawns/manages the server, `createOpencodeClient({ baseUrl })` attaches; `session.create` / `session.prompt` / `session.abort` / permissions API. |
+| `@opencode-ai/sdk` | `^1.18.35` (M5) | `createOpencodeClient({ baseUrl, fetch })` attaches to the local server; session, event subscription, and permission APIs power conflict resolution. |
 | electron-vite | `^5.0.0` | Single renderer entry + hash routing (`#palette` / `#calendar`) — multi-page `rollupOptions.input` objects are dropped by its config merge, so we don't use them. |
 | electron-builder | `^26` | AppImage + deb, dmg, nsis targets (M6). |
 

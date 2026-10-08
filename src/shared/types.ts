@@ -26,7 +26,7 @@ export const TOOL_META: Record<ToolId, { label: string; hint: string }> = {
   gmail: { label: '@gmail', hint: 'Gmail via Composio (M3) — alias @email' },
   sheets: { label: '@sheets', hint: 'Sheets via Composio (M3) — alias @sheet' },
   opencode: { label: '@opencode', hint: 'Coding agent (M5)' },
-  github: { label: '@github', hint: 'Repo tasks via local clone (M5)' },
+  github: { label: '@github', hint: 'PR reviews via local gh CLI (read-only)' },
   files: { label: '@files', hint: 'Local files in granted folders (M2)' }
 }
 

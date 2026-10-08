@@ -36,6 +36,7 @@ import { ProfileSettingsService } from './agent/profile-settings.js'
 import { BudgetGuard, type BudgetStore, type BudgetUsageState } from './connectors/budget-guard.js'
 import { ConnectorSettingsService, type ConnectorStore } from './connectors/connector-settings.js'
 import { ComposioProvider } from './connectors/composio-tools.js'
+import { GitHubCliProvider, isZeroCostTool, validateRepoEntry } from './connectors/github-cli.js'
 import { registerConnectorProvider, getToolsForMentions } from './agent/registry.js'
 import {
   Scheduler,
@@ -102,6 +103,14 @@ const connectorSettings = new ConnectorSettingsService(new ElectronConnectorStor
 })
 
 registerConnectorProvider(new ComposioProvider(() => connectorSettings.getKey()))
+
+// Read-only @github via the local `gh` CLI + git (zero Composio cost).
+// Reads repos from model settings (validated allowlist); the gh token is
+// never read or stored — auth happens via `gh auth login` in the terminal.
+const githubProvider = new GitHubCliProvider({
+  getRepos: () => settingsService.getConfig().githubRepos ?? []
+})
+registerConnectorProvider(githubProvider)
 
 const routineFile = new Store<{ routines: Routine[] }>({ name: 'palette-routines', defaults: { routines: [] } })
 
@@ -311,10 +320,18 @@ function wireIpc(): void {
     }
   })
 
-  ipcMain.handle(IpcChannels.setModelSettings, (_event, payload: unknown) => {
+  ipcMain.handle(IpcChannels.setModelSettings, async (_event, payload: unknown) => {
     const parsed = ModelSettingsSchema.safeParse(payload)
     if (!parsed.success) return { ok: false as const, error: 'Invalid model settings.' }
     try {
+      // GitHub repos: validate path + git repo + origin match before storing.
+      // Only allowlisted repos are ever accessible to @github tools.
+      for (const entry of parsed.data.githubRepos ?? []) {
+        const checked = await validateRepoEntry(entry)
+        if (!checked.ok) {
+          return { ok: false as const, error: `GitHub repo "${entry.repo || entry.path}": ${checked.error}` }
+        }
+      }
       const saved = settingsService.setConfig(parsed.data)
       return { ok: true as const, settings: { ...saved, keySet: undefined, encryptionAvailable: undefined } }
     } catch (err) {
@@ -381,10 +398,12 @@ function wireIpc(): void {
         getConfig: () => settingsService.getConfig(),
         getApiKey: () => settingsService.getApiKey(),
         // Every Composio tool execution goes through BudgetGuard here.
+        // Zero-cost local tools (gh CLI) are skipped: they are not Composio calls.
         getTools: async (ids) => {
           const set = await getToolsForMentions(ids)
           for (const [name, t] of Object.entries(set)) {
             if (name === 'echo' || name === 'echo_write') continue
+            if (isZeroCostTool(t)) continue
             const orig = (t as { execute?: unknown }).execute
             if (typeof orig !== 'function') continue
             const fn = orig as (args: never, opts: never) => Promise<unknown>
@@ -509,13 +528,16 @@ function wireIpc(): void {
 
   ipcMain.handle(IpcChannels.getConnector, async () => {
     const pub = await connectorSettings.getPublicState()
-    const ids = ['notion', 'gmail', 'sheets', 'websearch', 'github'] as const
-    const services = await Promise.all(
+    // NOTE (@github): served by the local gh CLI, not Composio — its live
+    // status comes from the gh provider (key-based stub would be wrong).
+    const ids = ['notion', 'gmail', 'sheets', 'websearch'] as const
+    const services: Array<{ id: string; connected: boolean; detail?: string }> = await Promise.all(
       ids.map(async (id) => {
         const s = await new ComposioProvider(() => connectorSettings.getKey()).status(id)
         return { id, ...s }
       })
     )
+    services.push({ id: 'github', ...(await githubProvider.status('github')) })
     return { ...pub, services }
   })
 
@@ -533,6 +555,24 @@ function wireIpc(): void {
   ipcMain.handle(IpcChannels.clearConnectorKey, async () => {
     await connectorSettings.clearKey()
     return { ok: true as const }
+  })
+
+  // @github status (local gh CLI; no payload, nothing secret crosses IPC).
+  // Reports gh presence + auth with the exact `gh auth login` fix, plus the
+  // configured repo allowlist.
+  ipcMain.handle(IpcChannels.githubStatus, async () => {
+    try {
+      const check = await githubProvider.checkGh()
+      return {
+        ok: true as const,
+        installed: check.installed,
+        authenticated: check.authenticated,
+        detail: check.detail,
+        repos: settingsService.getConfig().githubRepos ?? []
+      }
+    } catch (err) {
+      return { ok: false as const, error: err instanceof Error ? err.message : String(err) }
+    }
   })
 
   ipcMain.handle(IpcChannels.routineList, () => ({ ok: true as const, routines: scheduler.list() }))

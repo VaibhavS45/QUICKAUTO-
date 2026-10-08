@@ -46,7 +46,9 @@ export const IpcChannels = {
   getAwake: 'awake:get',
   setAwake: 'awake:set',
   getProfile: 'settings:get-profile',
-  setProfile: 'settings:set-profile'
+  setProfile: 'settings:set-profile',
+  /** GitHub CLI status for @github (local gh; token never crosses IPC). */
+  githubStatus: 'github:status'
 } as const
 
 export type IpcChannel = (typeof IpcChannels)[keyof typeof IpcChannels]

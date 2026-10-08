@@ -111,7 +111,7 @@ export async function runAgent(opts: RunAgentOptions): Promise<{ text: string; s
     createAgent?.({ model: null, tools: toolSet, source }) ??
     new ToolLoopAgent({
       model: resolveModel(config, apiKey) as never,
-      instructions: buildInstructions(source),
+      instructions: buildInstructions(source, tools),
       tools: toolSet,
       stopWhen: isStepCount(AGENT_STEP_LIMIT),
       toolApproval: buildToolApproval(source, toolNames) as never

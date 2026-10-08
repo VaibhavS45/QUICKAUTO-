@@ -19,7 +19,21 @@ export const ModelSettingsSchema = z.object({
   model: z.string().min(1).max(200),
   baseUrl: z.string().url().max(500).optional().or(z.literal('').transform(() => undefined)),
   /** Budget reset day 1-28. */
-  resetDay: z.number().int().min(1).max(28).optional()
+  resetDay: z.number().int().min(1).max(28).optional(),
+  /**
+   * GitHub repos accessible to @github (local `gh` CLI, zero Composio cost).
+   * Path checks (exists, git repo, origin match) run at settings-save time in
+   * main; the schema only checks shapes here.
+   */
+  githubRepos: z
+    .array(
+      z.object({
+        path: z.string().min(1).max(500),
+        repo: z.string().min(1).max(200)
+      })
+    )
+    .max(20)
+    .optional()
 })
 export type ModelSettings = z.infer<typeof ModelSettingsSchema>
 

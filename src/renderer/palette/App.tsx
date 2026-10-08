@@ -1,6 +1,8 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { TOOL_IDS, TOOL_META, TOOL_ALIASES, activeMention, parseMentionedTools } from '../../shared/types.js'
 import SettingsDialog from '../settings/SettingsDialog.js'
+import { Badge } from '../components/ui/badge.js'
+import { Button } from '../components/ui/button.js'
 import { useGmailConnect } from '../hooks/useGmailConnect.js'
 import '../styles.css'
 
@@ -480,6 +482,11 @@ export default function PaletteApp(): React.JSX.Element {
       return
     }
     if (e.key === 'Escape') {
+      if (showSettings) {
+        e.preventDefault()
+        setShowSettings(false)
+        return
+      }
       if (running) {
         e.preventDefault()
         void cancelRun()
@@ -511,32 +518,21 @@ export default function PaletteApp(): React.JSX.Element {
           className="w-full bg-transparent text-[15px] text-neutral-100 outline-none placeholder:text-neutral-500"
         />
         {running && (
-          <button
-            onClick={() => void cancelRun()}
-            className="rounded bg-red-700 px-2 py-0.5 text-xs text-white"
-            title="Cancel run (Esc)"
-          >
+          <Button variant="destructive" size="sm" onClick={() => void cancelRun()} title="Cancel run (Esc)">
             Stop
-          </button>
+          </Button>
         )}
-        <button
-          onClick={() => setShowSettings((s) => !s)}
-          className="rounded px-1 text-neutral-500 hover:text-neutral-200"
-          title="Settings"
-        >
+        <Button variant="ghost" size="icon" onClick={() => setShowSettings((s) => !s)} title="Settings" aria-label="Settings">
           ⚙
-        </button>
+        </Button>
       </div>
 
       {tools.length > 0 && (
         <div className="flex flex-wrap gap-1 px-4 pt-2">
           {tools.map((t) => (
-            <span
-              key={t}
-              className="rounded bg-indigo-600/30 px-1.5 py-0.5 text-xs text-indigo-200"
-            >
+            <Badge key={t} variant="tool">
               @{t}
-            </span>
+            </Badge>
           ))}
         </div>
       )}
@@ -580,21 +576,21 @@ export default function PaletteApp(): React.JSX.Element {
           {toolCalls.length > 0 && (
             <div className="flex flex-wrap gap-1 pb-2">
               {toolCalls.map((t) => (
-                <span
+                <Badge
                   key={t.toolCallId}
                   title={shortJson(t.input)}
-                  className={`rounded px-1.5 py-0.5 font-mono text-xs ${
+                  variant={
                     t.status === 'running'
-                      ? 'bg-amber-600/30 text-amber-200'
+                      ? 'busy'
                       : t.status === 'needs-approval'
-                        ? 'bg-orange-600/40 text-orange-100'
+                        ? 'alert'
                         : t.status === 'denied'
-                          ? 'bg-red-800/50 text-red-200'
-                          : 'bg-emerald-700/30 text-emerald-200'
-                  }`}
+                          ? 'bad'
+                          : 'ok'
+                  }
                 >
                   {t.toolName} · {t.status === 'running' ? 'running' : t.status === 'done' ? 'done' : t.status === 'needs-approval' ? 'needs approval' : 'denied'}
-                </span>
+                </Badge>
               ))}
             </div>
           )}
@@ -613,18 +609,12 @@ export default function PaletteApp(): React.JSX.Element {
               {a.reason && <div className="text-xs text-orange-200/80">{a.reason}</div>}
               <ApprovalDetail toolName={a.toolName} input={a.input} />
               <div className="flex gap-2 pt-2">
-                <button
-                  onClick={() => void decide(a.approvalId, true)}
-                  className="rounded bg-emerald-600 px-3 py-1 text-xs font-medium text-white"
-                >
+                <Button variant="success" size="sm" onClick={() => void decide(a.approvalId, true)}>
                   Approve
-                </button>
-                <button
-                  onClick={() => void decide(a.approvalId, false)}
-                  className="rounded bg-red-700 px-3 py-1 text-xs font-medium text-white"
-                >
+                </Button>
+                <Button variant="destructive" size="sm" onClick={() => void decide(a.approvalId, false)}>
                   Deny
-                </button>
+                </Button>
               </div>
             </div>
           ))}
@@ -635,13 +625,9 @@ export default function PaletteApp(): React.JSX.Element {
             toolCalls.some((t) => t.toolName.startsWith('gmail_')) &&
             /not connected/i.test(`${answer} ${runError ?? ''}`) && (
               <div className="mb-2">
-                <button
-                  onClick={() => void gmail.connect()}
-                  disabled={gmail.connecting}
-                  className="rounded bg-emerald-600 px-3 py-1 text-xs font-medium text-white disabled:opacity-50"
-                >
+                <Button variant="success" size="sm" onClick={() => void gmail.connect()} disabled={gmail.connecting}>
                   {gmail.connecting ? 'Waiting for Gmail…' : 'Connect Gmail'}
-                </button>
+                </Button>
                 {gmail.message && <div className="pt-1 text-xs text-amber-200">{gmail.message}</div>}
               </div>
             )}

@@ -21,7 +21,7 @@ export const TOOL_ALIASES: Record<string, ToolId> = {
 
 export const TOOL_META: Record<ToolId, { label: string; hint: string }> = {
   calendar: { label: '@calendar', hint: 'Open calendar with a task draft' },
-  websearch: { label: '@websearch', hint: 'Search the web (M2)' },
+  websearch: { label: '@websearch', hint: 'Search the web and optionally save a summary' },
   notion: { label: '@notion', hint: 'Notion via Composio (M3)' },
   gmail: { label: '@gmail', hint: 'Gmail via Composio (read-only) — alias @email' },
   sheets: { label: '@sheets', hint: 'Sheets via Composio (M3) — alias @sheet' },

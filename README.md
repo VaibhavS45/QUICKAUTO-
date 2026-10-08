@@ -28,6 +28,22 @@ Settings) to toggle the palette. The calendar opens automatically on launch
 Enter runs, Esc hides, ↑ recalls history, ⌘/Ctrl+Enter copies the result.
 `@calendar <text>` opens the calendar with a task draft (it never runs an agent).
 
+## Web search and scheduled tasks
+
+`@websearch` uses the platform's web-search tool registry. By default it falls back to the public DuckDuckGo API, and it prefers a configured provider if you set either `BRAVE_SEARCH_API_KEY` or `SERPAPI_API_KEY` (or `PALETTE_WEBSEARCH_PROVIDER`).
+
+Examples:
+
+```text
+@websearch what is the highest grossing movie globally this year?
+@websearch find today's biggest tech news and save a summary to /home/vaibhav/doc/tech-news.txt
+@websearch sources
+```
+
+The search tool keeps source metadata for the latest result. If a message asks for sources or says “where did you get this information,” Palette can cite the most recent web-search sources without inventing URLs.
+
+You can also schedule `@websearch` through the calendar task system, e.g. `@calendar @websearch at 7:00am check the price of Bitcoin and append it to /home/vaibhav/doc/bitcoin.txt`.
+
 ## Linux / Wayland hotkey
 
 `globalShortcut` is unreliable on Wayland (Electron docs; the portal-based

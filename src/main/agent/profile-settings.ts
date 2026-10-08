@@ -15,6 +15,13 @@ export const ProfileSettingsSchema = z.object({
   about: z.string().max(2000),
   language: ProfileLanguageSchema
 })
+
+const ProfileSettingsInputSchema = z.object({
+  name: z.string(),
+  email: z.string().refine((v) => v === '' || /^[^\s@]+@[^\s@]+\.[^\s@]+$/, 'Invalid email.'),
+  about: z.string(),
+  language: ProfileLanguageSchema
+})
 export type ProfileSettings = z.infer<typeof ProfileSettingsSchema>
 
 export const DEFAULT_PROFILE_SETTINGS: ProfileSettings = {
@@ -41,7 +48,7 @@ export class ProfileSettingsService {
   }
 
   set(input: unknown): ProfileSettings {
-    const parsed = ProfileSettingsSchema.safeParse(input)
+    const parsed = ProfileSettingsInputSchema.safeParse(input)
     if (!parsed.success) throw new Error('Invalid profile settings.')
     const trimmed: ProfileSettings = {
       name: parsed.data.name.trim().slice(0, 80),

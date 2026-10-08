@@ -1,4 +1,7 @@
 import { tool } from 'ai'
+import { mkdir, readFile, writeFile } from 'node:fs/promises'
+import { homedir } from 'node:os'
+import path from 'node:path'
 import { z } from 'zod'
 
 /**
@@ -15,6 +18,21 @@ export const EchoInputSchema = z.object({
   text: z.string().min(1).max(2000)
 })
 
+function validateWritePath(filePath: string): string {
+  const trimmed = filePath.trim()
+  if (!trimmed) return 'Write target path is required.'
+  const resolved = path.resolve(trimmed)
+  const allowedRoots = [path.resolve(homedir()), path.resolve(process.cwd()), '/tmp']
+  const ok = allowedRoots.some((root) => resolved === root || resolved.startsWith(`${root}${path.sep}`))
+  if (!ok) {
+    return 'Only files inside your home directory, the current workspace, or /tmp may be written.'
+  }
+  if (resolved.includes('\0')) {
+    return 'Invalid file path.'
+  }
+  return ''
+}
+
 export function createBuiltinTools() {
   const echo = tool({
     description: 'Echo back the given text. A harmless read-only test tool.',
@@ -29,7 +47,38 @@ export function createBuiltinTools() {
     execute: async ({ text }) => ({ written: text })
   })
 
-  return { echo, echo_write }
+  const write_file = tool({
+    description:
+      'Safely write a text payload to a local file, creating parent directories when needed. Use only when the user explicitly asks to save or append data.',
+    inputSchema: z.object({
+      path: z.string().min(1).max(4096),
+      content: z.string().max(200000),
+      append: z.boolean().optional(),
+      createDirs: z.boolean().optional()
+    }),
+    execute: async ({ path: filePath, content, append = false, createDirs = true }) => {
+      const error = validateWritePath(filePath)
+      if (error) throw new Error(error)
+      const resolved = path.resolve(filePath)
+      const dir = path.dirname(resolved)
+      if (createDirs) await mkdir(dir, { recursive: true })
+      if (!append) {
+        await writeFile(resolved, content, 'utf8')
+        return { ok: true, path: resolved, mode: 'write', bytes: Buffer.byteLength(content, 'utf8') }
+      }
+      let existing = ''
+      try {
+        existing = await readFile(resolved, 'utf8')
+      } catch {
+        existing = ''
+      }
+      const next = `${existing}${content}`
+      await writeFile(resolved, next, 'utf8')
+      return { ok: true, path: resolved, mode: 'append', bytes: Buffer.byteLength(next, 'utf8') }
+    }
+  })
+
+  return { echo, echo_write, write_file }
 }
 
 export type BuiltinToolName = keyof ReturnType<typeof createBuiltinTools>
@@ -37,6 +86,7 @@ export type BuiltinToolName = keyof ReturnType<typeof createBuiltinTools>
 /** Tools that need an in-app approve/deny card before they may run. */
 export const APPROVAL_REQUIRED_TOOLS: ReadonlySet<string> = new Set([
   'echo_write',
+  'write_file',
   'notion_create',
   'gmail_draft',
   'gmail_send',

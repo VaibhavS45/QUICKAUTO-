@@ -9,7 +9,7 @@ import {
   getPaletteWindow,
   resizePaletteToContent
 } from './palette-window.js'
-import { openCalendar, getCalendarWindow } from './calendar-window.js'
+import { openCalendar, getCalendarWindow, takePendingDraft } from './calendar-window.js'
 import {
   IpcChannels,
   PaletteSubmitSchema,
@@ -457,6 +457,13 @@ function wireIpc(): void {
     else w.maximize()
   })
   ipcMain.on(IpcChannels.calendarClose, () => getCalendarWindow()?.close())
+
+  // Step 0 (fix/palette-pop): cold-start draft race fix. openCalendar pushes
+  // the draft on ready-to-show, which can fire before the calendar renderer
+  // mounts its listener. The renderer therefore also pulls on mount via this
+  // channel. Take-once: returns the draft and clears it, so a draft is never
+  // delivered twice. No payload, so nothing to validate.
+  ipcMain.handle(IpcChannels.calendarTakeDraft, () => ({ draft: takePendingDraft() }))
 
   ipcMain.handle(IpcChannels.paletteSubmit, (_event, payload: unknown) => {
     const parsed = PaletteSubmitSchema.safeParse(payload)

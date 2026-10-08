@@ -86,6 +86,14 @@ export default function CalendarApp(): React.JSX.Element {
   useEffect(() => {
     window.palette.calendarWindowEvent('opened')
     const off = window.palette.onCalendarDraft((text) => setDraft(text))
+    // Step 0 (fix/palette-pop) calendar hand-off — the ONLY change this task
+    // makes to a calendar-owned renderer file: pull any draft the main-side
+    // ready-to-show push may have delivered before this listener mounted
+    // (cold start). Take-once on the main side, so no double delivery.
+    void window.palette.takeCalendarDraft().then((r) => {
+      const res = r as unknown as { draft?: string | null }
+      if (typeof res?.draft === 'string' && res.draft.length > 0) setDraft(res.draft)
+    }).catch(() => {})
     const onUnload = (): void => window.palette.calendarWindowEvent('closed')
     window.addEventListener('beforeunload', onUnload)
     return () => {

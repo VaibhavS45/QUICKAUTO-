@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { defaultHotkey, parseMentionedTools, toPaletteSubmit } from '../../src/shared/types.js'
+import { activeMention, defaultHotkey, parseMentionedTools, toPaletteSubmit } from '../../src/shared/types.js'
 
 describe('parseMentionedTools', () => {
   it('finds single and chained tools', () => {
@@ -21,6 +21,37 @@ describe('parseMentionedTools', () => {
 
   it('returns empty when no tools mentioned', () => {
     expect(parseMentionedTools('just some text')).toEqual([])
+  })
+
+  it('ignores email addresses and inline @handles', () => {
+    expect(parseMentionedTools('me@example.com')).toEqual([])
+    expect(parseMentionedTools('mail me@gmail.com today')).toEqual([])
+    expect(parseMentionedTools('contact user@notion.io for details')).toEqual([])
+    // A mention wrapped in punctuation but separated by space still counts.
+    expect(parseMentionedTools('(see @gmail) for the thread')).toEqual(['gmail'])
+    // A real mention after whitespace still counts, even next to an email.
+    expect(parseMentionedTools('me@gmail.com and @gmail the thread')).toEqual(['gmail'])
+    expect(toPaletteSubmit('write to me@example.com').tools).toEqual([])
+  })
+})
+
+describe('activeMention', () => {
+  it('opens autocomplete for a real @mention', () => {
+    expect(activeMention('@gm', 3)).toEqual({ start: 0, typed: 'gm' })
+    expect(activeMention('hi @cal', 7)).toEqual({ start: 3, typed: 'cal' })
+    expect(activeMention('@', 1)).toEqual({ start: 0, typed: '' })
+  })
+
+  it('never opens for email addresses', () => {
+    expect(activeMention('me@example.com', 14)).toBeNull()
+    expect(activeMention('mail me@gmail.com', 17)).toBeNull()
+    expect(activeMention('a@b', 3)).toBeNull()
+  })
+
+  it('is null without a trailing @fragment', () => {
+    expect(activeMention('just text', 9)).toBeNull()
+    expect(activeMention('@gmail done', 11)).toBeNull()
+    expect(activeMention('@gmail done @', 13)).toEqual({ start: 12, typed: '' })
   })
 })
 

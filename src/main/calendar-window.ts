@@ -80,3 +80,15 @@ export function openCalendar(draft?: string): void {
     win = null
   })
 }
+
+// Step 0 (fix/palette-pop) calendar hand-off — the ONLY change this task makes
+// to a calendar-owned file: the ready-to-show push above can fire before the
+// calendar renderer mounts its 'calendar:new-draft' listener (cold start), so
+// the renderer also pulls via 'calendar:take-draft' on mount. Take-once keeps
+// push and pull from double-delivering the same draft.
+/** Return the pending @calendar draft and clear it (single consumption). */
+export function takePendingDraft(): string | null {
+  const draft = pendingDraft
+  pendingDraft = null
+  return draft
+}

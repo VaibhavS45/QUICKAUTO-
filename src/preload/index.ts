@@ -95,6 +95,8 @@ const api = {
     ipcRenderer.on('calendar:new-draft', fn)
     return () => ipcRenderer.removeListener('calendar:new-draft', fn)
   },
+  takeCalendarDraft: (): Promise<{ draft: string | null }> =>
+    ipcRenderer.invoke('calendar:take-draft'),
   calendarWindowEvent: (kind: 'opened' | 'closed') => {
     if (kind === 'opened') ipcRenderer.send('calendar:opened-with-window')
     else ipcRenderer.send('calendar:closed-to-tray')

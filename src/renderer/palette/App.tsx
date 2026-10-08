@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { TOOL_IDS, TOOL_META, TOOL_ALIASES, parseMentionedTools } from '../../shared/types.js'
+import { TOOL_IDS, TOOL_META, TOOL_ALIASES, activeMention, parseMentionedTools } from '../../shared/types.js'
 import SettingsDialog from '../settings/SettingsDialog.js'
 import '../styles.css'
 
@@ -58,17 +58,6 @@ function mentionCandidates(typed: string): string[] {
   const q = typed.toLowerCase()
   const all = [...TOOL_IDS.map((id) => `@${id}`), ...Object.keys(TOOL_ALIASES).map((a) => `@${a}`)]
   return all.filter((c) => c.startsWith(`@${q}`))
-}
-
-/** Active @mention fragment being typed (letters right after the last @). */
-function activeMention(value: string, caret: number): { start: number; typed: string } | null {
-  const before = value.slice(0, caret)
-  const m = /@([a-zA-Z]*)$/.exec(before)
-  if (!m) return null
-  // Must be at start or preceded by whitespace.
-  const at = before.length - m[0].length
-  if (at > 0 && !/\s/.test(before[at - 1])) return null
-  return { start: at, typed: m[1] ?? '' }
 }
 
 /** Tiny markdown renderer (no deps, no raw HTML): fences, lists, bold, code, headings. */

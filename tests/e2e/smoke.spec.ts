@@ -69,6 +69,15 @@ test('CalTen smoke: calendar first, palette toggle, @calendar draft', async () =
       })
     await expect.poll(paletteHeight, { timeout: 10_000 }).toBeGreaterThan(120)
 
+    // Nothing clipped: the last autocomplete option must end inside the
+    // palette content bounds (Bug A regression: fixed 120px window).
+    const lastOption = palette.getByRole('button', { name: '@sheet' }).first()
+    await expect(lastOption).toBeVisible()
+    const optionBox = await lastOption.boundingBox()
+    const contentHeight = await paletteHeight()
+    expect(optionBox).not.toBeNull()
+    expect(optionBox!.y + optionBox!.height).toBeLessThanOrEqual(contentHeight + 1)
+
     // Alias @email resolves to @gmail.
     await input.fill('@ema')
     await expect(palette.getByRole('button', { name: /@email/ }).first()).toBeVisible()
@@ -85,6 +94,51 @@ test('CalTen smoke: calendar first, palette toggle, @calendar draft', async () =
     await input.fill('@calendar buy milk Friday 9am')
     await input.press('Enter')
     await expect(calendar.getByText('buy milk Friday 9am')).toBeVisible()
+  } finally {
+    await app.close()
+  }
+})
+
+test('CalTen cold start: @calendar draft lands 20 times in a row', async () => {
+  test.setTimeout(300_000)
+  killStaleTestInstances()
+  const app = await electron.launch({
+    executablePath,
+    args: [mainEntry, '--no-sandbox'],
+    env: { ...process.env, NODE_ENV: 'test' }
+  })
+  try {
+    await expect.poll(() => app.windows().length, { timeout: 30_000 }).toBe(2)
+    const palette = app.windows().find((p) => p.url().includes('#palette')) ?? app.windows()[0]!
+    secondInstanceToggle()
+    const input = palette.getByPlaceholder(/Type @ for tools/)
+    await input.click()
+
+    const calendarCount = (): Promise<number> =>
+      Promise.resolve(app.windows().filter((p) => p.url().includes('#calendar')).length)
+
+    for (let i = 0; i < 20; i++) {
+      const text = `cold draft ${i}`
+      // Cold start: no calendar window at all when the draft is submitted.
+      for (const p of app.windows().filter((w) => w.url().includes('#calendar'))) {
+        await p.close()
+      }
+      await expect.poll(calendarCount, { timeout: 15_000 }).toBe(0)
+
+      await input.fill(`@calendar ${text}`)
+      await input.press('Enter')
+
+      // Window recreated; the draft must appear even though the
+      // ready-to-show push fired before the renderer mounted (take-draft pull).
+      await expect.poll(calendarCount, { timeout: 15_000 }).toBe(1)
+      const calendar = app.windows().find((w) => w.url().includes('#calendar'))!
+      await expect(calendar.getByText(text)).toBeVisible({ timeout: 15_000 })
+
+      // Single-consumption invariant: whichever path won (push or pull),
+      // a second take must come back empty — the draft is never duplicated.
+      const secondTake = await calendar.evaluate(() => window.palette.takeCalendarDraft())
+      expect(secondTake).toEqual({ draft: null })
+    }
   } finally {
     await app.close()
   }

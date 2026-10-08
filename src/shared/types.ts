@@ -30,10 +30,12 @@ export const TOOL_META: Record<ToolId, { label: string; hint: string }> = {
   files: { label: '@files', hint: 'Local files in granted folders (M2)' }
 }
 
-/** Extract @mentions from free text, resolving aliases. @calendar is included. */
+/** Extract @mentions from free text, resolving aliases. @calendar is included.
+ * An @ only counts at the start of the text or after whitespace, so email
+ * addresses (me@gmail.com) and handles (a@b) never count as mentions. */
 export function parseMentionedTools(text: string): ToolId[] {
   const found: ToolId[] = []
-  const re = /@([a-zA-Z]+)/g
+  const re = /(?:^|\s)@([a-zA-Z]+)/g
   let m: RegExpExecArray | null
   while ((m = re.exec(text)) !== null) {
     const raw = m[1].toLowerCase()
@@ -43,6 +45,19 @@ export function parseMentionedTools(text: string): ToolId[] {
     if (id && !found.includes(id)) found.push(id)
   }
   return found
+}
+
+/** Active @mention fragment being typed (letters right after the last @).
+ * Returns null unless the @ is at the start or preceded by whitespace, so
+ * typing an email address never opens the @ autocomplete. */
+export function activeMention(value: string, caret: number): { start: number; typed: string } | null {
+  const before = value.slice(0, caret)
+  const m = /@([a-zA-Z]*)$/.exec(before)
+  if (!m) return null
+  // Must be at start or preceded by whitespace.
+  const at = before.length - m[0].length
+  if (at > 0 && !/\s/.test(before[at - 1])) return null
+  return { start: at, typed: m[1] ?? '' }
 }
 
 export const HotkeySchema = z

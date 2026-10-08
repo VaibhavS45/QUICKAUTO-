@@ -93,11 +93,13 @@ export function createComposioTools(getKey: () => Promise<string | null>) {
   return { notion_search, notion_create, web_search, gmail_search, gmail_draft, sheets_read }
 }
 
-/** @mention id -> composio tool names offered to the model. */
+/** @mention id -> composio tool names offered to the model.
+ * NOTE (feat/gmail-read): @gmail is served by the real ComposioConnectorProvider
+ * (src/main/connectors/composio.ts), so it is intentionally absent here — the
+ * stub must not shadow the real read-only tools or re-expose a draft writer. */
 const MENTION_MAP: Record<string, string[]> = {
   notion: ['notion_search', 'notion_create'],
   websearch: ['web_search'],
-  gmail: ['gmail_search', 'gmail_draft'],
   sheets: ['sheets_read'],
   github: []
 }

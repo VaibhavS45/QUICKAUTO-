@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
+import { useGmailConnect } from '../hooks/useGmailConnect.js'
 
 export type SettingsTabId = 'general' | 'model' | 'connections' | 'routines' | 'shortcuts' | 'usage'
 
@@ -328,7 +329,38 @@ function ConnectionsPanel(): React.JSX.Element {
           ))}
         </div>
       )}
+      <GmailConnectBlock />
     </section>
+  )
+}
+
+function GmailConnectBlock(): React.JSX.Element {
+  const g = useGmailConnect()
+  return (
+    <div className="pt-3">
+      <div className="flex flex-wrap items-center gap-2 text-xs">
+        <span className="text-neutral-400">
+          Gmail {g.status ? (g.status.connected ? 'connected ✓' : 'not connected') : '…'}
+        </span>
+        {g.status && !g.status.connected && (
+          <button
+            onClick={() => void g.connect()}
+            disabled={g.connecting}
+            className="rounded-md bg-emerald-600 px-3 py-1.5 text-xs font-medium text-white disabled:opacity-50"
+          >
+            {g.connecting ? 'Waiting…' : 'Connect Gmail'}
+          </button>
+        )}
+        <button
+          onClick={() => void g.refresh()}
+          className="rounded-md border border-neutral-700 px-3 py-1.5 text-xs text-neutral-300"
+        >
+          Refresh
+        </button>
+      </div>
+      {g.status?.detail && <p className="pt-1 text-[11px] text-neutral-500">{g.status.detail}</p>}
+      {g.message && <p className="pt-1 text-xs text-amber-200">{g.message}</p>}
+    </div>
   )
 }
 

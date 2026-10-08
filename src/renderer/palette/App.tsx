@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { TOOL_IDS, TOOL_META, TOOL_ALIASES, activeMention, parseMentionedTools } from '../../shared/types.js'
 import SettingsDialog from '../settings/SettingsDialog.js'
+import { useGmailConnect } from '../hooks/useGmailConnect.js'
 import '../styles.css'
 
 interface SubmitResponse {
@@ -214,6 +215,9 @@ export default function PaletteApp(): React.JSX.Element {
 
   // Budget for the footer (full details live in Settings → Usage).
   const [budget, setBudget] = useState<BudgetState | null>(null)
+
+  // Gmail connect state for the not-connected card below (polling shared with Settings).
+  const gmail = useGmailConnect()
 
   const mention = useMemo(() => activeMention(value, caret), [value, caret])
   const candidates = useMemo(
@@ -550,6 +554,21 @@ export default function PaletteApp(): React.JSX.Element {
           ))}
 
           {runError && <div className="text-sm text-red-300">{runError}</div>}
+
+          {!running &&
+            toolCalls.some((t) => t.toolName.startsWith('gmail_')) &&
+            /not connected/i.test(`${answer} ${runError ?? ''}`) && (
+              <div className="mb-2">
+                <button
+                  onClick={() => void gmail.connect()}
+                  disabled={gmail.connecting}
+                  className="rounded bg-emerald-600 px-3 py-1 text-xs font-medium text-white disabled:opacity-50"
+                >
+                  {gmail.connecting ? 'Waiting for Gmail…' : 'Connect Gmail'}
+                </button>
+                {gmail.message && <div className="pt-1 text-xs text-amber-200">{gmail.message}</div>}
+              </div>
+            )}
 
           {answer && <Markdown text={answer} />}
           {running && !answer && (

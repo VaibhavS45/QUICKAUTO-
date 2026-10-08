@@ -36,6 +36,7 @@ interface ModelState {
   model: string
   baseUrl?: string
   resetDay?: number
+  githubRepos?: Array<{ path: string; repo: string }>
   autoApprove?: string[]
   keySet: boolean
   encryptionAvailable: boolean
@@ -216,11 +217,13 @@ function ModelPanel(): React.JSX.Element {
   async function save(): Promise<void> {
     setMsg(null)
     const rd = Math.min(28, Math.max(1, parseInt(resetDay, 10) || 1))
+    const current = (await window.palette.getModelSettings()) as ModelState
     const res = (await window.palette.setModelSettings({
       provider,
       model: model.trim(),
       baseUrl: baseUrl.trim() || undefined,
       resetDay: rd,
+      githubRepos: current.githubRepos,
       autoApprove: autoApproveEcho ? ['echo'] : []
     })) as { ok: boolean; error?: string }
     if (!res.ok) {
@@ -348,8 +351,142 @@ function ConnectionsPanel(): React.JSX.Element {
           ))}
         </div>
       )}
+      <GitHubPanel />
       <GmailConnectBlock />
     </section>
+  )
+}
+
+interface GhStatus {
+  ok: boolean
+  installed?: boolean
+  authenticated?: boolean
+  detail?: string
+  error?: string
+}
+
+/**
+ * @github settings: local `gh` CLI status + repo allowlist. Auth happens via
+ * `gh auth login` in the user's terminal — the token is never read or stored.
+ * Only allowlisted repos are accessible to the agent; entries are validated
+ * (path exists, git repo, origin match) when saved.
+ */
+function GitHubPanel(): React.JSX.Element {
+  const [gh, setGh] = useState<GhStatus | null>(null)
+  const [repos, setRepos] = useState<Array<{ path: string; repo: string }>>([])
+  const [newPath, setNewPath] = useState('')
+  const [newRepo, setNewRepo] = useState('')
+  const [msg, setMsg] = useState<string | null>(null)
+
+  async function refresh(): Promise<void> {
+    try {
+      setGh((await window.palette.githubStatus()) as GhStatus)
+    } catch {
+      setGh({ ok: false, error: 'Could not check gh status.' })
+    }
+    try {
+      const m = (await window.palette.getModelSettings()) as ModelState
+      setRepos(m.githubRepos ?? [])
+    } catch {
+      /* keep current list */
+    }
+  }
+
+  useEffect(() => {
+    void refresh()
+  }, [])
+
+  async function save(next: Array<{ path: string; repo: string }>): Promise<void> {
+    setMsg(null)
+    try {
+      const m = (await window.palette.getModelSettings()) as ModelState
+      const res = (await window.palette.setModelSettings({
+        provider: m.provider,
+        model: m.model,
+        baseUrl: m.baseUrl,
+        resetDay: m.resetDay,
+        githubRepos: next,
+        autoApprove: m.autoApprove
+      })) as { ok: boolean; error?: string }
+      if (!res.ok) {
+        setMsg(res.error ?? 'Save failed.')
+        return
+      }
+      setRepos(next)
+      setMsg('Saved.')
+    } catch {
+      setMsg('Save failed.')
+    }
+  }
+
+  function add(): void {
+    const path = newPath.trim()
+    const repo = newRepo.trim()
+    if (!path || !repo) {
+      setMsg('Enter both a local path and owner/name.')
+      return
+    }
+    if (repos.some((r) => r.repo.toLowerCase() === repo.toLowerCase())) {
+      setMsg(`"${repo}" is already in the list.`)
+      return
+    }
+    setNewPath('')
+    setNewRepo('')
+    void save([...repos, { path, repo }])
+  }
+
+  function remove(repo: string): void {
+    void save(repos.filter((r) => r.repo.toLowerCase() !== repo.toLowerCase()))
+  }
+
+  return (
+    <div className="pt-4">
+      <h4 className="text-sm font-semibold text-neutral-100">GitHub (local CLI, read-only)</h4>
+      <div className="flex flex-wrap items-center gap-2 pt-2 text-xs">
+        <span className="text-neutral-400">
+          {gh ? (gh.ok ? (gh.detail ?? 'gh status unknown') : (gh.error ?? 'gh check failed')) : 'Checking gh…'}
+        </span>
+        <button
+          onClick={() => void refresh()}
+          className="rounded-md border border-neutral-700 px-3 py-1 text-xs text-neutral-300"
+        >
+          Refresh
+        </button>
+      </div>
+      {gh?.ok && !gh.authenticated && (
+        <p className="pt-1 font-mono text-[11px] text-amber-300">Fix: run `gh auth login` in a terminal, then press Refresh.</p>
+      )}
+      <p className={hintCls}>Only these repos are accessible to @github. Each path must exist and be a git repo whose origin matches owner/name.</p>
+      <div className="space-y-1.5 pt-2">
+        {repos.length === 0 && <p className="text-xs text-neutral-500">No repos yet.</p>}
+        {repos.map((r) => (
+          <div key={r.repo.toLowerCase()} className="flex items-center gap-2 rounded-lg border border-neutral-800 bg-neutral-950 px-2.5 py-2 text-xs">
+            <span className="font-mono text-neutral-200">{r.repo}</span>
+            <span className="truncate font-mono text-neutral-500" title={r.path}>{r.path}</span>
+            <span className="flex-1" />
+            <button onClick={() => remove(r.repo)} className="text-neutral-500 hover:text-red-400">
+              Remove
+            </button>
+          </div>
+        ))}
+      </div>
+      <div className="flex flex-wrap items-end gap-2 pt-2">
+        <div className="min-w-40 flex-1">
+          <Field label="Local path">
+            <input value={newPath} onChange={(e) => setNewPath(e.target.value)} placeholder="/home/you/code/repo" className={`${inputCls} font-mono text-xs`} />
+          </Field>
+        </div>
+        <div className="w-44">
+          <Field label="owner/name">
+            <input value={newRepo} onChange={(e) => setNewRepo(e.target.value)} placeholder="owner/name" className={`${inputCls} font-mono text-xs`} />
+          </Field>
+        </div>
+        <button onClick={add} className="h-9 rounded-md bg-blue-500 px-4 text-sm font-medium text-white hover:bg-blue-400">
+          Add
+        </button>
+      </div>
+      {msg && <p className="pt-2 text-xs text-amber-200">{msg}</p>}
+    </div>
   )
 }
 

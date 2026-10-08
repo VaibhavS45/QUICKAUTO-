@@ -34,11 +34,19 @@ const api = {
     model: string
     baseUrl?: string
     resetDay?: number
+    githubRepos?: Array<{ path: string; repo: string }>
     autoApprove?: string[]
     keySet: boolean
     encryptionAvailable: boolean
   }> => ipcRenderer.invoke('settings:get-model'),
-  setModelSettings: (s: { provider: string; model: string; baseUrl?: string; resetDay?: number; autoApprove?: string[] }) =>
+  setModelSettings: (s: {
+    provider: string
+    model: string
+    baseUrl?: string
+    resetDay?: number
+    githubRepos?: Array<{ path: string; repo: string }>
+    autoApprove?: string[]
+  }) =>
     ipcRenderer.invoke('settings:set-model', s),
   setApiKey: (key: string) => ipcRenderer.invoke('settings:set-api-key', { key }),
   clearApiKey: () => ipcRenderer.invoke('settings:clear-api-key'),
@@ -72,6 +80,14 @@ const api = {
   }> => ipcRenderer.invoke('connector:get'),
   setConnectorKey: (key: string) => ipcRenderer.invoke('connector:set-key', { key }),
   clearConnectorKey: () => ipcRenderer.invoke('connector:clear-key'),
+  githubStatus: (): Promise<{
+    ok: boolean
+    installed?: boolean
+    authenticated?: boolean
+    detail?: string
+    repos?: Array<{ path: string; repo: string }>
+    error?: string
+  }> => ipcRenderer.invoke('github:status'),
   routineList: (): Promise<{
     ok: boolean
     routines: Array<{

@@ -20,6 +20,17 @@ export const ModelSettingsSchema = z.object({
   baseUrl: z.string().url().max(500).optional().or(z.literal('').transform(() => undefined)),
   /** Budget reset day 1-28. */
   resetDay: z.number().int().min(1).max(28).optional(),
+  /** GitHub repos accessible to @github via the local CLI. */
+  githubRepos: z
+    .array(
+      z.object({
+        path: z.string().min(1).max(500),
+        repo: z.string().min(1).max(200),
+        testCommand: z.string().min(1).max(500).optional()
+      })
+    )
+    .max(20)
+    .optional(),
   /**
    * Per-tool auto-approve list. Default OFF (empty). Applies only to
    * non-write tools in palette runs — writes always need the approval card

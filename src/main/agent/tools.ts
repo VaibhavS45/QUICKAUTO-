@@ -91,7 +91,10 @@ export const APPROVAL_REQUIRED_TOOLS: ReadonlySet<string> = new Set([
   'gmail_draft',
   'gmail_send',
   'gmail_reply',
-  'gmail_modify_labels'
+  'gmail_modify_labels',
+  'github_resolve_conflicts',
+  'github_commit_resolution',
+  'github_push_resolution'
 ])
 
 export type ToolApprovalValue = 'user-approval' | 'approved' | { type: 'denied'; reason: string }

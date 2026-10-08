@@ -11,14 +11,14 @@ export type ProfileLanguage = z.infer<typeof ProfileLanguageSchema>
 
 export const ProfileSettingsSchema = z.object({
   name: z.string().max(80),
-  email: z.string().max(254).refine((v) => v === '' || /^[^\s@]+@[^\s@]+\.[^\s@]+$/, 'Invalid email.'),
+  email: z.string().max(254).refine((v) => v === '' || /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v), 'Invalid email.'),
   about: z.string().max(2000),
   language: ProfileLanguageSchema
 })
 
 const ProfileSettingsInputSchema = z.object({
   name: z.string(),
-  email: z.string().refine((v) => v === '' || /^[^\s@]+@[^\s@]+\.[^\s@]+$/, 'Invalid email.'),
+  email: z.string().refine((v) => v === '' || /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v), 'Invalid email.'),
   about: z.string(),
   language: ProfileLanguageSchema
 })

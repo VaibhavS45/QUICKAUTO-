@@ -34,9 +34,18 @@ import type { AgentEvent } from '../shared/agent.js'
 import { runAgent, type ApprovalDecision } from './agent/runner.js'
 import { ModelSettingsService, type SettingsStore } from './settings/model-settings.js'
 import { ProfileSettingsService } from './agent/profile-settings.js'
+import { GitHubResolveProvider } from './connectors/github-resolve.js'
+import { OpencodeServerManager } from './agent/opencode-server.js'
+import { runOpencodeResolve, type OpencodePermission } from './agent/opencode-resolve.js'
+import {
+  setNestedApprovalHandler,
+  nextNestedApprovalId,
+  requestNestedApprovalForCurrentRun
+} from './agent/nested-approval.js'
 import { BudgetGuard, type BudgetStore, type BudgetUsageState } from './connectors/budget-guard.js'
 import { ConnectorSettingsService, type ConnectorStore } from './connectors/connector-settings.js'
 import { ComposioProvider } from './connectors/composio-tools.js'
+import { GitHubCliProvider, isZeroCostTool, validateRepoEntry } from './connectors/github-cli.js'
 import { ComposioConnectorProvider, isPaletteGuarded } from './connectors/composio.js'
 import { registerConnectorProvider, getToolsForMentions } from './agent/registry.js'
 import {
@@ -105,6 +114,33 @@ const connectorSettings = new ConnectorSettingsService(new ElectronConnectorStor
 
 registerConnectorProvider(new ComposioProvider(() => connectorSettings.getKey()))
 
+// Read-only @github via the local `gh` CLI + git (zero Composio cost).
+// Reads repos from model settings (validated allowlist); the gh token is
+// never read or stored — auth happens via `gh auth login` in the terminal.
+const githubProvider = new GitHubCliProvider({
+  getRepos: () => settingsService.getConfig().githubRepos ?? []
+})
+registerConnectorProvider(githubProvider)
+
+const opencodeManager = new OpencodeServerManager()
+const githubResolveProvider = new GitHubResolveProvider({
+  getRepos: () => settingsService.getConfig().githubRepos ?? [],
+  getOpencode: () => opencodeManager,
+  opencodeResolve: (opts) =>
+    runOpencodeResolve({
+      ...opts,
+      onPermission: async (perm: OpencodePermission) =>
+        (
+          await requestNestedApprovalForCurrentRun({
+            toolName: `opencode: ${perm.type} ${perm.title}`,
+            input: { pattern: perm.pattern ?? null, metadata: perm.metadata ?? null },
+            reason: 'OpenCode requests permission while resolving conflicts.'
+          })
+        ).approved
+    })
+})
+registerConnectorProvider(githubResolveProvider)
+
 // Real read-only @gmail provider (feat/gmail-read). Registered after the stub
 // so its gmail_* tools are the ones served; distinct provider id avoids the
 // registry's duplicate-id ignore. Its tools guard themselves (with cache and
@@ -164,6 +200,28 @@ const activeRuns = new Map<string, ActiveRun>()
 function emitToPalette(e: AgentEvent): void {
   getPaletteWindow()?.webContents.send(IpcChannels.agentEvent, e)
 }
+
+setNestedApprovalHandler(
+  (req) =>
+    new Promise((resolve) => {
+      const active = activeRuns.get(req.runId)
+      if (!active) {
+        resolve({ approved: false, reason: 'Run ended.' })
+        return
+      }
+      const approvalId = nextNestedApprovalId()
+      active.pending.set(approvalId, resolve)
+      emitToPalette({
+        type: 'approval-requested',
+        runId: req.runId,
+        approvalId,
+        toolCallId: approvalId,
+        toolName: req.toolName,
+        input: req.input,
+        reason: req.reason
+      })
+    })
+)
 
 let tray: Tray | null = null
 let hotkeyError: string | null = null
@@ -324,10 +382,18 @@ function wireIpc(): void {
     }
   })
 
-  ipcMain.handle(IpcChannels.setModelSettings, (_event, payload: unknown) => {
+  ipcMain.handle(IpcChannels.setModelSettings, async (_event, payload: unknown) => {
     const parsed = ModelSettingsSchema.safeParse(payload)
     if (!parsed.success) return { ok: false as const, error: 'Invalid model settings.' }
     try {
+      // GitHub repos: validate path + git repo + origin match before storing.
+      // Only allowlisted repos are ever accessible to @github tools.
+      for (const entry of parsed.data.githubRepos ?? []) {
+        const checked = await validateRepoEntry(entry)
+        if (!checked.ok) {
+          return { ok: false as const, error: `GitHub repo "${entry.repo || entry.path}": ${checked.error}` }
+        }
+      }
       const saved = settingsService.setConfig(parsed.data)
       return { ok: true as const, settings: { ...saved, keySet: undefined, encryptionAvailable: undefined } }
     } catch (err) {
@@ -393,13 +459,14 @@ function wireIpc(): void {
       deps: {
         getConfig: () => settingsService.getConfig(),
         getApiKey: () => settingsService.getApiKey(),
-        // Every Composio tool execution goes through BudgetGuard here —
-        // except provider tools that already guard themselves (with cache
-        // and dedupe keys); wrapping those again would meter one call twice.
+        // Every Composio tool execution goes through BudgetGuard here.
+        // Local gh tools are free; Gmail tools already guard themselves with
+        // cache and dedupe keys, so neither should be metered here again.
         getTools: async (ids) => {
           const set = await getToolsForMentions(ids)
           for (const [name, t] of Object.entries(set)) {
             if (name === 'echo' || name === 'echo_write') continue
+            if (name.startsWith('github_') || isZeroCostTool(t)) continue
             if (isPaletteGuarded(t)) continue
             const orig = (t as { execute?: unknown }).execute
             if (typeof orig !== 'function') continue
@@ -525,15 +592,21 @@ function wireIpc(): void {
 
   ipcMain.handle(IpcChannels.getConnector, async () => {
     const pub = await connectorSettings.getPublicState()
-    // NOTE (feat/gmail-read): 'gmail' is served by the real provider — its
-    // live status comes from connections:status, not this stub key check.
-    const ids = ['notion', 'sheets', 'websearch', 'github'] as const
-    const services = await Promise.all(
+    // Gmail status is provided by its dedicated connection IPC; GitHub uses
+    // the local CLI. Composio status applies only to its other services.
+    const ids = ['notion', 'sheets', 'websearch'] as const
+    const services: Array<{ id: string; connected: boolean; detail?: string }> = await Promise.all(
       ids.map(async (id) => {
         const s = await new ComposioProvider(() => connectorSettings.getKey()).status(id)
         return { id, ...s }
       })
     )
+    const gh = await githubProvider.checkGh()
+    services.push({
+      id: 'github',
+      connected: gh.installed && gh.authenticated,
+      detail: gh.detail
+    })
     return { ...pub, services }
   })
 
@@ -551,6 +624,24 @@ function wireIpc(): void {
   ipcMain.handle(IpcChannels.clearConnectorKey, async () => {
     await connectorSettings.clearKey()
     return { ok: true as const }
+  })
+
+  // @github status (local gh CLI; no payload, nothing secret crosses IPC).
+  // Reports gh presence + auth with the exact `gh auth login` fix, plus the
+  // configured repo allowlist.
+  ipcMain.handle(IpcChannels.githubStatus, async () => {
+    try {
+      const check = await githubProvider.checkGh()
+      return {
+        ok: true as const,
+        installed: check.installed,
+        authenticated: check.authenticated,
+        detail: check.detail,
+        repos: settingsService.getConfig().githubRepos ?? []
+      }
+    } catch (err) {
+      return { ok: false as const, error: err instanceof Error ? err.message : String(err) }
+    }
   })
 
   // Gmail connection status + connect (feat/gmail-read). The Composio API key
@@ -673,6 +764,8 @@ app.on('window-all-closed', () => {
 
 app.on('will-quit', () => {
   globalShortcut.unregisterAll()
+  setNestedApprovalHandler(null)
+  void opencodeManager.stop()
 })
 
 export { store }

@@ -20,6 +20,8 @@
   "dependencies": {
     "@ai-sdk/anthropic": "^4.0.74",
     "@ai-sdk/openai": "^4.0.86",
+    "@composio/core": "^0.22.0",
+    "@composio/vercel": "^0.12.1",
     "ai": "^7.0.130",
     "electron-store": "^11.0.0",
     "react-day-picker": "^10.0.2",

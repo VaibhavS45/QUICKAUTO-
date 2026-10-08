@@ -1,4 +1,4 @@
-import { app, BrowserWindow, Tray, Menu, globalShortcut, ipcMain, nativeImage, session, Notification, safeStorage } from 'electron'
+import { app, BrowserWindow, Tray, Menu, globalShortcut, ipcMain, nativeImage, session, Notification, safeStorage, shell } from 'electron'
 import Store from 'electron-store'
 import { randomUUID } from 'node:crypto'
 import {
@@ -26,6 +26,7 @@ import {
   PaletteResizeSchema,
   ModelSettingsSchema,
   ProfileSettingsSchema,
+  ConnectionToolSchema,
   type PlatformInfo
 } from './ipc.js'
 import { defaultHotkey, toPaletteSubmit, TOOL_IDS, type ToolId } from '../shared/types.js'
@@ -36,6 +37,7 @@ import { ProfileSettingsService } from './agent/profile-settings.js'
 import { BudgetGuard, type BudgetStore, type BudgetUsageState } from './connectors/budget-guard.js'
 import { ConnectorSettingsService, type ConnectorStore } from './connectors/connector-settings.js'
 import { ComposioProvider } from './connectors/composio-tools.js'
+import { ComposioConnectorProvider, isPaletteGuarded } from './connectors/composio.js'
 import { registerConnectorProvider, getToolsForMentions } from './agent/registry.js'
 import {
   Scheduler,
@@ -102,6 +104,17 @@ const connectorSettings = new ConnectorSettingsService(new ElectronConnectorStor
 })
 
 registerConnectorProvider(new ComposioProvider(() => connectorSettings.getKey()))
+
+// Real read-only @gmail provider (feat/gmail-read). Registered after the stub
+// so its gmail_* tools are the ones served; distinct provider id avoids the
+// registry's duplicate-id ignore. Its tools guard themselves (with cache and
+// dedupe keys), so the generic wrapper below skips them (isPaletteGuarded) —
+// exactly one BudgetGuard hit per Composio call.
+const gmailProvider = new ComposioConnectorProvider({
+  getApiKey: () => connectorSettings.getKey(),
+  getGuard: () => getGuard()
+})
+registerConnectorProvider(gmailProvider)
 
 const routineFile = new Store<{ routines: Routine[] }>({ name: 'palette-routines', defaults: { routines: [] } })
 
@@ -380,11 +393,14 @@ function wireIpc(): void {
       deps: {
         getConfig: () => settingsService.getConfig(),
         getApiKey: () => settingsService.getApiKey(),
-        // Every Composio tool execution goes through BudgetGuard here.
+        // Every Composio tool execution goes through BudgetGuard here —
+        // except provider tools that already guard themselves (with cache
+        // and dedupe keys); wrapping those again would meter one call twice.
         getTools: async (ids) => {
           const set = await getToolsForMentions(ids)
           for (const [name, t] of Object.entries(set)) {
             if (name === 'echo' || name === 'echo_write') continue
+            if (isPaletteGuarded(t)) continue
             const orig = (t as { execute?: unknown }).execute
             if (typeof orig !== 'function') continue
             const fn = orig as (args: never, opts: never) => Promise<unknown>
@@ -509,7 +525,9 @@ function wireIpc(): void {
 
   ipcMain.handle(IpcChannels.getConnector, async () => {
     const pub = await connectorSettings.getPublicState()
-    const ids = ['notion', 'gmail', 'sheets', 'websearch', 'github'] as const
+    // NOTE (feat/gmail-read): 'gmail' is served by the real provider — its
+    // live status comes from connections:status, not this stub key check.
+    const ids = ['notion', 'sheets', 'websearch', 'github'] as const
     const services = await Promise.all(
       ids.map(async (id) => {
         const s = await new ComposioProvider(() => connectorSettings.getKey()).status(id)
@@ -533,6 +551,35 @@ function wireIpc(): void {
   ipcMain.handle(IpcChannels.clearConnectorKey, async () => {
     await connectorSettings.clearKey()
     return { ok: true as const }
+  })
+
+  // Gmail connection status + connect (feat/gmail-read). The Composio API key
+  // itself stays in connectorSettings (safeStorage); only status/URL crosses.
+  ipcMain.handle(IpcChannels.connectionStatus, async (_event, payload: unknown) => {
+    const parsed = ConnectionToolSchema.safeParse(payload)
+    if (!parsed.success) return { ok: false as const, error: 'Invalid connection request.' }
+    try {
+      const st = await gmailProvider.status(parsed.data.toolId as ToolId)
+      return { ok: true as const, ...st }
+    } catch (err) {
+      return { ok: false as const, error: err instanceof Error ? err.message : String(err) }
+    }
+  })
+
+  ipcMain.handle(IpcChannels.connectionConnect, async (_event, payload: unknown) => {
+    const parsed = ConnectionToolSchema.safeParse(payload)
+    if (!parsed.success) return { ok: false as const, error: 'Invalid connection request.' }
+    try {
+      const res = await gmailProvider.connect(parsed.data.toolId as ToolId)
+      if (res.ok && res.url) {
+        // Auth happens in the user's own browser; the Composio key and any
+        // tokens stay in main. Renderer polls connectionStatus until ACTIVE.
+        await shell.openExternal(res.url)
+      }
+      return { ok: res.ok as boolean, url: res.url, error: res.error }
+    } catch (err) {
+      return { ok: false as const, error: err instanceof Error ? err.message : String(err) }
+    }
   })
 
   ipcMain.handle(IpcChannels.routineList, () => ({ ok: true as const, routines: scheduler.list() }))

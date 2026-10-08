@@ -4,6 +4,7 @@ import { createOpenAI } from '@ai-sdk/openai'
 import type { AgentEvent, RunSource } from '../../shared/agent.js'
 import type { ToolId } from '../../shared/types.js'
 import { buildInstructions, getToolsForMentions } from './registry.js'
+import { runWithContext } from './run-context.js'
 import { buildToolApproval } from './tools.js'
 import type { ModelSettings } from '../settings/model-settings.js'
 
@@ -111,13 +112,15 @@ export async function runAgent(opts: RunAgentOptions): Promise<{ text: string; s
     createAgent?.({ model: null, tools: toolSet, source }) ??
     new ToolLoopAgent({
       model: resolveModel(config, apiKey) as never,
-      instructions: buildInstructions(source),
+      instructions: buildInstructions(source, tools),
       tools: toolSet,
       stopWhen: isStepCount(AGENT_STEP_LIMIT),
       toolApproval: buildToolApproval(source, toolNames) as never
     })
 
-  const messages: ModelMessage[] = [{ role: 'user', content: prompt }]
+  // Carry { runId, source } to tool execute functions (BudgetGuard metering).
+  return runWithContext({ runId, source }, async () => {
+    const messages: ModelMessage[] = [{ role: 'user', content: prompt }]
   // eslint-disable-next-line no-constant-condition
   while (true) {
     if (signal?.aborted) {
@@ -226,4 +229,5 @@ export async function runAgent(opts: RunAgentOptions): Promise<{ text: string; s
     messages.push(...(await result.responseMessages))
     messages.push({ role: 'tool', content: responses } as unknown as ModelMessage)
   }
+  })
 }

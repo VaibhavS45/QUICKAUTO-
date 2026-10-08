@@ -235,6 +235,8 @@ export default function PaletteApp(): React.JSX.Element {
         setAnswer((a) => a + (e.delta ?? ''))
         break
       case 'tool-call':
+        if (e.toolName === 'web_search') setNotice('🔎 Searching the web…')
+        if (e.toolName === 'write_file') setNotice('💾 Saving result…')
         setToolCalls((prev) => {
           if (prev.some((t) => t.toolCallId === e.toolCallId)) return prev
           return [...prev, { toolCallId: e.toolCallId ?? '', toolName: e.toolName ?? 'unknown', input: e.input ?? null, status: 'running' }]
@@ -258,6 +260,7 @@ export default function PaletteApp(): React.JSX.Element {
         setRunning(false)
         setAnswer(e.text ?? '')
         setRunSteps(e.steps ?? null)
+        if ((e.text ?? '').trim().length > 0) setNotice('✓ Search complete')
         void refreshBudget()
         break
       case 'error':

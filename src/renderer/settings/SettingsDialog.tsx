@@ -84,6 +84,8 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
 function GeneralPanel(): React.JSX.Element {
   const [profile, setProfile] = useState<Profile>({ name: '', email: '', about: '', language: 'system' })
   const [status, setStatus] = useState('Loading…')
+  const [keepBackground, setKeepBackground] = useState(true)
+  const [behaviorStatus, setBehaviorStatus] = useState('')
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null)
   const first = useRef(true)
 
@@ -99,6 +101,13 @@ function GeneralPanel(): React.JSX.Element {
         }
       })
       .catch(() => live && setStatus('Could not load profile.'))
+    window.palette
+      .getAppBehavior()
+      .then((r) => {
+        const res = r as unknown as { ok: boolean; keepBackground?: boolean }
+        if (live && res.ok && typeof res.keepBackground === 'boolean') setKeepBackground(res.keepBackground)
+      })
+      .catch(() => {})
     return () => {
       live = false
       if (timer.current) clearTimeout(timer.current)
@@ -172,8 +181,7 @@ function GeneralPanel(): React.JSX.Element {
             The app follows your system language unless you pick one here. Only part of the interface is translated
             so far — untranslated text stays in English.
           </p>
-        </div>
-        <select
+        </div>        <select
           value={profile.language}
           onChange={(e) => patch({ language: e.target.value })}
           aria-label="Language"
@@ -182,6 +190,35 @@ function GeneralPanel(): React.JSX.Element {
           <option value="system">System</option>
           <option value="en">English</option>
         </select>
+      </section>
+      <section className="flex items-start justify-between gap-4">
+        <div>
+          <h3 className="text-sm font-semibold text-neutral-100">When the calendar is closed</h3>
+          <p className="max-w-md pt-1 text-xs leading-relaxed text-neutral-400">
+            Keep the command bar, tray and scheduled routines running in the background.
+            Turn off to quit the app when the calendar closes.
+            {behaviorStatus ? ` ${behaviorStatus}` : ''}
+          </p>
+        </div>
+        <button
+          role="switch"
+          aria-checked={keepBackground}
+          aria-label="Keep command bar in background"
+          onClick={() => {
+            const next = !keepBackground
+            setKeepBackground(next)
+            window.palette
+              .setAppBehavior({ keepBackground: next })
+              .then((r) => {
+                const res = r as unknown as { ok: boolean; error?: string }
+                setBehaviorStatus(res.ok ? 'Saved.' : (res.error ?? 'Save failed.'))
+              })
+              .catch(() => setBehaviorStatus('Save failed.'))
+          }}
+          className={`h-6 w-11 shrink-0 rounded-full p-0.5 transition-colors ${keepBackground ? 'bg-emerald-600' : 'bg-neutral-700'}`}
+        >
+          <span className={`block h-5 w-5 rounded-full bg-white transition-transform ${keepBackground ? 'translate-x-5' : ''}`} />
+        </button>
       </section>
     </div>
   )

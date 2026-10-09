@@ -42,6 +42,11 @@ function sameDay(a: Date, b: Date): boolean {
 function iso(d: Date): string {
   return `${d.getFullYear()}-${d.getMonth()}-${d.getDate()}`
 }
+/** Numeric day order for sorting — dayISO strings are unpadded, so they never sort lexicographically. */
+function dayOrd(key: string): number {
+  const [y, m, d] = key.split('-').map(Number)
+  return y! * 10000 + m! * 100 + d!
+}
 /** Monday-first week containing d. */
 function weekDays(anchor: Date): Date[] {
   const dow = (anchor.getDay() + 6) % 7
@@ -108,16 +113,12 @@ export default function CalendarApp(): React.JSX.Element {
     scrollRef.current?.scrollTo({ top: 8 * HOUR_H })
   }, [])
 
-  const visibleEvents = events.filter((e) => botFilter === 'all' || e.botId === botFilter)
+  const visibleEvents = events
+    .filter((e) => (botFilter === 'all' || e.botId === botFilter) && days.some((d) => iso(d) === e.dayISO))
+    .sort((a, b) => dayOrd(a.dayISO) - dayOrd(b.dayISO) || a.start - b.start)
   const botsShown = BOTS.filter((b) => b.name.toLowerCase().includes(query.toLowerCase()))
   const rangeLabel = `${MONTHS[days[0]!.getMonth()]} ${days[0]!.getDate()} – ${days[6]!.getDate()}, ${days[6]!.getFullYear()}`
   const nowTop = (now.getHours() + now.getMinutes() / 60) * HOUR_H
-
-  function offsetToHour(day: Date, clientY: number, target: HTMLDivElement): number {
-    void day
-    const rect = target.getBoundingClientRect()
-    return hourFromOffset(clientY - rect.top)
-  }
 
   /** Day column under the cursor (for dragging events across days). */
   function dayColAt(x: number, y: number): { iso: string; el: HTMLDivElement } | null {
@@ -186,14 +187,24 @@ export default function CalendarApp(): React.JSX.Element {
     }
   }
 
+  /** Creation collision block — same predicate as move/resize: touching edges OK. */
+  function collides(dayISO: string, start: number, end: number, ignoreId?: number): boolean {
+    return events.some((x) => x.id !== ignoreId && x.dayISO === dayISO && start < x.end && x.start < end)
+  }
+
   function commitDrag(day: Date, lo: number, hi: number): void {
+    const key = iso(day)
+    const start = snapHour(Math.min(lo, hi))
+    const hiRaw = Math.max(lo, hi)
+    // A release at/below the bottom edge means midnight, not a 23:45 clamp.
+    const rawEnd = hiRaw - Math.min(lo, hi) < SNAP_MIN ? defaultEnd(start) : hiRaw >= 24 ? 24 : snapHour(hiRaw)
+    const end = Math.max(rawEnd, start + 0.25)
+    if (collides(key, start, end)) return
     const botId = botFilter !== 'all' ? botFilter : BOTS[0]!.id
     const bot = BOTS.find((b) => b.id === botId)!
     const id = nextId++
-    const start = snapHour(Math.min(lo, hi))
-    const end = Math.max(lo, hi) - Math.min(lo, hi) < SNAP_MIN ? defaultEnd(start) : snapHour(Math.max(lo, hi))
     const title = botFilter !== 'all' ? bot.name : 'New Event'
-    setEvents((ev) => [...ev, { id, botId, title, dayISO: iso(day), start, end: Math.max(end, start + 0.25) }])
+    setEvents((ev) => [...ev, { id, botId, title, dayISO: key, start, end }])
     setSelId(id)
   }
 
@@ -203,28 +214,39 @@ export default function CalendarApp(): React.JSX.Element {
     if (e.button !== 0) return
     const target = e.currentTarget
     target.setPointerCapture(e.pointerId)
-    const h = offsetToHour(day, e.clientY, target)
     const raw = (e.clientY - target.getBoundingClientRect().top) / HOUR_H
+    const h = snapHour(raw)
     setDrag({ dayISO: iso(day), start: h, cur: h, live: raw })
   }
 
   function onColPointerMove(day: Date, e: React.PointerEvent<HTMLDivElement>): void {
-    if (!drag || drag.dayISO !== iso(day)) return
-    const rect = e.currentTarget.getBoundingClientRect()
-    setDrag({ ...drag, cur: offsetToHour(day, e.clientY, e.currentTarget), live: (e.clientY - rect.top) / HOUR_H })
+    if (!drag) return
+    void day
+    // Pointer capture retargets every move to the press column, so resolve the
+    // hovered column from real cursor coords (cross-day drags). Off-grid: freeze.
+    const found = dayColAt(e.clientX, e.clientY)
+    if (!found) return
+    const raw = rawHourIn(found.el, e.clientY)
+    setDrag({ ...drag, dayISO: found.iso, cur: snapHour(raw), live: raw })
   }
 
   function onColPointerUp(day: Date, e: React.PointerEvent<HTMLDivElement>): void {
-    if (!drag || drag.dayISO !== iso(day)) return
+    if (!drag) return
+    // Commit on the release column (cross-day drags). Releasing outside any
+    // column aborts instead of creating a clamped phantom event.
+    const found = dayColAt(e.clientX, e.clientY)
+    setDrag(null)
+    if (!found) return
+    const targetDay = days.find((d) => iso(d) === found.iso) ?? day
+    const raw = rawHourIn(found.el, e.clientY)
+    // Recomputed from the release point so a scroll-then-release stays accurate.
+    const at = raw >= 24 ? 24 : snapHour(raw)
     const lo = Math.min(drag.start, drag.cur)
     const hi = Math.max(drag.start, drag.cur)
-    // Recompute from the release point so a scroll-then-release stays accurate.
-    const at = offsetToHour(day, e.clientY, e.currentTarget)
     const flo = Math.min(drag.start, at)
     const fhi = Math.max(drag.start, at)
-    setDrag(null)
-    if (fhi - flo < SNAP_MIN && hi - lo < SNAP_MIN) commitDrag(day, at, at)
-    else commitDrag(day, flo, fhi)
+    if (fhi - flo < SNAP_MIN && hi - lo < SNAP_MIN) commitDrag(targetDay, at, at)
+    else commitDrag(targetDay, flo, fhi)
   }
 
   function dropOnDay(day: Date, e: React.DragEvent): void {
@@ -234,18 +256,25 @@ export default function CalendarApp(): React.JSX.Element {
     if (!bot) return
     const rect = (e.currentTarget as HTMLDivElement).getBoundingClientRect()
     const start = hourFromOffset(e.clientY - rect.top)
+    const end = defaultEnd(start)
+    const key = iso(day)
+    if (collides(key, start, end)) return
     const id = nextId++
-    setEvents((ev) => [...ev, { id, botId, title: bot.name, dayISO: iso(day), start, end: defaultEnd(start) }])
+    setEvents((ev) => [...ev, { id, botId, title: bot.name, dayISO: key, start, end }])
     setSelId(id)
   }
 
   function addNow(): void {
     const n = new Date()
     const start = snapHour(n.getHours() + n.getMinutes() / 60)
+    const end = defaultEnd(start)
+    const todayKey = iso(n)
+    const key = days.some((d) => iso(d) === todayKey) ? todayKey : iso(anchor)
+    if (collides(key, start, end)) return
     const botId = botFilter !== 'all' ? botFilter : BOTS[0]!.id
     const bot = BOTS.find((b) => b.id === botId)!
     const id = nextId++
-    setEvents((ev) => [...ev, { id, botId, title: bot.name, dayISO: iso(anchor), start, end: defaultEnd(start) }])
+    setEvents((ev) => [...ev, { id, botId, title: bot.name, dayISO: key, start, end }])
     setSelId(id)
   }
 
@@ -254,6 +283,11 @@ export default function CalendarApp(): React.JSX.Element {
   }
 
   function updateSel(patch: Partial<CalEvent>): void {
+    if (sel && (patch.start !== undefined || patch.end !== undefined)) {
+      const next = { ...sel, ...patch }
+      if (next.end <= next.start) return
+      if (collides(next.dayISO, next.start, next.end, sel.id)) return
+    }
     setEvents((list) => list.map((ev) => (ev.id === selId ? { ...ev, ...patch } : ev)))
   }
 
@@ -444,7 +478,7 @@ export default function CalendarApp(): React.JSX.Element {
               return (
                 <div key={e.id} className="mb-2 flex items-center gap-2 rounded-lg border border-neutral-800 bg-neutral-950 px-3 py-2 text-sm">
                   <span className="inline-block h-2.5 w-2.5 rounded-sm" style={{ background: b.color }} />
-                  <span className="font-medium text-white">{e.title}</span>
+                  <span className="font-medium text-white">{e.title || 'New Event'}</span>
                   <span className="text-neutral-500">{b.name} · {e.dayISO} · {formatRange(e.start, e.end)}</span>
                   <div className="flex-1" />
                   <button onClick={() => setEvents((ev) => ev.filter((x) => x.id !== e.id))} className="text-neutral-500 hover:text-red-400">Remove</button>
@@ -491,6 +525,7 @@ export default function CalendarApp(): React.JSX.Element {
                 const showDrag = drag && drag.dayISO === key
                 const dlo = showDrag ? Math.min(drag.start, drag.cur) : 0
                 const dhi = showDrag ? Math.max(drag.start, drag.cur) : 0
+                const dragBlocked = !!showDrag && collides(key, dlo, dhi)
                 return (
                   <div
                     key={key}
@@ -531,18 +566,20 @@ export default function CalendarApp(): React.JSX.Element {
                           style={{
                             top: e.start * HOUR_H + 1,
                             height: Math.max(22, (e.end - e.start) * HOUR_H - 2),
-                            // Stacked full-width: every overlapping event stays readable,
-                            // later lanes stagger right and sit on top.
-                            left: 2 + Math.min(l.col, 4) * 12,
-                            right: 2,
+                            // Side-by-side: each overlapping event takes 1/cols of the width,
+                            // so stacked cards never cover each other (touching edges stay full width).
+                            left: `calc(2px + ((100% - 4px) / ${l.cols}) * ${l.col})`,
+                            width: `calc((100% - 4px) / ${l.cols} - 2px)`,
                             zIndex: l.col + 1,
                             background: `${b.color}33`,
                             borderColor: `${b.color}88`,
                             borderLeft: `3px solid ${b.color}`
                           }}
                         >
-                          <div className="truncate text-[12px] font-semibold">{e.title}</div>
-                          <div className="truncate text-[11px] opacity-80">◷ {formatRange(e.start, e.end)}</div>
+                          <div className="truncate text-[12px] font-semibold" title={e.title || 'New Event'}>{e.title || 'New Event'}</div>
+                          {(e.end - e.start) * HOUR_H >= 34 && (
+                            <div className="truncate text-[11px] opacity-80" title={formatRange(e.start, e.end)}>◷ {formatRange(e.start, e.end)}</div>
+                          )}
                           {/* Resize handles */}
                           <div
                             onPointerDown={(ev) => onEdgeDown(e, 'top', ev)}
@@ -567,12 +604,12 @@ export default function CalendarApp(): React.JSX.Element {
                         style={{
                           top: dlo * HOUR_H + 1,
                           height: Math.max(22, (dhi - dlo) * HOUR_H - 2),
-                          background: 'rgba(59,130,246,0.25)',
-                          border: '1px dashed rgba(96,165,250,0.9)',
+                          background: dragBlocked ? 'rgba(239,68,68,0.25)' : 'rgba(59,130,246,0.25)',
+                          border: dragBlocked ? '1px dashed rgba(248,113,113,0.9)' : '1px dashed rgba(96,165,250,0.9)',
                           color: '#fff'
                         }}
                       >
-                        <div className="truncate text-[12px] font-semibold">New Event</div>
+                        <div className="truncate text-[12px] font-semibold">{dragBlocked ? 'Overlaps existing event' : 'New Event'}</div>
                         <div className="truncate text-[11px] opacity-80">{formatRange(Math.min(drag.start, drag.cur), Math.max(drag.start, drag.cur))}</div>
                       </div>
                     )}
@@ -656,7 +693,7 @@ export default function CalendarApp(): React.JSX.Element {
                 onChange={(e) => updateSel({ end: Number(e.target.value) })}
                 className="rounded bg-neutral-700 px-1 py-1"
               >
-                {quarters.filter((q) => q.value > sel.start).map((q) => <option key={q.value} value={q.value}>{q.label}</option>)}
+                {[...quarters.filter((q) => q.value > sel.start), { value: 24, label: formatClock(24) }].map((q) => <option key={q.value} value={q.value}>{q.label}</option>)}
               </select>
             </div>
           </div>

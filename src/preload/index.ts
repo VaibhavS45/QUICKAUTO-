@@ -111,6 +111,10 @@ const api = {
     ipcRenderer.invoke('settings:get-profile'),
   setProfile: (p: { name: string; email: string; about: string; language: string }) =>
     ipcRenderer.invoke('settings:set-profile', p),
+  getAppBehavior: (): Promise<{ ok: boolean; keepBackground: boolean }> =>
+    ipcRenderer.invoke('app:get-behavior'),
+  setAppBehavior: (p: { keepBackground: boolean }): Promise<{ ok: boolean; keepBackground?: boolean; error?: string }> =>
+    ipcRenderer.invoke('app:set-behavior', p),
   onCalendarDraft: (cb: (text: string) => void) => {
     const fn = (_e: unknown, text: string): void => cb(text)
     ipcRenderer.on('calendar:new-draft', fn)

@@ -43,6 +43,15 @@ describe('shell main-process contract modules', () => {
   it('exposes no window actions from the shell preload and callable IPC registration hooks', () => {
     expect(automationsApi).toEqual({})
     expect(Object.keys(shellApi).sort()).toEqual([
+      'agentCreate',
+      'agentRemove',
+      'agentUpdate',
+      'agentsList',
+      'mcpList',
+      'mcpRemove',
+      'mcpStart',
+      'mcpStop',
+      'mcpUpsert',
       'notificationCreate',
       'notificationDismiss',
       'notificationRead',
@@ -50,6 +59,8 @@ describe('shell main-process contract modules', () => {
       'notificationsReadAll',
       'onNotificationsChanged',
       'onScheduleChanged',
+      'pluginEnable',
+      'pluginsList',
       'recentTasks',
       'scheduleToday'
     ])

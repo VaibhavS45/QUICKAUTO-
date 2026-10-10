@@ -1,7 +1,7 @@
 # Repository and UI backend inventory
 
-Updated after the shell launch work and removal of the palette and calendar
-windows.
+Updated after U5 added shell settings for plugins, MCP, API metadata, and
+agents.
 
 ## Part A: S0 verification
 
@@ -19,9 +19,9 @@ windows.
 | `src/main/shell/notifications.ts` | Present | Electron-store-backed notification service with a 200-item cap. |
 | `src/main/ipc/shell.ts` | Missing at requested path | IPC registration is currently in `src/main/agent/shell-ipc.ts`. |
 | `src/main/ipc/automations.ts` | Missing at requested path | Placeholder registration is also in `src/main/agent/shell-ipc.ts`. |
-| `src/preload/shell.ts` | Present | Empty extension object; shell-specific methods are exposed through `window.app`. |
+| `src/preload/shell.ts` | Present | Schedule/notification, plugin, MCP, and agent APIs are exposed through `window.app`. |
 | `src/preload/automations.ts` | Present | Empty extension object. |
-| `EXTRA_TABS` / `EXTRA_NAV` | Present | Empty extension collections consumed by Settings navigation. |
+| `EXTRA_TABS` / `EXTRA_NAV` | Present | Settings extension points register Account, Plugins, MCP, API, and Agents tabs. |
 | `openSettings(tab?)` | Present | Settings window supports an optional tab. |
 | `docs/ownership.md` | Present | Documents shell/Automations ownership. |
 | `CODEOWNERS` | Present | Contains repository ownership entries. |
@@ -64,20 +64,43 @@ The scheduler's legacy `@calendar` routine syntax remains in
 
 ### 2. MCP
 
-No MCP client/server, server configuration, registration lifecycle, status
-API, or MCP-to-agent tool bridge exists. OpenCode is an SDK wrapper around a
-separately spawned local OpenCode server, not MCP.
+`src/main/shell/mcp-registry.ts` validates and persists stdio and streamable
+HTTP server configurations, tracks stopped/running/error status, starts and
+stops servers, and provides tools from running connections. The MCP screen uses
+`shell:mcp-list`, `shell:mcp-upsert`, `shell:mcp-start`, `shell:mcp-stop`, and
+`shell:mcp-remove`; each request is validated in
+`src/main/shell/settings-ipc.ts`. The adapter in `mcp-client.ts` uses the
+official `@modelcontextprotocol/client` TypeScript SDK v2 package with
+`StdioClientTransport` or `StreamableHTTPClientTransport`. Plain HTTP is
+limited to localhost; other HTTP servers must use HTTPS.
+
+Credentials are encrypted by `SafeStorageMcpVault` using Electron's async
+safeStorage APIs and stored as ciphertext in `palette-mcp-secrets`. Server
+configuration is in `palette-mcp`. Secret values are never included in IPC
+responses. Running server tools are exposed through the `@mcp` tool ID by
+`McpConnectorProvider`; every MCP tool requires the runner's approve/deny card.
+MCP tool executions are not Composio calls and are not charged to BudgetGuard.
+No MCP server feature is provided by the OpenCode SDK wrapper.
 
 ### 3. Plugins
 
-No plugin loader, manifest format, install flow, persistence, or enable/disable
-API exists. The Plugins screen is currently a placeholder.
+`src/main/shell/settings-runtime.ts` scans
+`<userData>/plugins/*/plugin.json` at startup and passes parsed manifests to
+`PluginRegistry.load()`. The registry validates public manifest fields and
+persists enabled IDs in the `palette-plugins` electron-store. The Plugins
+sidebar view and Settings tab support listing and enable/disable through
+`shell:plugins-list` and `shell:plugin-enable`.
+
+There is no plugin installer or plugin-code execution runtime yet; enablement
+currently records the user's preference only.
 
 ### 4. API and network endpoints
 
 - No app-owned local HTTP API or inbound webhook endpoint/port exists.
 - Outbound integrations include AI SDK provider wrappers, Composio, web
   search, and local `gh` invocations.
+- The API tab displays only model/Composio key-presence state and the model
+  base URL. It does not provide an app-owned HTTP API.
 - OpenCode is spawned on an available loopback port with a random
   per-process password passed through `OPENCODE_SERVER_PASSWORD`; it is
   stopped when the app quits. This is internal to OpenCode, not a Palette API.
@@ -87,7 +110,8 @@ API exists. The Plugins screen is currently a placeholder.
 ### 5. Agent runner
 
 - `src/main/agent/registry.ts` combines built-in tools and registered
-  connectors. Active selectable tool IDs are defined in `src/shared/types.ts`.
+  connectors, including the new `@mcp` provider. Active selectable tool IDs
+  are defined in `src/shared/types.ts`.
 - `src/main/agent/runner.ts` uses AI SDK v7 `ToolLoopAgent`, streams events,
   and stops after 20 steps. Agent events are sent to the shell app window.
 - `agent:run` accepts a prompt, tools, source, optional conversation history,
@@ -97,11 +121,15 @@ API exists. The Plugins screen is currently a placeholder.
   runs and supplies the last 20 messages to the runner.
 - Writes require an approve/deny decision on interactive runs. Scheduled
   runs deny writes; OpenCode permission requests use the nested approval path.
+  MCP tool calls also require approval (including read calls).
 - Recent agent runs persist in the `palette-shell` electron-store.
+- Custom agent profiles are stored in `palette-agents`, capped at 20 including
+  the undeletable built-in Chat profile. Their CRUD is exposed in Settings via
+  shell IPC. Custom profiles are stored but are not yet selectable by Chat.
 
 ### 6. Settings tabs
 
-The current Settings navigation has six tabs:
+Settings navigation has six built-in tabs plus five shell tabs:
 
 | Tab | Existing functionality |
 |---|---|
@@ -111,11 +139,16 @@ The current Settings navigation has six tabs:
 | Connectors | Composio key/status, Gmail OAuth connection, and GitHub CLI/repository configuration. Notion/Sheets operations are stubs. |
 | Routines | Lists and manages persisted scheduler routines. |
 | Usage | BudgetGuard counts and a link to the Composio usage dashboard. |
+| Account | Reuses the local profile settings surface from General. |
+| Plugins | Lists scanned plugin manifests and persists enable/disable state. Does not execute plugin code. |
+| MCP | Add, edit, start, stop, and remove stdio or streamable HTTP servers. Credentials are safeStorage-encrypted. |
+| API | Shows API key presence and base URLs only; states that there is no local API server. |
+| Agents | CRUD for local profiles; Chat is built in and undeletable. |
 
 Settings IPC includes `settings:get-model`, `settings:set-model`,
 `settings:set-api-key`, `settings:clear-api-key`, profile/app-behavior
-channels, and `settings:show` / `settings:hide`. The extension maps
-`EXTRA_TABS` and `EXTRA_NAV` are present but empty. There is no Shortcuts tab.
+channels, and `settings:show` / `settings:hide`. `EXTRA_TABS` and `EXTRA_NAV`
+provide the five shell settings surfaces. There is no Shortcuts tab.
 
 ### 7. Removed-window and startup dependencies
 
@@ -136,11 +169,11 @@ channels, and `settings:show` / `settings:hide`. The extension maps
 
 | UI item | Status | Backend evidence / gap |
 |---|---|---|
-| Connectors screen | **PARTIAL** | Settings already has connector status/key and Gmail/GitHub connection workflows; Notion and Sheets are stubs. |
-| Plugins list and enable/disable | **MISSING** | No plugin runtime, manifest, persistence, or management API. |
-| MCP servers screen (add/remove/status) | **MISSING** | No MCP server or configuration layer. |
-| API keys screen | **READY** | Provider and Composio key set/clear/status already use encrypted storage and expose renderer-safe state. |
-| Agents CRUD | **MISSING** | No agent model/store or CRUD IPC. |
+| Connectors screen | **READY** | Existing connector status/key and Gmail/GitHub flows remain; Notion and Sheets operations are still stubs. |
+| Plugins list and enable/disable | **READY** | Manifest scan, validation, electron-store preferences, and namespaced IPC are wired; plugin code is not executed. |
+| MCP servers screen (add/remove/status) | **READY** | Registry, official SDK adapter, lifecycle controls, safeStorage credentials, IPC, and approved `@mcp` tools are wired. |
+| API keys screen | **READY** | New API tab shows key-presence/base URL metadata only; encrypted set/clear flows remain in Provider and Connectors. |
+| Agents CRUD | **READY** | Zod-validated electron-store profiles, 20-item cap, protected built-in Chat, and Settings CRUD are wired; custom agents are not yet used by Chat. |
 | Chat history store | **READY** | Persistent chat threads/history and validated `shell:chat-*` IPC power Home chat and the sidebar. |
 | Notifications | **READY** | `src/main/shell/notifications.ts` persists validated notifications in the `palette-notifications` electron-store, with namespaced IPC and a shell notification center. |
 | Today's schedule source | **READY** | `src/main/shell/schedule-service.ts` adapts persisted routines and recent agent runs to the schedule contracts; the shell shows today's schedule and recent tasks. |

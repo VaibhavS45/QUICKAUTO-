@@ -51,6 +51,7 @@ import type { RunSource } from '../shared/agent.js'
 import { ChatStore, type ChatStoreStorage } from './shell/chat-store.js'
 import { registerChatIpc } from './shell/chat-ipc.js'
 import { createShellRuntime } from './shell/runtime.js'
+import { createSettingsShellRuntime } from './shell/settings-runtime.js'
 
 // Launched without a console, stdio writes hit EPIPE and kill main — swallow it first.
 installStdioGuard()
@@ -116,6 +117,7 @@ class ElectronChatStore implements ChatStoreStorage {
 }
 
 const chatStore = new ChatStore(new ElectronChatStore())
+const settingsShellRuntime = createSettingsShellRuntime(safeStorage)
 
 const connectorFile = new Store<Record<string, unknown>>({ name: 'palette-connectors', defaults: {} })
 
@@ -173,6 +175,7 @@ const gmailProvider = new ComposioConnectorProvider({
   getGuard: () => getGuard()
 })
 registerConnectorProvider(gmailProvider)
+registerConnectorProvider(settingsShellRuntime.mcpProvider)
 
 const routineFile = new Store<{ routines: Routine[] }>({ name: 'palette-routines', defaults: { routines: [] } })
 let routineChangeHook = (): void => {}
@@ -286,6 +289,7 @@ function wireIpc(): void {
   registerShellIpc()
   registerAutomationsIpc()
   registerChatIpc(ipcMain, chatStore)
+  settingsShellRuntime.registerIpc(ipcMain)
   fireRoutine = (routine) => {
     startAgentRun(routine.prompt, routine.tools, 'scheduled', routine.id)
     shellRuntime.notify({ kind: 'info', title: 'Automation started', body: routine.prompt.slice(0, 200) })
@@ -426,7 +430,7 @@ function wireIpc(): void {
         getTools: async (ids) => {
           const set = await getToolsForMentions(ids)
           for (const [name, t] of Object.entries(set)) {
-            if (name === 'echo' || name === 'echo_write') continue
+            if (name === 'echo' || name === 'echo_write' || name.startsWith('mcp_')) continue
             if (name.startsWith('github_') || isZeroCostTool(t)) continue
             if (isBudgetGuardedTool(t)) continue
             const orig = (t as { execute?: unknown }).execute
@@ -631,6 +635,7 @@ async function onReady(): Promise<void> {
 
   applyStrictCsp()
   watchDockVisibility()
+  await settingsShellRuntime.loadPlugins(app.getPath('userData'))
   wireIpc()
   scheduler.startAll()
   createTray()
@@ -652,6 +657,8 @@ app.on('window-all-closed', () => {
 app.on('will-quit', () => {
   setNestedApprovalHandler(null)
   void opencodeManager.stop()
+  void settingsShellRuntime.stopAll()
+    .catch((error: unknown) => console.error('Could not stop MCP servers cleanly.', error))
 })
 
 export { store }

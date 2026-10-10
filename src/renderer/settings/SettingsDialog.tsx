@@ -792,7 +792,7 @@ export default function SettingsApp(): React.JSX.Element {
           </button>
         </div>
         <div className="min-h-0 flex-1 overflow-y-auto p-6">
-          {tab === 'general' && <GeneralPanel />}
+          {(tab === 'general' || tab === 'account') && <GeneralPanel />}
           {tab === 'appearance' && <AppearancePanel shader={shader} onShader={setShader} />}
           {tab === 'provider' && <ModelPanel />}
           {tab === 'connectors' && <ConnectionsPanel />}

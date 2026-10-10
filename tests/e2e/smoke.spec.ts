@@ -123,6 +123,31 @@ test('today empty state navigates to automations and notifications persist', asy
   }
 })
 
+test('U5 settings expose Plugins, MCP, API metadata, and protected Chat agent', async () => {
+  const instance = await launchApp()
+  const { app } = instance
+  try {
+    await expect.poll(() => app.windows().length, { timeout: 30_000 }).toBe(1)
+    const shell = app.windows()[0]!
+    await shell.getByRole('button', { name: 'Plugins' }).click()
+    await expect(shell.getByText('No plugin manifests found in the plugins folder.')).toBeVisible()
+
+    await shell.locator('body').press('Control+,')
+    await expect.poll(() => app.windows().some((page) => page.url().includes('#settings'))).toBe(true)
+    const settings = app.windows().find((page) => page.url().includes('#settings'))!
+    await expect(settings.getByRole('dialog', { name: 'Settings' })).toBeVisible()
+    await settings.getByRole('button', { name: 'MCP', exact: true }).click()
+    await expect(settings.getByText('MCP servers (0)')).toBeVisible()
+    await settings.getByRole('button', { name: 'API', exact: true }).click()
+    await expect(settings.getByText('No local API server.')).toBeVisible()
+    await settings.getByRole('button', { name: 'Agents', exact: true }).click()
+    await expect(settings.getByText('Agents (1/20)')).toBeVisible()
+    await expect(settings.getByText(/Chat\s+Built in/)).toBeVisible()
+  } finally {
+    await instance.close()
+  }
+})
+
 test('tray-only --background launch does not open the shell window', async () => {
   const instance = await launchApp(['--background'])
   const { app } = instance

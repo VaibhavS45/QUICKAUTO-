@@ -1,6 +1,7 @@
 import { app, BrowserWindow } from 'electron'
 import { join } from 'path'
 import { preloadPath } from '../preload-path.js'
+import { getShellAppWindow } from './shell-app-window.js'
 import {
   SETTINGS_HEIGHT,
   SETTINGS_MIN_HEIGHT,
@@ -26,11 +27,34 @@ function loadSettings(target: BrowserWindow, tab?: string): void {
   void target.loadFile(join(__dirname, '../renderer/index.html'), { hash })
 }
 
+function getParent(): BrowserWindow | null {
+  try {
+    const parent = getShellAppWindow()
+    return parent && !parent.isDestroyed() ? parent : null
+  } catch {
+    return null
+  }
+}
+
+function centerOverParent(target: BrowserWindow, parent: BrowserWindow): void {
+  try {
+    const p = parent.getBounds()
+    const x = Math.round(p.x + (p.width - SETTINGS_WIDTH) / 2)
+    const y = Math.round(p.y + (p.height - SETTINGS_HEIGHT) / 2)
+    target.setPosition(x, y)
+  } catch {
+    /* keep default position */
+  }
+}
+
 /** Dedicated settings window (Cursor-style). Created on first open so smoke stays 2 windows. */
 export function openSettings(tab?: string): BrowserWindow {
   if (process.platform === 'darwin' && app.dock) app.dock.show()
+  const parent = getParent()
   if (win && !win.isDestroyed()) {
+    if (parent && win.getParentWindow() !== parent) win.setParentWindow(parent)
     if (tab) win.webContents.send('settings:open', tab)
+    if (parent) centerOverParent(win, parent)
     win.show()
     win.focus()
     return win
@@ -42,6 +66,8 @@ export function openSettings(tab?: string): BrowserWindow {
     minWidth: SETTINGS_MIN_WIDTH,
     minHeight: SETTINGS_MIN_HEIGHT,
     show: false,
+    parent: parent ?? undefined,
+    modal: false,
     frame: process.platform !== 'darwin',
     titleBarStyle: process.platform === 'darwin' ? 'hidden' : 'default',
     trafficLightPosition: process.platform === 'darwin' ? { x: 16, y: 14 } : undefined,
@@ -62,6 +88,8 @@ export function openSettings(tab?: string): BrowserWindow {
   loadSettings(win, tab)
 
   win.once('ready-to-show', () => {
+    const currentParent = getParent()
+    if (win && currentParent) centerOverParent(win, currentParent)
     win?.show()
     win?.focus()
   })

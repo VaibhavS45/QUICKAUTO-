@@ -1,6 +1,10 @@
 import { describe, expect, it } from 'vitest'
 import { wantsToggle, shouldAutoOpenCalendar } from '../../src/main/agent/background-mode.js'
-import { resolveAppBehavior, DEFAULT_APP_BEHAVIOR } from '../../src/main/agent/app-prefs.js'
+import {
+  resolveAppBehavior,
+  applyAppBehaviorPatch,
+  DEFAULT_APP_BEHAVIOR
+} from '../../src/main/agent/app-prefs.js'
 
 describe('background-mode', () => {
   it('routes --toggle through the single-instance lock', () => {
@@ -18,13 +22,19 @@ describe('background-mode', () => {
 
 describe('app-prefs', () => {
   it('defaults to keeping the command bar in the background', () => {
-    expect(DEFAULT_APP_BEHAVIOR.keepBackground).toBe(true)
-    expect(resolveAppBehavior(undefined)).toEqual({ keepBackground: true })
-    expect(resolveAppBehavior({ keepBackground: false })).toEqual({ keepBackground: false })
+    expect(DEFAULT_APP_BEHAVIOR).toEqual({ keepBackground: true, shader: true })
+    expect(resolveAppBehavior(undefined)).toEqual({ keepBackground: true, shader: true })
+    expect(resolveAppBehavior({ keepBackground: false })).toEqual({ keepBackground: false, shader: true })
   })
 
   it('falls back to defaults on garbage', () => {
-    expect(resolveAppBehavior(null)).toEqual({ keepBackground: true })
-    expect(resolveAppBehavior({ keepBackground: 'yes' })).toEqual({ keepBackground: true })
+    expect(resolveAppBehavior(null)).toEqual({ keepBackground: true, shader: true })
+    expect(resolveAppBehavior({ keepBackground: 'yes' })).toEqual({ keepBackground: true, shader: true })
+  })
+
+  it('merges appearance patches without dropping keepBackground', () => {
+    const next = applyAppBehaviorPatch({ keepBackground: false, shader: true }, { shader: false })
+    expect(next).toEqual({ keepBackground: false, shader: false })
+    expect(applyAppBehaviorPatch({ keepBackground: true, shader: true }, {})).toBeNull()
   })
 })

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { ProfileSettingsService, DEFAULT_PROFILE_SETTINGS } from '../../src/main/agent/profile-settings.js'
-import { filterSettingsNav } from '../../src/renderer/settings/SettingsDialog.js'
+import { filterSettingsNav, groupedSettingsNav, SETTINGS_NAV } from '../../src/renderer/settings/nav.js'
 
 function memStore(seed?: unknown) {
   const m = new Map<string, unknown>()
@@ -38,9 +38,15 @@ describe('ProfileSettingsService', () => {
 
 describe('filterSettingsNav', () => {
   it('returns all on empty query, filters case-insensitively', () => {
-    expect(filterSettingsNav('').length).toBeGreaterThan(3)
+    expect(filterSettingsNav('').length).toBe(SETTINGS_NAV.length)
     expect(filterSettingsNav('gen').map((n) => n.id)).toEqual(['general'])
-    expect(filterSettingsNav('MODEL').map((n) => n.id)).toEqual(['model'])
+    expect(filterSettingsNav('MODEL').map((n) => n.id)).toEqual(['provider'])
+    expect(filterSettingsNav('shader').map((n) => n.id)).toEqual(['appearance'])
     expect(filterSettingsNav('zzz')).toEqual([])
+  })
+
+  it('groups remaining items and drops empty groups', () => {
+    const groups = groupedSettingsNav(filterSettingsNav('hotkey'))
+    expect(groups).toEqual([{ id: 'system', label: 'System', items: [expect.objectContaining({ id: 'shortcuts' })] }])
   })
 })

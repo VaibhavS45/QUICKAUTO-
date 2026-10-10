@@ -1,8 +1,9 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { TOOL_IDS, TOOL_META, TOOL_ALIASES, activeMention, parseMentionedTools } from '../../shared/types.js'
-import SettingsDialog from '../settings/SettingsDialog.js'
+import { ShaderBackdrop } from '../components/ShaderBackdrop.js'
 import { Badge } from '../components/ui/badge.js'
 import { Button } from '../components/ui/button.js'
+import { Kbd } from '../components/ui/kbd.js'
 import { useGmailConnect } from '../hooks/useGmailConnect.js'
 import '../styles.css'
 
@@ -211,7 +212,7 @@ export default function PaletteApp(): React.JSX.Element {
   const [caret, setCaret] = useState(0)
   const [selected, setSelected] = useState(0)
   const [notice, setNotice] = useState<string | null>(null)
-  const [showSettings, setShowSettings] = useState(false)
+  const [shader, setShader] = useState(true)
   const inputRef = useRef<HTMLInputElement>(null)
   const rootRef = useRef<HTMLDivElement>(null)
   const lastHeightRef = useRef(0)
@@ -335,11 +336,14 @@ export default function PaletteApp(): React.JSX.Element {
   useEffect(() => {
     const offOpened = window.palette.onOpened(() => {
       setNotice(null)
-      setShowSettings(false)
       inputRef.current?.focus()
+      void window.palette.getAppBehavior().then((r) => {
+        const res = r as unknown as { ok?: boolean; shader?: boolean }
+        if (typeof res.shader === 'boolean') setShader(res.shader)
+      }).catch(() => {})
     })
     const offSettings = window.palette.onOpenSettings(() => {
-      setShowSettings(true)
+      window.palette.openSettingsWindow()
     })
     const offAgent = window.palette.onAgentEvent((raw) => {
       const e = raw as AgentEventMsg
@@ -352,6 +356,10 @@ export default function PaletteApp(): React.JSX.Element {
       handleAgentEvent(e)
     })
     void refreshBudget()
+    void window.palette.getAppBehavior().then((r) => {
+      const res = r as unknown as { ok?: boolean; shader?: boolean }
+      if (typeof res.shader === 'boolean') setShader(res.shader)
+    }).catch(() => {})
     const timer = setInterval(() => void refreshBudget(), 30_000)
     return () => {
       offOpened()
@@ -482,11 +490,6 @@ export default function PaletteApp(): React.JSX.Element {
       return
     }
     if (e.key === 'Escape') {
-      if (showSettings) {
-        e.preventDefault()
-        setShowSettings(false)
-        return
-      }
       if (running) {
         e.preventDefault()
         void cancelRun()
@@ -501,9 +504,10 @@ export default function PaletteApp(): React.JSX.Element {
   const budgetWarn = budget?.warning === 'exceeded' || budget?.warning === 'warn90'
 
   return (
-    <div ref={rootRef} className="relative mx-auto w-[720px] overflow-hidden rounded-xl border border-neutral-700 bg-neutral-900/95 shadow-2xl backdrop-blur">
-      <div className="flex items-center gap-2 px-4 pt-3">
-        <span className="text-neutral-400">›</span>
+    <div ref={rootRef} className="relative mx-auto w-[720px] overflow-hidden rounded-xl border border-white/10 bg-[#121214]/92 shadow-2xl backdrop-blur-xl">
+      <ShaderBackdrop enabled={shader} />
+      <div className="relative z-10 flex items-center gap-2 px-4 pt-3">
+        <span className="text-neutral-500">›</span>
         <input
           ref={inputRef}
           autoFocus
@@ -522,13 +526,13 @@ export default function PaletteApp(): React.JSX.Element {
             Stop
           </Button>
         )}
-        <Button variant="ghost" size="icon" onClick={() => setShowSettings((s) => !s)} title="Settings" aria-label="Settings">
+        <Button variant="ghost" size="icon" onClick={() => window.palette.openSettingsWindow()} title="Settings" aria-label="Settings">
           ⚙
         </Button>
       </div>
 
       {tools.length > 0 && (
-        <div className="flex flex-wrap gap-1 px-4 pt-2">
+        <div className="relative z-10 flex flex-wrap gap-1 px-4 pt-2">
           {tools.map((t) => (
             <Badge key={t} variant="tool">
               @{t}
@@ -538,7 +542,7 @@ export default function PaletteApp(): React.JSX.Element {
       )}
 
       {mention && candidates.length > 0 && (
-        <ul className="max-h-64 overflow-y-auto px-2 py-2">
+        <ul className="relative z-10 max-h-64 overflow-y-auto px-2 py-2">
           {candidates.map((c, i) => {
             const id = c.slice(1).toLowerCase()
             const meta = TOOL_META[(Object.keys(TOOL_META) as string[]).includes(id)
@@ -552,8 +556,8 @@ export default function PaletteApp(): React.JSX.Element {
               <li key={c}>
                 <button
                   onClick={() => applyCandidate(c)}
-                  className={`flex w-full items-center justify-between rounded px-3 py-1.5 text-left text-sm ${
-                    i === selected ? 'bg-indigo-600/40 text-white' : 'text-neutral-300'
+                  className={`flex w-full items-center justify-between rounded-md px-3 py-1.5 text-left text-sm ${
+                    i === selected ? 'bg-white/10 text-white' : 'text-neutral-300 hover:bg-white/5'
                   }`}
                 >
                   <span className="font-mono">{c}</span>
@@ -566,13 +570,13 @@ export default function PaletteApp(): React.JSX.Element {
       )}
 
       {notice && (
-        <div className="border-t border-neutral-800 px-4 py-2 text-sm text-neutral-300">
+        <div className="relative z-10 border-t border-white/8 px-4 py-2 text-sm text-neutral-300">
           {notice}
         </div>
       )}
 
       {(running || answer || toolCalls.length > 0 || runError || approvals.length > 0) && (
-        <div className="max-h-80 overflow-y-auto border-t border-neutral-800 px-4 py-3 text-sm text-neutral-200">
+        <div className="relative z-10 max-h-80 overflow-y-auto border-t border-white/8 px-4 py-3 text-sm text-neutral-200">
           {toolCalls.length > 0 && (
             <div className="flex flex-wrap gap-1 pb-2">
               {toolCalls.map((t) => (
@@ -644,10 +648,12 @@ export default function PaletteApp(): React.JSX.Element {
         </div>
       )}
 
-      <SettingsDialog open={showSettings} onClose={() => setShowSettings(false)} />
-
-      <div className="flex items-center justify-between border-t border-neutral-800 px-4 py-1.5 text-[11px] text-neutral-500">
-        <span>Enter run · Esc {running ? 'cancel' : 'hide'} · @ tools: {TOOL_IDS.map((t) => `@${t}`).join(' ')}</span>
+      <div className="relative z-10 flex items-center justify-between border-t border-white/8 px-4 py-1.5 text-[11px] text-neutral-500">
+        <span className="flex items-center gap-1.5">
+          <Kbd>↵</Kbd> run
+          <Kbd>Esc</Kbd> {running ? 'cancel' : 'hide'}
+          <span className="pl-1 text-neutral-600">@ tools: {TOOL_IDS.map((t) => `@${t}`).join(' ')}</span>
+        </span>
         <span className={budgetWarn ? 'text-amber-300' : undefined}>{budgetLabel}</span>
       </div>
     </div>

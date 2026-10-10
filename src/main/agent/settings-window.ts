@@ -16,19 +16,21 @@ export function getSettingsWindow(): BrowserWindow | null {
   return win
 }
 
-function loadSettings(target: BrowserWindow): void {
+function loadSettings(target: BrowserWindow, tab?: string): void {
+  const hash = tab ? `settings?tab=${encodeURIComponent(tab)}` : 'settings'
   if (process.env['ELECTRON_RENDERER_URL']) {
     const base = process.env['ELECTRON_RENDERER_URL'].replace(/\/$/, '')
-    void target.loadURL(`${base}/index.html#settings`)
+    void target.loadURL(`${base}/index.html#${hash}`)
     return
   }
-  void target.loadFile(join(__dirname, '../renderer/index.html'), { hash: 'settings' })
+  void target.loadFile(join(__dirname, '../renderer/index.html'), { hash })
 }
 
 /** Dedicated settings window (Cursor-style). Created on first open so smoke stays 2 windows. */
-export function openSettings(): BrowserWindow {
+export function openSettings(tab?: string): BrowserWindow {
   if (process.platform === 'darwin' && app.dock) app.dock.show()
   if (win && !win.isDestroyed()) {
+    if (tab) win.webContents.send('settings:open', tab)
     win.show()
     win.focus()
     return win
@@ -57,7 +59,7 @@ export function openSettings(): BrowserWindow {
     }
   })
 
-  loadSettings(win)
+  loadSettings(win, tab)
 
   win.once('ready-to-show', () => {
     win?.show()

@@ -1,5 +1,7 @@
 import { test, expect, _electron as electron } from '@playwright/test'
-import { spawn, execSync } from 'node:child_process'
+import { spawn } from 'node:child_process'
+import { mkdtempSync, rmSync } from 'node:fs'
+import { tmpdir } from 'node:os'
 import { join, dirname } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
@@ -10,50 +12,57 @@ const executablePath =
     : join(root, 'node_modules/electron/dist/electron')
 const mainEntry = join(root, 'out/main/index.js')
 
-/** Orphaned helpers from an interrupted run hold the single-instance lock. */
-function killStaleTestInstances(): void {
-  try {
-    execSync(`pkill -f "${mainEntry}"`)
-  } catch {
-    /* no stale processes — pkill exits 1 */
-  }
-}
-
 /** Fire-and-forget: the second instance signals the first via the lock, then exits. */
-function secondInstanceToggle(): void {
-  const child = spawn(executablePath, [mainEntry, '--no-sandbox', '--toggle'], {
+function secondInstanceToggle(userDataDir: string): void {
+  const child = spawn(executablePath, ['--no-sandbox', `--user-data-dir=${userDataDir}`, mainEntry, '--toggle'], {
     stdio: 'ignore',
     detached: true
   })
   child.unref()
 }
 
-test('CalTen smoke: calendar first, palette toggle, @calendar draft', async () => {
-  killStaleTestInstances()
+async function launchPalette(extraArgs: string[] = []) {
+  const userDataDir = mkdtempSync(join(tmpdir(), 'palette-e2e-'))
   const app = await electron.launch({
     executablePath,
-    args: [mainEntry, '--no-sandbox'],
+    args: ['--no-sandbox', `--user-data-dir=${userDataDir}`, mainEntry, ...extraArgs],
     env: { ...process.env, NODE_ENV: 'test' }
   })
+  return {
+    app,
+    userDataDir,
+    async close(): Promise<void> {
+      await app.close()
+      rmSync(userDataDir, { recursive: true, force: true })
+    }
+  }
+}
+
+test('CalTen smoke: calendar first, palette toggle, @calendar draft', async () => {
+  const instance = await launchPalette()
+  const { app } = instance
   try {
     const visibleWindows = (): Promise<number> =>
       app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows().filter((w) => w.isVisible()).length)
 
-    // Calendar-first: CalTen opens visible, palette stays hidden.
-    await expect.poll(() => app.windows().length, { timeout: 30_000 }).toBe(2)
-    await expect.poll(visibleWindows, { timeout: 30_000 }).toBe(1)
+    // The shell app and calendar open on launch; the palette stays hidden.
+    await expect.poll(() => app.windows().length, { timeout: 30_000 }).toBe(3)
+    await expect.poll(visibleWindows, { timeout: 30_000 }).toBe(2)
     await expect.poll(() => app.windows().some((page) => page.url().includes('#calendar')), { timeout: 30_000 }).toBe(true)
 
     const pages = app.windows()
     const calendar = pages.find((p) => p.url().includes('#calendar')) ?? pages[0]!
-    const palette = pages.find((p) => p !== calendar) ?? pages[0]!
+    const palette = pages.find((p) => p.url().includes('#palette')) ?? pages[0]!
+    const shell = pages.find((p) => p.url().includes('#app'))
+    expect(shell).toBeDefined()
+    await expect(shell!.getByText('Shell')).toBeVisible()
     await calendar.waitForLoadState('domcontentloaded')
     await expect(calendar.getByText('CalTen').first()).toBeVisible()
     await expect(calendar.getByRole('button', { name: 'Today', exact: true })).toBeVisible()
 
     // --toggle shows the hidden palette (covers the Wayland fallback path too).
-    secondInstanceToggle()
-    await expect.poll(visibleWindows, { timeout: 30_000 }).toBe(2)
+    secondInstanceToggle(instance.userDataDir)
+    await expect.poll(visibleWindows, { timeout: 30_000 }).toBe(3)
 
     const input = palette.getByPlaceholder(/Type @ for tools/)
     await input.click()
@@ -95,22 +104,18 @@ test('CalTen smoke: calendar first, palette toggle, @calendar draft', async () =
     await input.press('Enter')
     await expect(calendar.getByText('buy milk Friday 9am')).toBeVisible()
   } finally {
-    await app.close()
+    await instance.close()
   }
 })
 
 test('CalTen cold start: @calendar draft lands 20 times in a row', async () => {
   test.setTimeout(300_000)
-  killStaleTestInstances()
-  const app = await electron.launch({
-    executablePath,
-    args: [mainEntry, '--no-sandbox'],
-    env: { ...process.env, NODE_ENV: 'test' }
-  })
+  const instance = await launchPalette()
+  const { app } = instance
   try {
-    await expect.poll(() => app.windows().length, { timeout: 30_000 }).toBe(2)
+    await expect.poll(() => app.windows().length, { timeout: 30_000 }).toBe(3)
     const palette = app.windows().find((p) => p.url().includes('#palette')) ?? app.windows()[0]!
-    secondInstanceToggle()
+    secondInstanceToggle(instance.userDataDir)
     const input = palette.getByPlaceholder(/Type @ for tools/)
     await input.click()
 
@@ -140,6 +145,31 @@ test('CalTen cold start: @calendar draft lands 20 times in a row', async () => {
       expect(secondTake).toEqual({ draft: null })
     }
   } finally {
-    await app.close()
+    await instance.close()
+  }
+})
+
+test('settings can open to a requested registered tab', async () => {
+  const instance = await launchPalette()
+  const { app } = instance
+  try {
+    await expect.poll(() => app.windows().some((page) => page.url().includes('#app')), { timeout: 30_000 }).toBe(true)
+    const shell = app.windows().find((page) => page.url().includes('#app'))!
+    await shell.evaluate(() => window.palette.openSettingsWindow('general'))
+    await expect.poll(() => app.windows().some((page) => page.url().includes('#settings?tab=general'))).toBe(true)
+  } finally {
+    await instance.close()
+  }
+})
+
+test('tray-only --toggle launch does not open the app or calendar', async () => {
+  const instance = await launchPalette(['--toggle'])
+  const { app } = instance
+  try {
+    await expect.poll(() => app.windows().length, { timeout: 30_000 }).toBe(1)
+    expect(app.windows().some((page) => page.url().includes('#app'))).toBe(false)
+    expect(app.windows().some((page) => page.url().includes('#calendar'))).toBe(false)
+  } finally {
+    await instance.close()
   }
 })

@@ -6,7 +6,8 @@ import { Card, CardSub, CardTitle, Hint } from '../components/ui/card.js'
 import { Input, Select, Textarea } from '../components/ui/input.js'
 import { Switch } from '../components/ui/switch.js'
 import { useGmailConnect } from '../hooks/useGmailConnect.js'
-import { filterSettingsNav, groupedSettingsNav, type SettingsTabId } from './nav.js'
+import { filterSettingsNav, groupedSettingsNav, isSettingsTabRegistered, SETTINGS_NAV, type SettingsTabId } from './nav.js'
+import { EXTRA_TABS } from './extra-tabs.js'
 
 export { SETTINGS_NAV, filterSettingsNav, groupedSettingsNav } from './nav.js'
 export type { SettingsNavItem, SettingsTabId } from './nav.js'
@@ -676,7 +677,7 @@ function UsagePanel(): React.JSX.Element {
   )
 }
 
-const TAB_TITLES: Record<SettingsTabId, string> = {
+const TAB_TITLES: Record<string, string> = {
   general: 'General',
   appearance: 'Appearance',
   provider: 'Provider',
@@ -747,11 +748,15 @@ function NavGlyph({ id }: { id: SettingsTabId }): React.JSX.Element {
 
 /** Full-window settings: Cursor-like grouped sidebar + content. */
 export default function SettingsApp(): React.JSX.Element {
-  const [tab, setTab] = useState<SettingsTabId>('general')
+  const [tab, setTab] = useState<SettingsTabId>(() => {
+    const value = new URLSearchParams(window.location.hash.split('?')[1] ?? '').get('tab')
+    return value && isSettingsTabRegistered(value) ? value : 'general'
+  })
   const [query, setQuery] = useState('')
   const [shader, setShader] = useState(true)
   const items = useMemo(() => filterSettingsNav(query), [query])
   const groups = useMemo(() => groupedSettingsNav(items), [items])
+  const ExtraTab = EXTRA_TABS[tab]
 
   useEffect(() => {
     window.palette
@@ -764,8 +769,14 @@ export default function SettingsApp(): React.JSX.Element {
     function onKey(e: KeyboardEvent): void {
       if (e.key === 'Escape') window.palette.closeSettings()
     }
+    const removeSettingsListener = window.palette.onOpenSettings((next) => {
+      if (next && isSettingsTabRegistered(next)) setTab(next)
+    })
     window.addEventListener('keydown', onKey)
-    return () => window.removeEventListener('keydown', onKey)
+    return () => {
+      removeSettingsListener()
+      window.removeEventListener('keydown', onKey)
+    }
   }, [])
 
   return (
@@ -815,7 +826,9 @@ export default function SettingsApp(): React.JSX.Element {
       </aside>
       <div className="flex min-w-0 flex-1 flex-col bg-[#0c0c0e]">
         <div className="window-titlebar flex h-11 shrink-0 items-center justify-between border-b border-white/5 px-5">
-          <span className="text-[13px] font-medium text-neutral-200">{TAB_TITLES[tab]}</span>
+          <span className="text-[13px] font-medium text-neutral-200">
+            {TAB_TITLES[tab] ?? SETTINGS_NAV.find((item) => item.id === tab)?.label ?? 'Settings'}
+          </span>
           <button
             onClick={() => window.palette.closeSettings()}
             aria-label="Close settings"
@@ -832,6 +845,7 @@ export default function SettingsApp(): React.JSX.Element {
           {tab === 'routines' && <RoutinesPanel />}
           {tab === 'shortcuts' && <ShortcutsPanel />}
           {tab === 'usage' && <UsagePanel />}
+          {ExtraTab && <ExtraTab />}
         </div>
       </div>
     </div>

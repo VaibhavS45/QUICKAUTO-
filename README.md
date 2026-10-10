@@ -16,7 +16,7 @@ Dev mode: `npm run dev`. Typecheck: `npm run typecheck`.
 Unit tests: `npm test`. E2E smoke: `npm run test:e2e` (build first).
 Installers: `npm run dist` (electron-builder: AppImage + deb, dmg, nsis).
 
-The calendar opens automatically on launch. In Settings → General, choose
+The app shell and calendar open automatically on launch. In Settings → General, choose
 whether closing the calendar keeps the command bar, tray, and scheduled
 routines running in the background or quits the app. Press **Ctrl+Space**
 (macOS default: **Alt+Space**, configurable in palette Settings) to toggle the

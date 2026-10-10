@@ -1,4 +1,6 @@
 import { contextBridge, ipcRenderer } from 'electron'
+import { automationsApi } from './automations.js'
+import { shellApi } from './shell.js'
 
 /**
  * Preload: contextBridge API only. No API keys or tokens ever reach the renderer.
@@ -15,8 +17,8 @@ const api = {
     ipcRenderer.on('palette:opened', fn)
     return () => ipcRenderer.removeListener('palette:opened', fn)
   },
-  onOpenSettings: (cb: () => void) => {
-    const fn = (): void => cb()
+  onOpenSettings: (cb: (tab?: string) => void) => {
+    const fn = (_event: unknown, tab?: string): void => cb(tab)
     ipcRenderer.on('settings:open', fn)
     return () => ipcRenderer.removeListener('settings:open', fn)
   },
@@ -114,7 +116,7 @@ const api = {
     shader?: boolean
   }): Promise<{ ok: boolean; keepBackground?: boolean; shader?: boolean; error?: string }> =>
     ipcRenderer.invoke('app:set-behavior', p),
-  openSettingsWindow: () => ipcRenderer.send('settings:show'),
+  openSettingsWindow: (tab?: string) => ipcRenderer.send('settings:show', tab ? { tab } : undefined),
   onCalendarDraft: (cb: (text: string) => void) => {
     const fn = (_e: unknown, text: string): void => cb(text)
     ipcRenderer.on('calendar:new-draft', fn)
@@ -134,7 +136,9 @@ const api = {
     const fn = (): void => cb()
     ipcRenderer.on('settings:close', fn)
     return () => ipcRenderer.removeListener('settings:close', fn)
-  }
+  },
+  ...shellApi,
+  ...automationsApi
 }
 
 export type PaletteApi = typeof api

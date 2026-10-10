@@ -1,0 +1,5 @@
+* @shell-owner
+/src/renderer/features/automations/ @automations-owner
+/src/main/automations/ @automations-owner
+/src/main/agent/scheduler.ts @automations-owner
+/src/preload/automations.ts @automations-owner

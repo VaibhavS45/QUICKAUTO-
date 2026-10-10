@@ -27,6 +27,7 @@ export const IpcChannels = {
   calendarClose: 'calendar:close',
   /** Renderer pulls the pending @calendar draft on mount (cold-start race fix). */
   calendarTakeDraft: 'calendar:take-draft',
+  calendarOpen: 'calendar:open',
   getModelSettings: 'settings:get-model',
   setModelSettings: 'settings:set-model',
   setApiKey: 'settings:set-api-key',

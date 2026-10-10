@@ -38,31 +38,28 @@ async function launchPalette(extraArgs: string[] = []) {
   }
 }
 
-test('CalTen smoke: calendar first, palette toggle, @calendar draft', async () => {
+test('Palette smoke: app first, palette toggle, @calendar draft', async () => {
   const instance = await launchPalette()
   const { app } = instance
   try {
     const visibleWindows = (): Promise<number> =>
       app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows().filter((w) => w.isVisible()).length)
 
-    // The shell app and calendar open on launch; the palette stays hidden.
-    await expect.poll(() => app.windows().length, { timeout: 30_000 }).toBe(3)
-    await expect.poll(visibleWindows, { timeout: 30_000 }).toBe(2)
-    await expect.poll(() => app.windows().some((page) => page.url().includes('#calendar')), { timeout: 30_000 }).toBe(true)
+    // The app opens on launch; the calendar does not, and the palette stays hidden.
+    await expect.poll(() => app.windows().length, { timeout: 30_000 }).toBe(2)
+    await expect.poll(visibleWindows, { timeout: 30_000 }).toBe(1)
+    await expect.poll(() => app.windows().some((page) => page.url().includes('#calendar')), { timeout: 30_000 }).toBe(false)
 
     const pages = app.windows()
-    const calendar = pages.find((p) => p.url().includes('#calendar')) ?? pages[0]!
     const palette = pages.find((p) => p.url().includes('#palette')) ?? pages[0]!
     const shell = pages.find((p) => p.url().includes('#app'))
     expect(shell).toBeDefined()
-    await expect(shell!.getByText('Shell')).toBeVisible()
-    await calendar.waitForLoadState('domcontentloaded')
-    await expect(calendar.getByText('CalTen').first()).toBeVisible()
-    await expect(calendar.getByRole('button', { name: 'Today', exact: true })).toBeVisible()
+    await expect(shell!.getByRole('heading', { name: 'What can I help with?' })).toBeVisible()
+    await expect(shell!.getByRole('button', { name: 'New chat' })).toBeVisible()
 
     // --toggle shows the hidden palette (covers the Wayland fallback path too).
     secondInstanceToggle(instance.userDataDir)
-    await expect.poll(visibleWindows, { timeout: 30_000 }).toBe(3)
+    await expect.poll(visibleWindows, { timeout: 30_000 }).toBe(2)
 
     const input = palette.getByPlaceholder(/Type @ for tools/)
     await input.click()
@@ -102,6 +99,11 @@ test('CalTen smoke: calendar first, palette toggle, @calendar draft', async () =
     // @calendar sends the trailing text as a draft to the open calendar window.
     await input.fill('@calendar buy milk Friday 9am')
     await input.press('Enter')
+    await expect.poll(() => app.windows().some((page) => page.url().includes('#calendar'))).toBe(true)
+    const calendar = app.windows().find((page) => page.url().includes('#calendar'))!
+    await calendar.waitForLoadState('domcontentloaded')
+    await expect(calendar.getByText('CalTen').first()).toBeVisible()
+    await expect(calendar.getByRole('button', { name: 'Today', exact: true })).toBeVisible()
     await expect(calendar.getByText('buy milk Friday 9am')).toBeVisible()
   } finally {
     await instance.close()
@@ -113,7 +115,7 @@ test('CalTen cold start: @calendar draft lands 20 times in a row', async () => {
   const instance = await launchPalette()
   const { app } = instance
   try {
-    await expect.poll(() => app.windows().length, { timeout: 30_000 }).toBe(3)
+    await expect.poll(() => app.windows().length, { timeout: 30_000 }).toBe(2)
     const palette = app.windows().find((p) => p.url().includes('#palette')) ?? app.windows()[0]!
     secondInstanceToggle(instance.userDataDir)
     const input = palette.getByPlaceholder(/Type @ for tools/)
@@ -162,8 +164,41 @@ test('settings can open to a requested registered tab', async () => {
   }
 })
 
-test('tray-only --toggle launch does not open the app or calendar', async () => {
-  const instance = await launchPalette(['--toggle'])
+test('shell navigation, shortcuts, and local account menu work', async () => {
+  const instance = await launchPalette()
+  const { app } = instance
+  try {
+    const shell = app.windows().find((page) => page.url().includes('#app'))
+    await expect.poll(() => app.windows().some((page) => page.url().includes('#app'))).toBe(true)
+    const shellPage = shell ?? app.windows().find((page) => page.url().includes('#app'))!
+
+    await shellPage.locator('body').press('Control+b')
+    await expect(shellPage.locator('main.shell-frame')).toHaveClass(/is-collapsed/)
+    await shellPage.locator('body').press('Control+b')
+    await expect(shellPage.locator('main.shell-frame')).not.toHaveClass(/is-collapsed/)
+
+    await shellPage.getByRole('button', { name: 'Automations' }).click()
+    await expect(shellPage.getByText('Automations are coming soon.')).toBeVisible()
+    await shellPage.keyboard.press('Control+n')
+    await expect(shellPage.getByRole('heading', { name: 'What can I help with?' })).toBeVisible()
+
+    await shellPage.keyboard.press('Control+,')
+    await expect.poll(() => app.windows().some((page) => page.url().includes('#settings'))).toBe(true)
+    await app.windows().find((page) => page.url().includes('#settings'))?.close()
+
+    await shellPage.getByRole('button', { name: /Account menu for Local profile/ }).click()
+    const accountMenu = shellPage.getByRole('menu')
+    await expect(accountMenu.getByRole('menuitem', { name: 'Account settings' })).toBeVisible()
+    await expect(accountMenu.getByText('Sign out')).toHaveCount(0)
+    await accountMenu.getByRole('menuitem', { name: 'Account settings' }).click()
+    await expect.poll(() => app.windows().some((page) => page.url().includes('#settings?tab=account'))).toBe(true)
+  } finally {
+    await instance.close()
+  }
+})
+
+test('tray-only --background launch does not open the app or calendar', async () => {
+  const instance = await launchPalette(['--background'])
   const { app } = instance
   try {
     await expect.poll(() => app.windows().length, { timeout: 30_000 }).toBe(1)

@@ -1,4 +1,4 @@
-import { app, BrowserWindow, Tray, Menu, globalShortcut, ipcMain, nativeImage, session, Notification, safeStorage, shell } from 'electron'
+import { app, globalShortcut, ipcMain, session, Notification, safeStorage, shell } from 'electron'
 import Store from 'electron-store'
 import { randomUUID } from 'node:crypto'
 import {
@@ -58,10 +58,10 @@ import {
   type RoutineStore
 } from './agent/scheduler.js'
 import { parseMentionedTools } from '../shared/types.js'
-import { wantsToggle, shouldAutoOpenCalendar } from './agent/background-mode.js'
+import { wantsToggle } from './agent/background-mode.js'
 import { applyAppBehaviorPatch, resolveAppBehavior, type AppBehavior } from './agent/app-prefs.js'
 import { installStdioGuard } from './agent/stdio-guard.js'
-import { openShellAppWindow } from './agent/shell-app-window.js'
+import { createAppTray, startAppLaunch, watchDockVisibility } from './agent/app-lifecycle.js'
 import { registerAutomationsIpc, registerShellIpc } from './agent/shell-ipc.js'
 
 // Launched without a console, stdio writes hit EPIPE and kill main — swallow it first.
@@ -240,7 +240,6 @@ setNestedApprovalHandler(
     })
 )
 
-let tray: Tray | null = null
 let hotkeyError: string | null = null
 
 // Second-instance (palette --toggle CLI) routes through the single-instance lock.
@@ -302,36 +301,7 @@ function applyAutostart(): void {
 }
 
 function createTray(): void {
-  // ponytail: 1px placeholder icon, real tray artwork lands in M6.
-  const icon =
-    nativeImage.createFromDataURL(
-      'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAA4AAAAOCAYAAAAfSC3RAAAAFElEQVR42mP8z8AARQMTEwMTAwMAJBYAAWzRRf4AAAAASUVORK5CYII='
-    ) || nativeImage.createEmpty()
-  tray = new Tray(icon)
-  tray.setToolTip('CalTen')
-  const menu = Menu.buildFromTemplate([
-    { label: 'Open app', click: () => openShellAppWindow() },
-    { label: 'Open calendar', click: () => openCalendar() },
-    { label: 'Toggle command bar', click: () => togglePalette() },
-    {
-      label: 'Settings',
-      click: () => openSettings()
-    },
-    { type: 'separator' },
-    {
-      label: 'Start on login',
-      type: 'checkbox',
-      checked: store.get('openAtLogin', false),
-      click: (item) => {
-        store.set('openAtLogin', item.checked)
-        applyAutostart()
-      }
-    },
-    { type: 'separator' },
-    { label: 'Quit', click: () => app.quit() }
-  ])
-  tray.setContextMenu(menu)
-  tray.on('click', () => togglePalette())
+  createAppTray(openCalendar, () => openSettings())
 }
 
 function applyStrictCsp(): void {
@@ -573,6 +543,7 @@ function wireIpc(): void {
     else w.maximize()
   })
   ipcMain.on(IpcChannels.calendarClose, () => getCalendarWindow()?.close())
+  ipcMain.on(IpcChannels.calendarOpen, () => openCalendar())
 
   // Step 0 (fix/palette-pop): cold-start draft race fix. openCalendar pushes
   // the draft on ready-to-show, which can fire before the calendar renderer
@@ -740,28 +711,19 @@ function wireIpc(): void {
     if (process.platform === 'darwin' && app.dock) app.dock.show()
   })
   ipcMain.on('calendar:closed-to-tray', () => {
-    // Calendar-first: closing the calendar drops back to the command bar +
-    // tray (macOS also hides the Dock icon). Unless the user opted out in
+    // Closing the calendar returns control to the app or tray. Unless the user opted out in
     // Settings, in which case the app quits instead.
     if (!storedAppBehavior().keepBackground) {
       app.quit()
-      return
     }
-    // macOS: back to accessory-style when only palette/tray remain.
-    if (process.platform === 'darwin' && app.dock && !getCalendarWindow()) app.dock.hide()
   })
 }
 
 async function onReady(): Promise<void> {
   app.setName('CalTen')
 
-  // CLI flag through the single-instance lock.
-  if (wantsToggle(process.argv)) {
-    // First instance started with --toggle: start hidden (tray only).
-    // (No window to toggle yet; just don't show anything.)
-  }
-
   applyStrictCsp()
+  watchDockVisibility()
   createPaletteWindow()
   wireIpc()
   scheduler.startAll()
@@ -777,24 +739,7 @@ async function onReady(): Promise<void> {
     }).show()
   }
 
-  // macOS: hide the Dock icon while only the palette is open (keep it in dev so the app is findable).
-  // Calendar-first: dock stays visible whenever the calendar is open.
-  if (process.platform === 'darwin' && app.dock && !process.env['ELECTRON_RENDERER_URL'] && !getCalendarWindow())
-    app.dock.hide()
-
-  // Calendar-first: the calendar opens on launch (unless --toggle tray-only).
-  // Command bar, tray and schedules are all reachable from there.
-  if (shouldAutoOpenCalendar(process.argv)) {
-    openCalendar()
-    openShellAppWindow()
-  }
-
-  app.on('activate', () => {
-    // ponytail: Dock click must show something — recreate only if gone, then show.
-    if (BrowserWindow.getAllWindows().length === 0) createPaletteWindow()
-    // Calendar-first: Dock click reopens the calendar.
-    openCalendar()
-  })
+  startAppLaunch(process.argv)
 }
 
 app.whenReady().then(() => void onReady())

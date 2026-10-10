@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { wantsToggle, shouldAutoOpenCalendar } from '../../src/main/agent/background-mode.js'
+import { wantsToggle, shouldAutoOpenApp } from '../../src/main/agent/background-mode.js'
 import {
   resolveAppBehavior,
   applyAppBehaviorPatch,
@@ -13,10 +13,11 @@ describe('background-mode', () => {
     expect(wantsToggle(['palette'])).toBe(false)
   })
 
-  it('opens the calendar first unless started tray-only', () => {
-    expect(shouldAutoOpenCalendar(['palette'])).toBe(true)
-    expect(shouldAutoOpenCalendar(['palette', '--calendar'])).toBe(true)
-    expect(shouldAutoOpenCalendar(['palette', '--toggle'])).toBe(false)
+  it('opens the app by default and stays tray-only only with --background', () => {
+    expect(shouldAutoOpenApp(['palette'])).toBe(true)
+    expect(shouldAutoOpenApp(['palette', '--background'])).toBe(false)
+    expect(shouldAutoOpenApp(['palette', '--toggle'])).toBe(true)
+    expect(shouldAutoOpenApp(['palette', '--calendar'])).toBe(true)
   })
 })
 

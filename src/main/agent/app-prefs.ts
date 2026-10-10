@@ -1,10 +1,9 @@
 import { z } from 'zod'
 
 /**
- * App behavior prefs. Calendar-first: the calendar opens on launch and the
- * command bar + schedules stay available from there. When the calendar
- * window closes, `keepBackground` decides whether the palette/tray/scheduler
- * keep running (true, default) or the app quits.
+ * App behavior prefs. The shell opens on launch and schedules stay available
+ * from the tray. When the calendar window closes, `keepBackground` decides
+ * whether the app/tray/scheduler keep running (true, default) or the app quits.
  *
  * Appearance (`shader`) is non-secret UI chrome stored alongside.
  */

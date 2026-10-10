@@ -2,6 +2,8 @@ import { useEffect, useMemo, useState } from 'react'
 import type { FeatureProps, ShellApi } from '../contracts/feature.js'
 import { getFeatureRegistry } from './registry.js'
 import { PRIMARY_NAV, SIDEBAR_SECTIONS, ShellRouter } from './nav.js'
+import SettingsApp from '../settings/SettingsDialog.js'
+import { SETTINGS_HEIGHT, SETTINGS_WIDTH } from '../../main/agent/settings-layout.js'
 import './shell.css'
 
 interface LocalProfile {
@@ -35,6 +37,7 @@ export default function ShellApp(): React.JSX.Element {
   const [collapsed, setCollapsed] = useState(false)
   const [profile, setProfile] = useState<LocalProfile>({ name: '', email: '' })
   const [accountMenuOpen, setAccountMenuOpen] = useState(false)
+  const [settings, setSettings] = useState<{ tab?: string } | null>(null)
   const features = useMemo(() => getFeatureRegistry(), [])
   const activeFeature = features.find((feature) => feature.id === route.view)
 
@@ -46,6 +49,15 @@ export default function ShellApp(): React.JSX.Element {
       console.error('Could not load local profile.', error)
     })
     return () => { active = false }
+  }, [])
+
+  useEffect(() => {
+    const offOpen = window.app.onOpenSettings((tab) => setSettings({ tab }))
+    const offClose = window.app.onSettingsClose(() => setSettings(null))
+    return () => {
+      offOpen()
+      offClose()
+    }
   }, [])
 
   useEffect(() => {
@@ -174,6 +186,18 @@ export default function ShellApp(): React.JSX.Element {
           </div>
         </section>
       </div>
+      {settings !== null && (
+        <div
+          className="shell-settings-overlay"
+          onClick={(event) => {
+            if (event.target === event.currentTarget) window.app.closeSettings()
+          }}
+        >
+          <div className="shell-settings-card" style={{ width: SETTINGS_WIDTH, height: SETTINGS_HEIGHT }}>
+            <SettingsApp key={settings.tab ?? 'general'} initialTab={settings.tab} />
+          </div>
+        </div>
+      )}
     </main>
   )
 }

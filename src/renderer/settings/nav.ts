@@ -5,7 +5,6 @@ export type SettingsTabId =
   | 'appearance'
   | 'provider'
   | 'connectors'
-  | 'routines'
   | 'usage'
   | (string & {})
 
@@ -29,7 +28,6 @@ const BUILTIN_SETTINGS_NAV: SettingsNavItem[] = [
   { id: 'appearance', label: 'Appearance', group: 'app', keywords: ['shader', 'theme', 'sidebar'] },
   { id: 'provider', label: 'Provider', group: 'ai', keywords: ['model', 'anthropic', 'openai', 'api', 'key'] },
   { id: 'connectors', label: 'Connectors', group: 'ai', keywords: ['composio', 'gmail', 'github', 'notion', 'sheets'] },
-  { id: 'routines', label: 'Routines', group: 'system', keywords: ['schedule'] },
   { id: 'usage', label: 'Usage', group: 'system', keywords: ['budget', 'composio'] },
 ]
 

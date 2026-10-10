@@ -61,8 +61,8 @@ describe('switch / kbd / separator / shader', () => {
   })
 })
 
-describe('settings window size', () => {
-  it('uses a roomy standalone settings window size', () => {
+describe('settings panel size', () => {
+  it('uses a roomy floating settings panel size', () => {
     expect(SETTINGS_WIDTH).toBeGreaterThanOrEqual(900)
     expect(SETTINGS_HEIGHT).toBeGreaterThanOrEqual(600)
     expect(SETTINGS_MIN_WIDTH).toBeLessThan(SETTINGS_WIDTH)

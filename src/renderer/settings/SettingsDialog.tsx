@@ -46,15 +46,6 @@ interface ConnectorState {
   services: Array<{ id: string; connected: boolean; detail?: string }>
 }
 
-interface RoutineItem {
-  id: string
-  prompt: string
-  tools: string[]
-  runAt: number
-  enabled: boolean
-  lastStatus?: string
-}
-
 function Field({ label, children }: { label: string; children: React.ReactNode }): React.JSX.Element {
   return (
     <label className="set-field">
@@ -566,47 +557,6 @@ function GmailConnectBlock(): React.JSX.Element {
   )
 }
 
-function RoutinesPanel(): React.JSX.Element {
-  const [items, setItems] = useState<RoutineItem[]>([])
-  useEffect(() => {
-    window.app.routineList().then((r) => {
-      const res = r as { ok: boolean; routines: RoutineItem[] }
-      if (res.ok) setItems(res.routines)
-    }).catch(() => {})
-  }, [])
-  async function refresh(): Promise<void> {
-    const res = (await window.app.routineList()) as { ok: boolean; routines: RoutineItem[] }
-    if (res.ok) setItems(res.routines)
-  }
-  return (
-    <Card>
-      <CardTitle>Routines ({items.length})</CardTitle>
-      <CardSub>
-        Scheduled agent runs appear here and can be enabled, paused, or removed.
-      </CardSub>
-      <div className="set-list">
-        {items.length === 0 && <p className="set-list-empty">No routines yet.</p>}
-        {items.map((r) => (
-          <div key={r.id} className="set-list-item">
-            <button
-              onClick={() => void window.app.routineToggle(r.id, !r.enabled).then(() => void refresh())}
-              className={`set-toggle${r.enabled ? ' is-on' : ''}`}
-            >
-              {r.enabled ? 'on' : 'off'}
-            </button>
-            <span className="set-date">{new Date(r.runAt).toLocaleString()}</span>
-            <span className="set-prompt" title={r.prompt}>{r.prompt}</span>
-            <span className="spacer" />
-            <button onClick={() => void window.app.routineRemove(r.id).then(() => void refresh())} className="set-link-danger">
-              Remove
-            </button>
-          </div>
-        ))}
-      </div>
-    </Card>
-  )
-}
-
 function UsagePanel(): React.JSX.Element {
   const [budget, setBudget] = useState<BudgetState | null>(null)
   useEffect(() => {
@@ -638,7 +588,6 @@ const TAB_TITLES: Record<string, string> = {
   appearance: 'Appearance',
   provider: 'Provider',
   connectors: 'Connectors',
-  routines: 'Routines',
   usage: 'Usage'
 }
 
@@ -676,14 +625,6 @@ function NavGlyph({ id }: { id: SettingsTabId }): React.JSX.Element {
       </svg>
     )
   }
-  if (id === 'routines') {
-    return (
-      <svg viewBox="0 0 16 16" fill="none" aria-hidden>
-        <rect x="2.5" y="3.5" width="11" height="10" rx="1.5" stroke="currentColor" strokeWidth="1.3" />
-        <path d="M2.5 6.5h11M6 2.5v2M10 2.5v2" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" />
-      </svg>
-    )
-  }
   return (
     <svg viewBox="0 0 16 16" fill="none" aria-hidden>
       <path d="M3 12.5 6.2 6.5 8 10l1.6-2.8L13 12.5" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round" />
@@ -691,9 +632,10 @@ function NavGlyph({ id }: { id: SettingsTabId }): React.JSX.Element {
   )
 }
 
-/** Floating settings window: grouped sidebar + content, shadcn components on the app theme. */
-export default function SettingsApp(): React.JSX.Element {
+/** Floating settings panel: grouped sidebar + content, shadcn components on the app theme. */
+export default function SettingsApp({ initialTab }: { initialTab?: string }): React.JSX.Element {
   const [tab, setTab] = useState<SettingsTabId>(() => {
+    if (initialTab && isSettingsTabRegistered(initialTab)) return initialTab
     const value = new URLSearchParams(window.location.hash.split('?')[1] ?? '').get('tab')
     return value && isSettingsTabRegistered(value) ? value : 'general'
   })
@@ -783,7 +725,6 @@ export default function SettingsApp(): React.JSX.Element {
             {tab === 'appearance' && <AppearancePanel shader={shader} onShader={setShader} />}
             {tab === 'provider' && <ModelPanel />}
             {tab === 'connectors' && <ConnectionsPanel />}
-            {tab === 'routines' && <RoutinesPanel />}
             {tab === 'usage' && <UsagePanel />}
             {ExtraTab && <ExtraTab />}
           </div>

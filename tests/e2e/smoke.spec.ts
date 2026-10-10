@@ -57,9 +57,11 @@ test('shell navigation, shortcuts, and local account menu work', async () => {
     await expect(shell.getByRole('heading', { name: 'What can I help with?' })).toBeVisible()
 
     await shell.locator('body').press('Control+,')
-    await expect.poll(() => app.windows().length).toBe(2)
-    await expect(app.windows().find((page) => page.url().includes('#settings'))!).toHaveURL(/#settings$/)
-    await app.windows().find((page) => page.url().includes('#settings'))?.close()
+    await expect(shell.getByRole('dialog', { name: 'Settings' })).toBeVisible()
+    await expect(shell.getByRole('button', { name: 'General' })).toBeVisible()
+    await shell.keyboard.press('Escape')
+    await expect(shell.getByRole('dialog', { name: 'Settings' })).toHaveCount(0)
+    await expect.poll(() => app.windows().length).toBe(1)
 
     await shell.getByRole('button', { name: /Account menu for Local profile/ }).click()
     const accountMenu = shell.getByRole('menu')

@@ -333,34 +333,6 @@
   color: #f87171;
 }
 
-.set-toggle {
-  border: 0;
-  border-radius: 9999px;
-  padding: 2px 8px;
-  font-size: 12px;
-  font-weight: 500;
-  cursor: pointer;
-  background: #2a2e35;
-  color: #9299a6;
-}
-
-.set-toggle.is-on {
-  background: rgb(16 122 87 / 25%);
-  color: #a7f3d0;
-}
-
-.set-date {
-  color: #d7dbe2;
-  white-space: nowrap;
-}
-
-.set-prompt {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  color: #9299a6;
-}
-
 .set-badges {
   display: flex;
   flex-wrap: wrap;

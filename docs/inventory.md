@@ -22,7 +22,7 @@ windows.
 | `src/preload/shell.ts` | Present | Empty extension object; shell-specific methods are exposed through `window.app`. |
 | `src/preload/automations.ts` | Present | Empty extension object. |
 | `EXTRA_TABS` / `EXTRA_NAV` | Present | Empty extension collections consumed by Settings navigation. |
-| `openSettings(tab?)` | Present | Settings window supports an optional tab. |
+| `openSettings(tab?)` via `settings:show` | Present | Opens the centered floating settings panel in the shell window (blurred backdrop, no separate window). |
 | `docs/ownership.md` | Present | Documents shell/Automations ownership. |
 | `CODEOWNERS` | Present | Contains repository ownership entries. |
 | `AGENTS.md` | Present | Reflects current ownership and removed-window constraints. |

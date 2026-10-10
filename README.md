@@ -1,8 +1,8 @@
 # Palette
 
-Raycast-style pop-up command palette (global hotkey) + calendar app for scheduling
-AI agent tasks. All data stays local except what your chosen model provider, web
-search provider, and Composio receive. No telemetry.
+Desktop assistant with an in-app shell, a hotkey command palette, and a calendar
+for scheduling AI agent tasks. All data stays local except what your chosen
+model provider, web search provider, and Composio receive. No telemetry.
 
 ## Quick start
 
@@ -16,12 +16,12 @@ Dev mode: `npm run dev`. Typecheck: `npm run typecheck`.
 Unit tests: `npm test`. E2E smoke: `npm run test:e2e` (build first).
 Installers: `npm run dist` (electron-builder: AppImage + deb, dmg, nsis).
 
-The app shell and calendar open automatically on launch. In Settings → General, choose
-whether closing the calendar keeps the command bar, tray, and scheduled
-routines running in the background or quits the app. Press **Ctrl+Space**
+The app opens to the shell; the calendar is opened from the app or tray. In
+Settings → General, choose whether closing the calendar keeps the app and
+scheduled routines running in the background or quits the app. Press **Ctrl+Space**
 (macOS default: **Alt+Space**, configurable in palette Settings) to toggle the
-palette. Start with `--toggle` to launch tray-only without opening the
-calendar. Type `@` to see tools (`@calendar @websearch
+palette. Start with `--background` for tray-only startup; `--toggle` continues
+to toggle the palette through the single-instance lock. Type `@` to see tools (`@calendar @websearch
 @notion @gmail @sheets @opencode @github @files`, aliases `@email`, `@sheet`).
 Enter runs, Esc hides, ↑ recalls history, ⌘/Ctrl+Enter copies the result.
 `@calendar <text>` opens the calendar with a task draft (it never runs an agent).
@@ -67,9 +67,9 @@ shortcut to:
 
 GNOME: Settings → Keyboard → Custom Shortcut.
 KDE: System Settings → Shortcuts. The `--toggle` flag is routed through the
-single-instance lock, so it works whether the app is running or not (second
-instance just signals the first and exits). Verified on this machine, which
-itself runs a Wayland session.
+single-instance lock when the app is running (the second instance signals the
+first and exits). Use `--background` to start without opening the app window.
+Verified on this machine, which itself runs a Wayland session.
 
 ## Verified library versions (Oct 2026, per current docs)
 

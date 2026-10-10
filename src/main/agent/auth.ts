@@ -1,22 +1,22 @@
-import type { ProfileSettingsService } from './profile-settings.js'
+import type { ProfileSettingsService } from "./profile-settings.js";
 
 export interface AuthProfile {
-  name: string
-  email: string
+  name: string;
+  email: string;
 }
 
 export interface AuthProvider {
-  getCurrentProfile(): AuthProfile
+  getCurrentProfile(): AuthProfile;
 }
 
 export class LocalProfileAuth implements AuthProvider {
-  constructor(private readonly profiles: Pick<ProfileSettingsService, 'get'>) {}
+  constructor(private readonly profiles: Pick<ProfileSettingsService, "get">) {}
 
   getCurrentProfile(): AuthProfile {
-    const profile = this.profiles.get()
+    const profile = this.profiles.get();
     return {
-      name: profile.name.trim() || 'Local profile',
-      email: profile.email
-    }
+      name: profile.name.trim() || "Local profile",
+      email: profile.email,
+    };
   }
 }

@@ -3,7 +3,7 @@ import {
   ConnectorSettingsService,
   MemoryConnectorStore,
   type SafeStorageLike
-} from '../../src/main/connectors/connector-settings.js'
+} from '../../src/main/settings/connector-settings.js'
 import { ComposioProvider, createComposioTools } from '../../src/main/connectors/composio-tools.js'
 import { createBuiltinTools } from '../../src/main/agent/tools.js'
 

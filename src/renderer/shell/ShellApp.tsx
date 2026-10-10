@@ -3,7 +3,6 @@ import type { ShellApi } from '../contracts/feature.js'
 import type { ChatThread } from '../../shared/chat.js'
 import type { AgentEvent } from '../../shared/agent.js'
 import type { AppNotification } from '../../shared/contracts/notifications.js'
-import type { RunRecord, ScheduleItem, TodaySchedule } from '../../shared/contracts/schedule.js'
 import { parseMentionedTools } from '../../shared/types.js'
 import { ChatComposer } from './ChatComposer.js'
 import { ChatView } from './ChatView.js'
@@ -11,10 +10,9 @@ import { createChatRunState, reduceChatRun, resolveChatApproval, type ChatRunSta
 import { getFeatureRegistry } from './registry.js'
 import { FeatureContent, FeatureHeaderActions } from './FeatureHost.js'
 import type { AutomationTemplate } from '../../shared/contracts/automation-templates.js'
-import PluginsPanel from '../settings/tabs/PluginsPanel.js'
 import { PRIMARY_NAV, SIDEBAR_SECTIONS, ShellRouter } from './nav.js'
 import SettingsApp from '../settings/SettingsDialog.js'
-import { SETTINGS_HEIGHT, SETTINGS_WIDTH } from '../../main/agent/settings-layout.js'
+import { SETTINGS_HEIGHT, SETTINGS_WIDTH } from '../../main/shell/settings-layout.js'
 import './shell.css'
 
 interface LocalProfile {
@@ -26,7 +24,6 @@ function Icon({ name }: { name: string }): React.JSX.Element {
   const paths: Record<string, React.ReactNode> = {
     plus: <path d="M12 5v14M5 12h14" />,
     automation: <><rect x="3" y="5" width="18" height="16" rx="2" /><path d="M16 3v4M8 3v4M3 10h18" /></>,
-    puzzle: <path d="M5 3h4a2 2 0 1 1 4 0h6v6a2 2 0 1 0 0 4v8h-6a2 2 0 1 1-4 0H3v-6a2 2 0 1 0 0-4V3h2Z" />,
     bell: <><path d="M18 8a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9M10 21h4" /></>,
     settings: <><circle cx="12" cy="12" r="3" /><path d="m19.4 15 .1.1 1.4 1.1-1.4 2.4-1.7-.7a8 8 0 0 1-1.5.9l-.3 1.8h-2.8l-.3-1.8a8 8 0 0 1-1.5-.9l-1.7.7-1.4-2.4 1.4-1.1a8 8 0 0 1 0-1.8l-1.4-1.1 1.4-2.4 1.7.7a8 8 0 0 1 1.5-.9l.3-1.8h2.8l.3 1.8a8 8 0 0 1 1.5.9l1.7-.7 1.4 2.4-1.4 1.1a8 8 0 0 1 0 1.8Z" /></>,
     chevron: <path d="m9 18 6-6-6-6" />
@@ -46,10 +43,6 @@ function errorText(reason: unknown): string {
   return reason instanceof Error ? reason.message : String(reason)
 }
 
-function timeLabel(at: number): string {
-  return new Date(at).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })
-}
-
 export default function ShellApp(): React.JSX.Element {
   const router = useMemo(() => new ShellRouter(), [])
   const [route, setRoute] = useState(router.current)
@@ -59,8 +52,6 @@ export default function ShellApp(): React.JSX.Element {
   const [settings, setSettings] = useState<{ tab?: string } | null>(null)
   const [notificationsOpen, setNotificationsOpen] = useState(false)
   const [notifications, setNotifications] = useState<AppNotification[]>([])
-  const [todaySchedule, setTodaySchedule] = useState<TodaySchedule | null>(null)
-  const [recentTasks, setRecentTasks] = useState<RunRecord[]>([])
   const [dashboardError, setDashboardError] = useState('')
   const [threads, setThreads] = useState<ChatThread[]>([])
   const [chatError, setChatError] = useState('')
@@ -68,7 +59,6 @@ export default function ShellApp(): React.JSX.Element {
   const [run, setRun] = useState<ChatRunState | null>(null)
   const [runThreadId, setRunThreadId] = useState('')
   const [busy, setBusy] = useState(false)
-  const [chatSearchOpen, setChatSearchOpen] = useState(false)
   const [chatSearch, setChatSearch] = useState('')
   const [renamingId, setRenamingId] = useState('')
   const [renameValue, setRenameValue] = useState('')
@@ -96,18 +86,6 @@ export default function ShellApp(): React.JSX.Element {
     return result.threads
   }, [])
 
-  const refreshDashboard = useCallback(async (): Promise<void> => {
-    const [today, recent] = await Promise.all([
-      window.app.scheduleToday(),
-      window.app.recentTasks(10)
-    ])
-    if (!today.ok || !today.schedule) throw new Error(today.error || 'Could not load today’s schedule.')
-    if (!recent.ok || !recent.runs) throw new Error(recent.error || 'Could not load recent tasks.')
-    setTodaySchedule(today.schedule)
-    setRecentTasks(recent.runs)
-    setDashboardError('')
-  }, [])
-
   const refreshNotifications = useCallback(async (): Promise<void> => {
     const response = await window.app.notificationsList()
     if (!response.ok || !response.notifications) {
@@ -128,36 +106,11 @@ export default function ShellApp(): React.JSX.Element {
     }).finally(() => {
       if (active) setChatLoading(false)
     })
-    void refreshDashboard().catch((error: unknown) => {
-      if (active) setDashboardError(errorText(error))
-    })
     void refreshNotifications().catch((error: unknown) => {
       if (active) setDashboardError(errorText(error))
     })
     return () => { active = false }
-  }, [refreshThreads, refreshDashboard, refreshNotifications])
-
-  useEffect(() => {
-    let timer: ReturnType<typeof setTimeout>
-    let active = true
-    const refreshAtNextMinute = (): void => {
-      const delay = 60_000 - (Date.now() % 60_000)
-      timer = setTimeout(() => {
-        if (!active) return
-        void refreshDashboard().catch((error: unknown) => setDashboardError(errorText(error)))
-        refreshAtNextMinute()
-      }, delay)
-    }
-    refreshAtNextMinute()
-    const unsubscribe = window.app.onScheduleChanged(() => {
-      void refreshDashboard().catch((error: unknown) => setDashboardError(errorText(error)))
-    })
-    return () => {
-      active = false
-      clearTimeout(timer)
-      unsubscribe()
-    }
-  }, [refreshDashboard])
+  }, [refreshThreads, refreshNotifications])
 
   useEffect(() => window.app.onNotificationsChanged(() => {
     void refreshNotifications().catch((error: unknown) => setDashboardError(errorText(error)))
@@ -258,14 +211,10 @@ export default function ShellApp(): React.JSX.Element {
     openSettings: (tab) => window.app.openSettingsWindow(tab),
     notify: (notification) => window.dispatchEvent(new CustomEvent('app:notification', { detail: notification }))
   }
-  const title = activeFeature?.title ?? (
-    route.view === 'plugins' ? 'Plugins' :
-      activeThread?.title ?? 'New chat'
-  )
+  const title = activeFeature?.title ?? (activeThread?.title ?? 'New chat')
   const initials = displayName(profile).split(/\s+/).slice(0, 2).map((part) => part[0]?.toUpperCase()).join('')
   const visibleThreads = threads
-    .filter((thread) => !chatSearchOpen || thread.title.toLowerCase().includes(chatSearch.trim().toLowerCase()))
-    .slice(0, chatSearchOpen ? 200 : 15)
+    .filter((thread) => thread.title.toLowerCase().includes(chatSearch.trim().toLowerCase()))
 
   async function sendMessage(text: string): Promise<boolean> {
     if (busyRef.current) return false
@@ -415,72 +364,17 @@ export default function ShellApp(): React.JSX.Element {
                 title={collapsed ? item.label : undefined}
                 onClick={() => navigate(item.view)}
               >
-                <Icon name={item.id === 'home' ? 'plus' : item.id === 'plugins' ? 'puzzle' : 'automation'} />
+                <Icon name={item.id === 'home' ? 'plus' : 'automation'} />
                 <span>{item.label}</span>
               </button>
             ))}
           </nav>
           <div className="shell-sidebar-sections">
-            <section className="shell-sidebar-section shell-today-section" aria-label={SIDEBAR_SECTIONS[0]}>
-              <h2>{SIDEBAR_SECTIONS[0]}</h2>
-              {todaySchedule?.items.length ? (
-                <>
-                  <div className="shell-today-progress" aria-label={`${todaySchedule.done} of ${todaySchedule.items.length} complete`}>
-                    <span style={{ width: `${todaySchedule.items.length ? (todaySchedule.done / todaySchedule.items.length) * 100 : 0}%` }} />
-                  </div>
-                  <div className="shell-schedule-items">
-                    {todaySchedule.items.slice(0, 5).map((item: ScheduleItem) => (
-                      <button key={item.id} type="button" className="shell-schedule-item" onClick={() => navigate('automations', item.routineId ? { focusId: item.routineId } : {})}>
-                        <time>{timeLabel(item.at)}</time>
-                        <span className="shell-schedule-title">{item.title}</span>
-                        <span className={`shell-schedule-status is-${item.status}`} title={item.status} />
-                      </button>
-                    ))}
-                    {todaySchedule.items.length > 5 && <span className="shell-section-more">+{todaySchedule.items.length - 5} more today</span>}
-                  </div>
-                </>
-              ) : (
-                !collapsed && (
-                  <div className="shell-section-empty">
-                    <p>Nothing scheduled today.</p>
-                    <button type="button" onClick={() => navigate('automations')}>Create automation</button>
-                  </div>
-                )
-              )}
-            </section>
-            <section className="shell-sidebar-section shell-recent-section" aria-label={SIDEBAR_SECTIONS[1]}>
-              <h2>{SIDEBAR_SECTIONS[1]}</h2>
-              {recentTasks.length ? (
-                <div className="shell-recent-list">
-                  {recentTasks.slice(0, 5).map((item) => (
-                    <button
-                      key={item.id}
-                      type="button"
-                      className="shell-recent-item"
-                      title={item.title}
-                      aria-label={`${item.title} — ${item.status.replaceAll('_', ' ').replaceAll('-', ' ')}`}
-                      onClick={() => item.chatId
-                        ? navigate('chat', { chatId: item.chatId })
-                        : item.routineId ? navigate('automations', { focusId: item.routineId }) : undefined}
-                    >
-                      <span className={`shell-recent-status is-${item.status}`} />
-                      <span className="shell-recent-title">{item.title}</span>
-                      <time>{timeLabel(item.endedAt ?? item.startedAt)}</time>
-                    </button>
-                  ))}
-                </div>
-              ) : (
-                !collapsed && <p className="shell-section-empty-copy">Your recent tasks will appear here.</p>
-              )}
-            </section>
-            <section className="shell-sidebar-section shell-chats-section" aria-label="Chats">
+            <section className="shell-sidebar-section shell-chats-section" aria-label={SIDEBAR_SECTIONS[0]}>
               <div className="shell-chats-heading">
-                <h2>Chats</h2>
-                {threads.length > 0 && !collapsed && (
-                  <button type="button" aria-label="Show all chats" title="Show all chats" onClick={() => setChatSearchOpen((open) => !open)}>⌕</button>
-                )}
+                <h2>{SIDEBAR_SECTIONS[0]}</h2>
               </div>
-              {chatSearchOpen && !collapsed && (
+              {threads.length > 3 && !collapsed && (
                 <input
                   className="shell-chat-search"
                   aria-label="Search chats"
@@ -520,8 +414,8 @@ export default function ShellApp(): React.JSX.Element {
                   </div>
                 ))}
                 {!chatLoading && threads.length === 0 && !collapsed && <p className="shell-chat-empty">Your recent chats will appear here.</p>}
-                {chatSearchOpen && !collapsed && threads.length > 15 && visibleThreads.length < 200 && !chatSearch && (
-                  <span className="shell-chat-count">Showing {visibleThreads.length} of {threads.length}</span>
+                {!collapsed && chatSearch.trim() && visibleThreads.length === 0 && threads.length > 0 && (
+                  <p className="shell-chat-empty">No chats match “{chatSearch.trim()}”.</p>
                 )}
               </div>
               {!collapsed && threads.length > 0 && (
@@ -566,6 +460,16 @@ export default function ShellApp(): React.JSX.Element {
               </div>
             )}
             <div className="shell-footer-actions">
+              <button
+                type="button"
+                className="shell-icon-button"
+                aria-label={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+                title="Toggle sidebar (Ctrl/Cmd+B)"
+                aria-expanded={!collapsed}
+                onClick={() => setCollapsed((value) => !value)}
+              >
+                <Icon name="chevron" />
+              </button>
               <button
                 type="button"
                 className="shell-icon-button shell-notifications-button"
@@ -625,8 +529,6 @@ export default function ShellApp(): React.JSX.Element {
           <div className={`shell-content${route.view === 'chat' ? ' has-chat-view' : ''}`}>
             {activeFeature ? (
               <FeatureContent feature={activeFeature} shell={shellApi} params={route.params} />
-            ) : route.view === 'plugins' ? (
-              <PluginsPanel />
             ) : activeChatId ? (
               activeThread ? (
                 <>

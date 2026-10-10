@@ -1,5 +1,4 @@
 import { contextBridge, ipcRenderer } from 'electron'
-import { automationsApi } from './automations.js'
 import { shellApi } from './shell.js'
 import type { ChatMessage, ChatThread } from '../shared/chat.js'
 import { AgentEventSchema, type AgentEvent } from '../shared/agent.js'
@@ -99,6 +98,16 @@ const api = {
     harnesses?: Array<{ id: string; installed: boolean; version?: string; detail: string }>
     error?: string
   }> => ipcRenderer.invoke('agent-provider:detect'),
+  opencodeModels: (): Promise<{
+    ok: boolean
+    current?: string
+    options?: Array<{ value: string; name: string }>
+    error?: string
+  }> => ipcRenderer.invoke('opencode:models'),
+  opencodeModelGet: (): Promise<{ ok: boolean; model?: string | null }> =>
+    ipcRenderer.invoke('opencode:model-get'),
+  opencodeModelSet: (model: string): Promise<{ ok: boolean; model?: string; error?: string }> =>
+    ipcRenderer.invoke('opencode:model-set', { model }),
   routineList: (): Promise<{
     ok: boolean
     routines: Array<{
@@ -146,8 +155,7 @@ const api = {
     ipcRenderer.on('settings:close', fn)
     return () => ipcRenderer.removeListener('settings:close', fn)
   },
-  ...shellApi,
-  ...automationsApi
+  ...shellApi
 }
 
 export type AppApi = typeof api

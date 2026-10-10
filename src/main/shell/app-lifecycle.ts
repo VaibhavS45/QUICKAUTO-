@@ -1,5 +1,5 @@
 import { app, BrowserWindow, Menu, nativeImage, Tray } from 'electron'
-import { openShellAppWindow } from '../agent/shell-app-window.js'
+import { openShellAppWindow } from './shell-app-window.js'
 
 let tray: Tray | null = null
 

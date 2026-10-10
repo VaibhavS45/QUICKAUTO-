@@ -3,7 +3,7 @@ import { cn } from './cn.js'
 
 export function kbdClass(className?: string): string {
   return cn(
-    'rounded border border-neutral-700 bg-neutral-800/80 px-1 py-px font-mono text-[10px] text-neutral-400',
+    'rounded border border-border bg-muted px-1 py-px font-mono text-[10px] text-muted-foreground',
     className
   )
 }

@@ -12,7 +12,7 @@ import {
   SETTINGS_HEIGHT,
   SETTINGS_MIN_WIDTH,
   SETTINGS_WIDTH
-} from '../../src/main/agent/settings-layout.js'
+} from '../../src/main/shell/settings-layout.js'
 
 describe('cn', () => {
   it('joins truthy classes only', () => {
@@ -22,12 +22,12 @@ describe('cn', () => {
 })
 
 describe('buttonClass', () => {
-  it('maps variants to the existing neutral utility classes', () => {
-    expect(buttonClass()).toContain('bg-blue-500')
-    expect(buttonClass('destructive', 'sm')).toContain('bg-red-700')
+  it('maps variants to shadcn token classes', () => {
+    expect(buttonClass()).toContain('bg-primary')
+    expect(buttonClass('destructive', 'sm')).toContain('bg-destructive')
     expect(buttonClass('success', 'sm')).toContain('bg-emerald-600')
-    expect(buttonClass('ghost', 'icon')).toContain('text-neutral-500')
-    expect(buttonClass('secondary', 'sm')).toContain('border-neutral-700')
+    expect(buttonClass('ghost', 'icon')).toContain('text-muted-foreground')
+    expect(buttonClass('secondary', 'sm')).toContain('bg-secondary')
   })
 })
 
@@ -44,16 +44,16 @@ describe('badgeClass', () => {
 
 describe('cardClass / inputClass', () => {
   it('keeps the settings card and input shell', () => {
-    expect(cardClass()).toContain('bg-neutral-900')
-    expect(inputClass()).toContain('bg-neutral-950')
+    expect(cardClass()).toContain('bg-card')
+    expect(inputClass()).toContain('border-input')
     expect(inputClass(true)).toContain('font-mono')
   })
 })
 
 describe('switch / kbd / separator / shader', () => {
   it('maps on/off tracks and chrome classes', () => {
-    expect(switchClass(true)).toContain('bg-blue-500')
-    expect(switchClass(false)).toContain('bg-neutral-700')
+    expect(switchClass(true)).toContain('bg-primary')
+    expect(switchClass(false)).toContain('bg-input')
     expect(switchThumbClass(true)).toContain('translate-x-4')
     expect(kbdClass()).toContain('font-mono')
     expect(separatorClass()).toContain('h-px')

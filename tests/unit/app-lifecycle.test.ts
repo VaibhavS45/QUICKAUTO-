@@ -31,7 +31,7 @@ vi.mock('electron', () => ({
   Tray: vi.fn(() => mocks.trayInstance)
 }))
 
-vi.mock('../../src/main/agent/shell-app-window.js', () => ({
+vi.mock('../../src/main/shell/shell-app-window.js', () => ({
   openShellAppWindow: mocks.openShellAppWindow
 }))
 

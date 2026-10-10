@@ -5,10 +5,8 @@ import {
   listNotifications,
   notify
 } from '../../src/main/shell/notifications.js'
-import { registerAutomationsIpc, registerShellIpc } from '../../src/main/agent/shell-ipc.js'
 import type { NewNotification } from '../../src/shared/contracts/notifications.js'
 import type { ScheduleSource } from '../../src/shared/contracts/schedule.js'
-import { automationsApi } from '../../src/preload/automations.js'
 import { shellApi } from '../../src/preload/shell.js'
 
 describe('shell main-process contract modules', () => {
@@ -40,8 +38,7 @@ describe('shell main-process contract modules', () => {
     expect(data.notifications).toHaveLength(200)
   })
 
-  it('exposes no window actions from the shell preload and callable IPC registration hooks', () => {
-    expect(automationsApi).toEqual({})
+  it('exposes the shell preload surface', () => {
     expect(Object.keys(shellApi).sort()).toEqual([
       'agentCreate',
       'agentRemove',
@@ -64,7 +61,5 @@ describe('shell main-process contract modules', () => {
       'recentTasks',
       'scheduleToday'
     ])
-    expect(() => registerShellIpc()).not.toThrow()
-    expect(() => registerAutomationsIpc()).not.toThrow()
   })
 })

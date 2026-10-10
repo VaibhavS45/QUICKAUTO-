@@ -1,8 +1,12 @@
 import { describe, expect, it } from 'vitest'
 import {
+  AcpModelService,
   AgentProviderService,
+  DEFAULT_ACP_MODEL,
   detectHarnesses,
-  parseVersion
+  parseVersion,
+  pickAutoEngine,
+  resolveOpenCodeBinary
 } from '../../src/main/agent/agent-provider.js'
 import { foldPiEvent, piMessageText } from '../../src/main/agent/pi-run.js'
 
@@ -30,6 +34,67 @@ describe('AgentProviderService', () => {
     const store = memStore()
     store.set('agent-provider', '???')
     expect(new AgentProviderService(store).get()).toBe('builtin')
+  })
+
+  it('tracks whether the user explicitly chose an engine', () => {
+    const store = memStore()
+    const svc = new AgentProviderService(store)
+    expect(svc.hasExplicit()).toBe(false)
+    svc.set('opencode')
+    expect(svc.hasExplicit()).toBe(true)
+    store.set('agent-provider', '???')
+    expect(new AgentProviderService(store).hasExplicit()).toBe(false)
+  })
+})
+
+describe('pickAutoEngine', () => {
+  const both = [
+    { id: 'opencode', installed: true },
+    { id: 'pi', installed: true }
+  ]
+  it('auto-connects opencode first, then pi, when builtin has no key', () => {
+    expect(pickAutoEngine({ explicit: false, keySet: false, harnesses: both })).toBe('opencode')
+    expect(
+      pickAutoEngine({ explicit: false, keySet: false, harnesses: [{ id: 'opencode', installed: false }, { id: 'pi', installed: true }] })
+    ).toBe('pi')
+    expect(
+      pickAutoEngine({ explicit: false, keySet: false, harnesses: [{ id: 'opencode', installed: false }, { id: 'pi', installed: false }] })
+    ).toBe(null)
+  })
+
+  it('never overrides an explicit choice or a ready builtin', () => {
+    expect(pickAutoEngine({ explicit: true, keySet: false, harnesses: both })).toBe(null)
+    expect(pickAutoEngine({ explicit: false, keySet: true, harnesses: both })).toBe(null)
+  })
+})
+
+describe('AcpModelService', () => {
+  it('defaults to the Zed-compatible OpenCode Zen free model and round-trips explicit picks', () => {
+    expect(DEFAULT_ACP_MODEL).toBe('opencode/muse-spark-1.3-contributor-free')
+    const svc = new AcpModelService(memStore())
+    expect(svc.get()).toBe(DEFAULT_ACP_MODEL)
+    expect(svc.set(DEFAULT_ACP_MODEL)).toBe(DEFAULT_ACP_MODEL)
+    expect(svc.get()).toBe(DEFAULT_ACP_MODEL)
+  })
+
+  it('rejects blank and oversized model ids', () => {
+    const svc = new AcpModelService(memStore())
+    expect(() => svc.set('')).toThrow()
+    expect(() => svc.set('  ')).toThrow()
+    expect(() => svc.set(42)).toThrow()
+    expect(() => svc.set('x'.repeat(161))).toThrow()
+    expect(svc.get()).toBe(DEFAULT_ACP_MODEL)
+  })
+})
+
+describe('resolveOpenCodeBinary', () => {
+  it('honors an explicitly configured native binary path', () => {
+    expect(resolveOpenCodeBinary({ OPENCODE_BINARY: '/custom/opencode' })).toBe('/custom/opencode')
+  })
+
+  it('uses an installed native path or PATH fallback when no override is set', () => {
+    expect(['/opt/homebrew/bin/opencode', '/usr/local/bin/opencode', '/usr/bin/opencode', 'opencode'])
+      .toContain(resolveOpenCodeBinary({}))
   })
 })
 

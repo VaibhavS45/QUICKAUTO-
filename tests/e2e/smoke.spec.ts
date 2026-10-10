@@ -86,11 +86,38 @@ test('chat messages persist and reopen from recent chats', async () => {
     await expect(thread).toBeVisible({ timeout: 15_000 })
     await expect(shell.locator('.chat-message.is-user')).toContainText('A persisted chat prompt')
     await expect(shell.getByRole('alert')).toContainText('No model API key set', { timeout: 15_000 })
+    await expect(shell.getByRole('button', { name: /A persisted chat prompt — failed/ })).toBeVisible()
 
     await shell.reload()
     await expect(shell.getByRole('button', { name: 'A persisted chat prompt', exact: true })).toBeVisible()
     await shell.getByRole('button', { name: 'A persisted chat prompt', exact: true }).click()
     await expect(shell.locator('.chat-message.is-user')).toContainText('A persisted chat prompt')
+  } finally {
+    await instance.close()
+  }
+})
+
+test('today empty state navigates to automations and notifications persist', async () => {
+  const instance = await launchApp()
+  const { app } = instance
+  try {
+    await expect.poll(() => app.windows().length, { timeout: 30_000 }).toBe(1)
+    const shell = app.windows()[0]!
+    await expect(shell.getByText('Nothing scheduled today.')).toBeVisible()
+    await shell.getByRole('button', { name: 'Create automation' }).click()
+    await expect(shell.getByText('Automations are coming soon.')).toBeVisible()
+
+    const created = await shell.evaluate(async () => window.app.notificationCreate({
+      kind: 'info',
+      title: 'Persisted notice',
+      body: 'Saved in the app store.'
+    }))
+    expect(created.ok).toBe(true)
+    await shell.getByRole('button', { name: /Notifications/ }).click()
+    await expect(shell.getByRole('region', { name: 'Notifications' }).getByText('Persisted notice')).toBeVisible()
+    await shell.reload()
+    await shell.getByRole('button', { name: /Notifications/ }).click()
+    await expect(shell.getByRole('region', { name: 'Notifications' }).getByText('Persisted notice')).toBeVisible()
   } finally {
     await instance.close()
   }

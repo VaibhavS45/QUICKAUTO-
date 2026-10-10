@@ -2,6 +2,8 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { FeatureProps, ShellApi } from '../contracts/feature.js'
 import type { ChatThread } from '../../shared/chat.js'
 import type { AgentEvent } from '../../shared/agent.js'
+import type { AppNotification } from '../../shared/contracts/notifications.js'
+import type { RunRecord, ScheduleItem, TodaySchedule } from '../../shared/contracts/schedule.js'
 import { parseMentionedTools } from '../../shared/types.js'
 import { ChatComposer } from './ChatComposer.js'
 import { ChatView } from './ChatView.js'
@@ -39,12 +41,21 @@ function errorText(reason: unknown): string {
   return reason instanceof Error ? reason.message : String(reason)
 }
 
+function timeLabel(at: number): string {
+  return new Date(at).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })
+}
+
 export default function ShellApp(): React.JSX.Element {
   const router = useMemo(() => new ShellRouter(), [])
   const [route, setRoute] = useState(router.current)
   const [collapsed, setCollapsed] = useState(false)
   const [profile, setProfile] = useState<LocalProfile>({ name: '', email: '' })
   const [accountMenuOpen, setAccountMenuOpen] = useState(false)
+  const [notificationsOpen, setNotificationsOpen] = useState(false)
+  const [notifications, setNotifications] = useState<AppNotification[]>([])
+  const [todaySchedule, setTodaySchedule] = useState<TodaySchedule | null>(null)
+  const [recentTasks, setRecentTasks] = useState<RunRecord[]>([])
+  const [dashboardError, setDashboardError] = useState('')
   const [threads, setThreads] = useState<ChatThread[]>([])
   const [chatError, setChatError] = useState('')
   const [chatLoading, setChatLoading] = useState(true)
@@ -70,12 +81,33 @@ export default function ShellApp(): React.JSX.Element {
     ? route.params['chatId']
     : ''
   const activeThread = threads.find((thread) => thread.id === activeChatId)
+  const unreadCount = notifications.filter((notification) => !notification.read).length
 
   const refreshThreads = useCallback(async (): Promise<ChatThread[]> => {
     const result = await window.app.chatList()
     if (!result.ok) throw new Error('Could not load chat history.')
     setThreads(result.threads)
     return result.threads
+  }, [])
+
+  const refreshDashboard = useCallback(async (): Promise<void> => {
+    const [today, recent] = await Promise.all([
+      window.app.scheduleToday(),
+      window.app.recentTasks(10)
+    ])
+    if (!today.ok || !today.schedule) throw new Error(today.error || 'Could not load today’s schedule.')
+    if (!recent.ok || !recent.runs) throw new Error(recent.error || 'Could not load recent tasks.')
+    setTodaySchedule(today.schedule)
+    setRecentTasks(recent.runs)
+    setDashboardError('')
+  }, [])
+
+  const refreshNotifications = useCallback(async (): Promise<void> => {
+    const response = await window.app.notificationsList()
+    if (!response.ok || !response.notifications) {
+      throw new Error(response.error || 'Could not load notifications.')
+    }
+    setNotifications(response.notifications)
   }, [])
 
   useEffect(() => {
@@ -90,8 +122,52 @@ export default function ShellApp(): React.JSX.Element {
     }).finally(() => {
       if (active) setChatLoading(false)
     })
+    void refreshDashboard().catch((error: unknown) => {
+      if (active) setDashboardError(errorText(error))
+    })
+    void refreshNotifications().catch((error: unknown) => {
+      if (active) setDashboardError(errorText(error))
+    })
     return () => { active = false }
-  }, [refreshThreads])
+  }, [refreshThreads, refreshDashboard, refreshNotifications])
+
+  useEffect(() => {
+    let timer: ReturnType<typeof setTimeout>
+    let active = true
+    const refreshAtNextMinute = (): void => {
+      const delay = 60_000 - (Date.now() % 60_000)
+      timer = setTimeout(() => {
+        if (!active) return
+        void refreshDashboard().catch((error: unknown) => setDashboardError(errorText(error)))
+        refreshAtNextMinute()
+      }, delay)
+    }
+    refreshAtNextMinute()
+    const unsubscribe = window.app.onScheduleChanged(() => {
+      void refreshDashboard().catch((error: unknown) => setDashboardError(errorText(error)))
+    })
+    return () => {
+      active = false
+      clearTimeout(timer)
+      unsubscribe()
+    }
+  }, [refreshDashboard])
+
+  useEffect(() => window.app.onNotificationsChanged(() => {
+    void refreshNotifications().catch((error: unknown) => setDashboardError(errorText(error)))
+  }), [refreshNotifications])
+
+  useEffect(() => {
+    const onNotification = (event: Event): void => {
+      const notification = (event as CustomEvent<Omit<AppNotification, 'id' | 'createdAt' | 'read'>>).detail
+      void window.app.notificationCreate(notification).then(async (response) => {
+        if (!response.ok) throw new Error(response.error || 'Could not save notification.')
+        await refreshNotifications()
+      }).catch((error: unknown) => setDashboardError(errorText(error)))
+    }
+    window.addEventListener('app:notification', onNotification)
+    return () => window.removeEventListener('app:notification', onNotification)
+  }, [refreshNotifications])
 
   useEffect(() => {
     const unsubscribe = router.subscribe(setRoute)
@@ -153,6 +229,7 @@ export default function ShellApp(): React.JSX.Element {
     router.navigate(view, params)
     setAccountMenuOpen(false)
     setChatError('')
+    setNotificationsOpen(false)
   }
 
   function openThread(thread: ChatThread): void {
@@ -276,6 +353,36 @@ export default function ShellApp(): React.JSX.Element {
     }
   }
 
+  async function readNotification(notification: AppNotification): Promise<void> {
+    if (!notification.read) {
+      const response = await window.app.notificationRead(notification.id)
+      if (!response.ok) {
+        setDashboardError(response.error || 'Could not mark notification as read.')
+        return
+      }
+      setNotifications((current) => current.map((item) => item.id === notification.id ? { ...item, read: true } : item))
+    }
+    if (notification.link) navigate(notification.link.view, notification.link.params)
+  }
+
+  async function readAllNotifications(): Promise<void> {
+    const response = await window.app.notificationsReadAll()
+    if (!response.ok) {
+      setDashboardError(response.error || 'Could not mark notifications as read.')
+      return
+    }
+    setNotifications((current) => current.map((item) => ({ ...item, read: true })))
+  }
+
+  async function dismissNotification(id: string): Promise<void> {
+    const response = await window.app.notificationDismiss(id)
+    if (!response.ok) {
+      setDashboardError(response.error || 'Could not dismiss notification.')
+      return
+    }
+    setNotifications((current) => current.filter((item) => item.id !== id))
+  }
+
   return (
     <main className={`shell-frame${collapsed ? ' is-collapsed' : ''}`}>
       <header className="shell-drag-strip" aria-label="Window title bar">
@@ -299,11 +406,58 @@ export default function ShellApp(): React.JSX.Element {
             ))}
           </nav>
           <div className="shell-sidebar-sections">
-            {SIDEBAR_SECTIONS.slice(0, 2).map((section) => (
-              <section className="shell-sidebar-section" key={section} aria-label={section}>
-                <h2>{section}</h2>
-              </section>
-            ))}
+            <section className="shell-sidebar-section shell-today-section" aria-label={SIDEBAR_SECTIONS[0]}>
+              <h2>{SIDEBAR_SECTIONS[0]}</h2>
+              {todaySchedule?.items.length ? (
+                <>
+                  <div className="shell-today-progress" aria-label={`${todaySchedule.done} of ${todaySchedule.items.length} complete`}>
+                    <span style={{ width: `${todaySchedule.items.length ? (todaySchedule.done / todaySchedule.items.length) * 100 : 0}%` }} />
+                  </div>
+                  <div className="shell-schedule-items">
+                    {todaySchedule.items.slice(0, 5).map((item: ScheduleItem) => (
+                      <button key={item.id} type="button" className="shell-schedule-item" onClick={() => navigate('automations', item.routineId ? { focusId: item.routineId } : {})}>
+                        <time>{timeLabel(item.at)}</time>
+                        <span className="shell-schedule-title">{item.title}</span>
+                        <span className={`shell-schedule-status is-${item.status}`} title={item.status} />
+                      </button>
+                    ))}
+                    {todaySchedule.items.length > 5 && <span className="shell-section-more">+{todaySchedule.items.length - 5} more today</span>}
+                  </div>
+                </>
+              ) : (
+                !collapsed && (
+                  <div className="shell-section-empty">
+                    <p>Nothing scheduled today.</p>
+                    <button type="button" onClick={() => navigate('automations')}>Create automation</button>
+                  </div>
+                )
+              )}
+            </section>
+            <section className="shell-sidebar-section shell-recent-section" aria-label={SIDEBAR_SECTIONS[1]}>
+              <h2>{SIDEBAR_SECTIONS[1]}</h2>
+              {recentTasks.length ? (
+                <div className="shell-recent-list">
+                  {recentTasks.slice(0, 5).map((item) => (
+                    <button
+                      key={item.id}
+                      type="button"
+                      className="shell-recent-item"
+                      title={item.title}
+                      aria-label={`${item.title} — ${item.status.replaceAll('_', ' ').replaceAll('-', ' ')}`}
+                      onClick={() => item.chatId
+                        ? navigate('chat', { chatId: item.chatId })
+                        : item.routineId ? navigate('automations', { focusId: item.routineId }) : undefined}
+                    >
+                      <span className={`shell-recent-status is-${item.status}`} />
+                      <span className="shell-recent-title">{item.title}</span>
+                      <time>{timeLabel(item.endedAt ?? item.startedAt)}</time>
+                    </button>
+                  ))}
+                </div>
+              ) : (
+                !collapsed && <p className="shell-section-empty-copy">Your recent tasks will appear here.</p>
+              )}
+            </section>
             <section className="shell-sidebar-section shell-chats-section" aria-label="Chats">
               <div className="shell-chats-heading">
                 <h2>Chats</h2>
@@ -397,8 +551,16 @@ export default function ShellApp(): React.JSX.Element {
               </div>
             )}
             <div className="shell-footer-actions">
-              <button type="button" className="shell-icon-button" aria-label="Notifications" title="Notifications">
+              <button
+                type="button"
+                className="shell-icon-button shell-notifications-button"
+                aria-label={`Notifications${unreadCount ? ` (${unreadCount} unread)` : ''}`}
+                aria-expanded={notificationsOpen}
+                title="Notifications"
+                onClick={() => setNotificationsOpen((open) => !open)}
+              >
                 <Icon name="bell" />
+                {unreadCount > 0 && <span className="shell-notification-badge">{unreadCount > 99 ? '99+' : unreadCount}</span>}
               </button>
               <button
                 type="button"
@@ -410,13 +572,40 @@ export default function ShellApp(): React.JSX.Element {
                 <Icon name="settings" />
               </button>
             </div>
+            {notificationsOpen && (
+              <section className="shell-notifications-panel" aria-label="Notifications">
+                <header>
+                  <strong>Notifications</strong>
+                  {unreadCount > 0 && <button type="button" onClick={() => void readAllNotifications()}>Mark all read</button>}
+                </header>
+                {notifications.length ? (
+                  <div className="shell-notifications-list">
+                    {notifications.map((notification) => (
+                      <article key={notification.id} className={`shell-notification${notification.read ? '' : ' is-unread'}`}>
+                        <button type="button" className="shell-notification-body" onClick={() => void readNotification(notification)}>
+                          <span>{notification.title}</span>
+                          {notification.body && <small>{notification.body}</small>}
+                          <time>{new Date(notification.createdAt).toLocaleString()}</time>
+                        </button>
+                        <button type="button" className="shell-notification-dismiss" aria-label={`Dismiss ${notification.title}`} onClick={() => void dismissNotification(notification.id)}>×</button>
+                      </article>
+                    ))}
+                  </div>
+                ) : <p className="shell-notifications-empty">You’re all caught up.</p>}
+              </section>
+            )}
           </footer>
         </aside>
         <section className="shell-main-pane">
           <header className="shell-pane-header">
             <h1>{title}</h1>
           </header>
-          {chatError && <div className="shell-chat-error" role="alert">{chatError}<button type="button" onClick={() => setChatError('')}>Dismiss</button></div>}
+          {(chatError || dashboardError) && (
+            <div className="shell-chat-error" role="alert">
+              {chatError || dashboardError}
+              <button type="button" onClick={() => { setChatError(''); setDashboardError('') }}>Dismiss</button>
+            </div>
+          )}
           <div className={`shell-content${route.view === 'chat' ? ' has-chat-view' : ''}`}>
             {activeFeature ? (
               <activeFeature.Component shell={shellApi} initialTemplate={route.params['template'] as FeatureProps['initialTemplate']} />

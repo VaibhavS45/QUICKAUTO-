@@ -13,6 +13,9 @@
     "noUnusedLocals": true,
     "noUnusedParameters": true,
     "useUnknownInCatchVariables": true,
+    "baseUrl": ".",
+    "paths": { "@/*": ["./src/renderer/*"] },
+    "resolvePackageJsonImports": true,
     "types": ["node", "vite/client"]
   },
   "include": ["src/**/*", "tests/**/*", "scripts/**/*", "electron-vite.config.ts", "playwright.config.ts", "vitest.config.ts"]

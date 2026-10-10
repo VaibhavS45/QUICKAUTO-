@@ -2,7 +2,7 @@ import type { InputHTMLAttributes, SelectHTMLAttributes, TextareaHTMLAttributes 
 import { cn } from './cn.js'
 
 const base =
-  'w-full rounded-md border border-neutral-700 bg-neutral-950 text-sm text-neutral-100 outline-none placeholder:text-neutral-600 focus:border-blue-500'
+  'w-full rounded-md border border-input bg-transparent text-sm text-foreground outline-none placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-2 focus-visible:ring-ring/50 disabled:opacity-50'
 
 /** Pure class map (unit-tested). Same shell + mono pattern the settings used. */
 export function inputClass(monospace = false, className?: string): string {

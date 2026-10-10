@@ -1,4 +1,2 @@
-/** ponytail: tiny cn() — joins truthy classes. No clsx dependency for one line. */
-export function cn(...parts: Array<string | false | null | undefined>): string {
-  return parts.filter(Boolean).join(' ')
-}
+/** ponytail: local cn() kept as compat re-export; canonical impl lives in @/lib/utils. */
+export { cn } from '../../lib/utils.js'

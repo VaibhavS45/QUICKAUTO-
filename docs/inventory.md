@@ -12,11 +12,11 @@ windows.
 | `src/shared/contracts/automation-templates.ts` | Present | Template, trigger, and defaults schemas. |
 | `src/renderer/contracts/feature.ts` | Present | `FeatureModule` and `ShellApi`; `openCalendarWindow()` remains deprecated and is a no-op. |
 | `src/renderer/shell/registry.ts` | Present | `import.meta.glob('../features/*/feature.ts', { eager: true })` with an Automations placeholder fallback. |
-| `src/renderer/shell/ShellApp.tsx` | Present | App frame, sidebar, in-memory navigation, local profile footer, and Home/Plugins/Automations placeholders. |
+| `src/renderer/shell/ShellApp.tsx` | Present | App frame, chat history, today's schedule, recent tasks, notifications, local profile footer, and feature navigation. |
 | `#app` route in `src/renderer/main.tsx` | Present | Default route renders `ShellApp`; `#settings` renders Settings. |
 | `src/main/shell/app-window.ts` | Missing at requested path | Window implementation is `src/main/agent/shell-app-window.ts`. |
 | `src/main/shell/schedule-registry.ts` | Missing at requested path | Registry is `src/main/agent/schedule-registry.ts`. |
-| `src/main/shell/notifications.ts` | Missing at requested path | In-memory store is `src/main/agent/notifications.ts`. |
+| `src/main/shell/notifications.ts` | Present | Electron-store-backed notification service with a 200-item cap. |
 | `src/main/ipc/shell.ts` | Missing at requested path | IPC registration is currently in `src/main/agent/shell-ipc.ts`. |
 | `src/main/ipc/automations.ts` | Missing at requested path | Placeholder registration is also in `src/main/agent/shell-ipc.ts`. |
 | `src/preload/shell.ts` | Present | Empty extension object; shell-specific methods are exposed through `window.app`. |
@@ -27,10 +27,10 @@ windows.
 | `CODEOWNERS` | Present | Contains repository ownership entries. |
 | `AGENTS.md` | Present | Reflects current ownership and removed-window constraints. |
 
-The listed `src/main/shell/**` and `src/main/ipc/**` locations are not used;
-the corresponding main-process shell modules remain under `src/main/agent/`.
-The S0 IPC registration functions and notification store are still
-placeholders/in-memory, not production persistence.
+The app window and schedule registry remain under `src/main/agent/`; chat,
+schedule, and notification services are under `src/main/shell/`. Namespaced
+shell IPC handlers are registered by the main process; notifications persist
+in electron-store.
 
 ## Part B: Existing implementation
 
@@ -90,13 +90,14 @@ API exists. The Plugins screen is currently a placeholder.
   connectors. Active selectable tool IDs are defined in `src/shared/types.ts`.
 - `src/main/agent/runner.ts` uses AI SDK v7 `ToolLoopAgent`, streams events,
   and stops after 20 steps. Agent events are sent to the shell app window.
-- `agent:run` accepts a prompt, tools, and source. `RunSource` retains
+- `agent:run` accepts a prompt, tools, source, optional conversation history,
+  and an optional system prompt. `RunSource` retains
   `'palette'` for compatibility and adds `'chat'` alongside `'scheduled'`.
-  Every run starts with a single user message; there is no history or
-  user-supplied system-prompt request field.
+- Chat history is persisted through `shell:chat-*`; main retrieves it for agent
+  runs and supplies the last 20 messages to the runner.
 - Writes require an approve/deny decision on interactive runs. Scheduled
   runs deny writes; OpenCode permission requests use the nested approval path.
-- No persistent chat/thread history store exists.
+- Recent agent runs persist in the `palette-shell` electron-store.
 
 ### 6. Settings tabs
 
@@ -140,6 +141,6 @@ channels, and `settings:show` / `settings:hide`. The extension maps
 | MCP servers screen (add/remove/status) | **MISSING** | No MCP server or configuration layer. |
 | API keys screen | **READY** | Provider and Composio key set/clear/status already use encrypted storage and expose renderer-safe state. |
 | Agents CRUD | **MISSING** | No agent model/store or CRUD IPC. |
-| Chat history store | **MISSING** | No thread/message persistence or history IPC. |
-| Notifications | **PARTIAL** | Notification schemas and an in-memory store exist, but no persistence, IPC, or notification center is wired. |
-| Today's schedule source | **PARTIAL** | Routines persist and have list/toggle/remove IPC; the `ScheduleSource` contract has no wired adapter or sidebar feed. |
+| Chat history store | **READY** | Persistent chat threads/history and validated `shell:chat-*` IPC power Home chat and the sidebar. |
+| Notifications | **READY** | `src/main/shell/notifications.ts` persists validated notifications in the `palette-notifications` electron-store, with namespaced IPC and a shell notification center. |
+| Today's schedule source | **READY** | `src/main/shell/schedule-service.ts` adapts persisted routines and recent agent runs to the schedule contracts; the shell shows today's schedule and recent tasks. |

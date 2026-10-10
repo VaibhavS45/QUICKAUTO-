@@ -13,6 +13,7 @@ import {
   ChatRenameSchema,
   ChatThreadIdSchema
 } from '../shared/chat.js'
+import { ShellIpcChannels } from './shell/ipc.js'
 
 /**
  * Typed IPC contract. Renderers may only invoke these channels
@@ -53,7 +54,8 @@ export const IpcChannels = {
   chatAppend: 'shell:chat-append',
   chatRename: 'shell:chat-rename',
   chatRemove: 'shell:chat-remove',
-  chatClear: 'shell:chat-clear'
+  chatClear: 'shell:chat-clear',
+  ...ShellIpcChannels
 } as const
 
 export type IpcChannel = (typeof IpcChannels)[keyof typeof IpcChannels]

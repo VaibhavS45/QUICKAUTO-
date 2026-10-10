@@ -111,6 +111,146 @@
   letter-spacing: 0.035em;
 }
 
+.shell-today-progress {
+  height: 3px;
+  overflow: hidden;
+  margin: 8px 0 6px;
+  border-radius: 3px;
+  background: #303034;
+}
+
+.shell-today-progress span {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: #8c9a78;
+  transition: width 160ms ease;
+}
+
+.shell-schedule-items,
+.shell-recent-list {
+  display: grid;
+  gap: 2px;
+  margin-top: 5px;
+}
+
+.shell-schedule-item,
+.shell-recent-item {
+  display: flex;
+  width: 100%;
+  min-width: 0;
+  min-height: 28px;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 4px;
+  border: 0;
+  border-radius: 5px;
+  color: #aaaab0;
+  background: transparent;
+  font-size: 10px;
+  text-align: left;
+  cursor: pointer;
+}
+
+.shell-schedule-item:hover,
+.shell-recent-item:hover {
+  color: #ededf0;
+  background: #252528;
+}
+
+.shell-schedule-item time,
+.shell-recent-item time {
+  flex: 0 0 auto;
+  color: #77777f;
+  font-variant-numeric: tabular-nums;
+  font-size: 9px;
+}
+
+.shell-schedule-title,
+.shell-recent-title {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.shell-schedule-status,
+.shell-recent-status {
+  width: 6px;
+  height: 6px;
+  flex: 0 0 auto;
+  border-radius: 50%;
+  background: #86868d;
+}
+
+.shell-schedule-status.is-done,
+.shell-recent-status.is-succeeded {
+  background: #81a989;
+}
+
+.shell-schedule-status.is-running,
+.shell-recent-status.is-running {
+  background: #d1b666;
+}
+
+.shell-schedule-status.is-failed,
+.shell-recent-status.is-failed {
+  background: #c2767e;
+}
+
+.shell-schedule-status.is-waiting-approval,
+.shell-recent-status.is-waiting-approval {
+  background: #c8a260;
+}
+
+.shell-schedule-status.is-skipped,
+.shell-recent-status.is-cancelled,
+.shell-recent-status.is-skipped_budget {
+  background: #797980;
+}
+
+.shell-section-empty,
+.shell-section-empty-copy {
+  margin: 8px 0 0;
+  color: #77777f;
+  font-size: 10px;
+  line-height: 1.5;
+}
+
+.shell-section-empty p {
+  margin: 0 0 5px;
+}
+
+.shell-section-empty button {
+  padding: 0;
+  border: 0;
+  color: #c7c7cc;
+  background: transparent;
+  font-size: 10px;
+  text-align: left;
+  cursor: pointer;
+}
+
+.shell-section-empty button:hover {
+  color: #fff;
+  text-decoration: underline;
+}
+
+.shell-section-more {
+  padding: 3px 4px;
+  color: #77777f;
+  font-size: 9px;
+}
+
+.is-collapsed .shell-section-empty,
+.is-collapsed .shell-section-empty-copy,
+.is-collapsed .shell-schedule-items,
+.is-collapsed .shell-recent-list,
+.is-collapsed .shell-today-progress {
+  display: none;
+}
+
 .shell-sidebar-footer {
   position: relative;
   display: grid;
@@ -165,10 +305,124 @@
 }
 
 .shell-icon-button {
+  position: relative;
   width: 34px;
   height: 32px;
   justify-content: center;
   border-radius: 6px;
+}
+
+.shell-notification-badge {
+  position: absolute;
+  top: 0;
+  right: 0;
+  min-width: 14px;
+  height: 14px;
+  padding: 0 3px;
+  border: 1px solid #161618;
+  border-radius: 8px;
+  color: #fff;
+  background: #b55f68;
+  font-size: 8px;
+  line-height: 12px;
+  text-align: center;
+}
+
+.shell-notifications-panel {
+  position: absolute;
+  z-index: 4;
+  bottom: 75px;
+  left: 0;
+  width: min(360px, calc(100vw - 90px));
+  max-height: min(450px, 60vh);
+  overflow: hidden;
+  border: 1px solid #39393f;
+  border-radius: 10px;
+  background: #222225;
+  box-shadow: 0 12px 36px #0009;
+}
+
+.shell-notifications-panel > header {
+  display: flex;
+  height: 40px;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 11px;
+  border-bottom: 1px solid #39393f;
+  color: #e8e8eb;
+  font-size: 11px;
+}
+
+.shell-notifications-panel > header button {
+  border: 0;
+  color: #aaaab1;
+  background: transparent;
+  font-size: 10px;
+  cursor: pointer;
+}
+
+.shell-notifications-list {
+  max-height: calc(min(450px, 60vh) - 41px);
+  overflow-y: auto;
+}
+
+.shell-notification {
+  display: flex;
+  align-items: flex-start;
+  border-bottom: 1px solid #333337;
+}
+
+.shell-notification.is-unread {
+  background: #2b2b30;
+}
+
+.shell-notification-body {
+  display: grid;
+  flex: 1;
+  gap: 4px;
+  padding: 10px;
+  border: 0;
+  color: #dedee2;
+  background: transparent;
+  text-align: left;
+  cursor: pointer;
+}
+
+.shell-notification-body span {
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.shell-notification-body small,
+.shell-notification-body time {
+  color: #93939b;
+  font-size: 10px;
+  line-height: 1.4;
+}
+
+.shell-notification-dismiss {
+  width: 30px;
+  height: 30px;
+  margin: 5px;
+  border: 0;
+  border-radius: 5px;
+  color: #8c8c93;
+  background: transparent;
+  font-size: 16px;
+  cursor: pointer;
+}
+
+.shell-notification-dismiss:hover {
+  color: #fff;
+  background: #3c3c42;
+}
+
+.shell-notifications-empty {
+  margin: 0;
+  padding: 25px 12px;
+  color: #898990;
+  font-size: 11px;
+  text-align: center;
 }
 
 .shell-account-menu {
@@ -484,6 +738,10 @@
 .is-collapsed .shell-clear-chats,
 .is-collapsed .shell-confirm-card {
   display: none;
+}
+
+.is-collapsed .shell-notifications-panel {
+  left: -5px;
 }
 
 .is-collapsed .shell-chats-section {

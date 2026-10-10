@@ -70,6 +70,32 @@ test('shell navigation, shortcuts, and local account menu work', async () => {
   }
 })
 
+test('chat messages persist and reopen from recent chats', async () => {
+  const instance = await launchApp()
+  const { app } = instance
+  try {
+    await expect.poll(() => app.windows().length, { timeout: 30_000 }).toBe(1)
+    const shell = app.windows()[0]!
+    const composer = shell.getByRole('textbox', { name: 'Message your assistant' })
+    await composer.press('Enter')
+    await expect(shell.getByRole('button', { name: 'Show all chats' })).toHaveCount(0)
+
+    await composer.fill('A persisted chat prompt')
+    await composer.press('Enter')
+    const thread = shell.getByRole('button', { name: 'A persisted chat prompt', exact: true })
+    await expect(thread).toBeVisible({ timeout: 15_000 })
+    await expect(shell.locator('.chat-message.is-user')).toContainText('A persisted chat prompt')
+    await expect(shell.getByRole('alert')).toContainText('No model API key set', { timeout: 15_000 })
+
+    await shell.reload()
+    await expect(shell.getByRole('button', { name: 'A persisted chat prompt', exact: true })).toBeVisible()
+    await shell.getByRole('button', { name: 'A persisted chat prompt', exact: true }).click()
+    await expect(shell.locator('.chat-message.is-user')).toContainText('A persisted chat prompt')
+  } finally {
+    await instance.close()
+  }
+})
+
 test('tray-only --background launch does not open the shell window', async () => {
   const instance = await launchApp(['--background'])
   const { app } = instance

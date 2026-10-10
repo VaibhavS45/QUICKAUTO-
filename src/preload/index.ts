@@ -1,6 +1,8 @@
 import { contextBridge, ipcRenderer } from 'electron'
 import { automationsApi } from './automations.js'
 import { shellApi } from './shell.js'
+import type { ChatMessage, ChatThread } from '../shared/chat.js'
+import { AgentEventSchema, type AgentEvent } from '../shared/agent.js'
 
 /**
  * Preload: contextBridge API only. No API keys or tokens ever reach the renderer.
@@ -38,15 +40,31 @@ const api = {
     ipcRenderer.invoke('connections:status', { toolId }),
   connectionConnect: (toolId: string): Promise<{ ok: boolean; url?: string; error?: string }> =>
     ipcRenderer.invoke('connections:connect', { toolId }),
-  agentRun: (payload: { prompt: string; tools: string[]; source: 'palette' | 'chat' | 'scheduled' }) =>
+  agentRun: (payload: {
+    prompt: string
+    tools: string[]
+    source: 'palette' | 'chat' | 'scheduled'
+    chatId?: string
+    history?: ChatMessage[]
+    systemPrompt?: string
+  }): Promise<{ ok: boolean; runId?: string; error?: string }> =>
     ipcRenderer.invoke('agent:run', payload),
   agentCancel: (runId: string) => ipcRenderer.invoke('agent:cancel', { runId }),
   agentApproval: (payload: { runId: string; approvalId: string; approved: boolean; reason?: string }) =>
     ipcRenderer.invoke('agent:approval', payload),
-  onAgentEvent: (cb: (e: unknown) => void) => {
-    const fn = (_e: unknown, event: unknown): void => cb(event)
+  onAgentEvent: (cb: (e: AgentEvent) => void) => {
+    const fn = (_e: unknown, event: unknown): void => {
+      const parsed = AgentEventSchema.safeParse(event)
+      if (!parsed.success) {
+        console.error('Rejected invalid agent event payload.')
+        return
+      }
+      cb(parsed.data)
+    }
     ipcRenderer.on('agent:event', fn)
-    return () => ipcRenderer.removeListener('agent:event', fn)
+    return () => {
+      ipcRenderer.removeListener('agent:event', fn)
+    }
   },
   getBudget: (): Promise<{
     used: number
@@ -98,6 +116,20 @@ const api = {
     shader?: boolean
   }): Promise<{ ok: boolean; keepBackground?: boolean; shader?: boolean; error?: string }> =>
     ipcRenderer.invoke('app:set-behavior', p),
+  chatList: (): Promise<{ ok: boolean; threads: ChatThread[] }> =>
+    ipcRenderer.invoke('shell:chat-list'),
+  chatGet: (id: string): Promise<{ ok: boolean; thread?: ChatThread; error?: string }> =>
+    ipcRenderer.invoke('shell:chat-get', { id }),
+  chatCreate: (): Promise<{ ok: boolean; thread?: ChatThread; error?: string }> =>
+    ipcRenderer.invoke('shell:chat-create', {}),
+  chatAppend: (id: string, message: ChatMessage): Promise<{ ok: boolean; thread?: ChatThread; error?: string }> =>
+    ipcRenderer.invoke('shell:chat-append', { id, message }),
+  chatRename: (id: string, title: string): Promise<{ ok: boolean; thread?: ChatThread; error?: string }> =>
+    ipcRenderer.invoke('shell:chat-rename', { id, title }),
+  chatRemove: (id: string): Promise<{ ok: boolean; error?: string }> =>
+    ipcRenderer.invoke('shell:chat-remove', { id }),
+  chatClear: (): Promise<{ ok: boolean; removed?: number; error?: string }> =>
+    ipcRenderer.invoke('shell:chat-clear', {}),
   openSettingsWindow: (tab?: string) => ipcRenderer.send('settings:show', tab ? { tab } : undefined),
   closeSettings: () => ipcRenderer.send('settings:hide'),
   onSettingsClose: (cb: () => void) => {

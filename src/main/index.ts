@@ -26,6 +26,7 @@ import {
   PaletteResizeSchema,
   ModelSettingsSchema,
   ProfileSettingsSchema,
+  AppBehaviorSchema,
   ConnectionToolSchema,
   type PlatformInfo
 } from './ipc.js'
@@ -56,12 +57,14 @@ import {
   type RoutineStore
 } from './agent/scheduler.js'
 import { parseMentionedTools } from '../shared/types.js'
+import { wantsToggle, shouldAutoOpenCalendar } from './agent/background-mode.js'
+import { resolveAppBehavior } from './agent/app-prefs.js'
 
 const gotLock = app.requestSingleInstanceLock()
 if (!gotLock) app.quit()
 
-const store = new Store<{ hotkey: string; openAtLogin: boolean }>({
-  defaults: { hotkey: defaultHotkey(process.platform), openAtLogin: false }
+const store = new Store<{ hotkey: string; openAtLogin: boolean; keepBackground: boolean }>({
+  defaults: { hotkey: defaultHotkey(process.platform), openAtLogin: false, keepBackground: true }
 })
 
 class ElectronSettingsStore implements SettingsStore {
@@ -226,10 +229,6 @@ setNestedApprovalHandler(
 let tray: Tray | null = null
 let hotkeyError: string | null = null
 
-function wantsToggle(argv: string[]): boolean {
-  return argv.includes('--toggle') || argv.includes('palette --toggle')
-}
-
 // Second-instance (palette --toggle CLI) routes through the single-instance lock.
 app.on('second-instance', (_event, argv) => {
   if (wantsToggle(argv)) togglePalette()
@@ -297,8 +296,8 @@ function createTray(): void {
   tray = new Tray(icon)
   tray.setToolTip('CalTen')
   const menu = Menu.buildFromTemplate([
-    { label: 'Toggle palette', click: () => togglePalette() },
     { label: 'Open calendar', click: () => openCalendar() },
+    { label: 'Toggle command bar', click: () => togglePalette() },
     {
       label: 'Settings',
       click: () => {
@@ -370,6 +369,15 @@ function wireIpc(): void {
   ipcMain.handle(IpcChannels.getModelSettings, async () => settingsService.getPublicState())
 
   ipcMain.handle(IpcChannels.getProfile, () => profileService.get())
+
+  ipcMain.handle(IpcChannels.getAppBehavior, () => ({ ok: true as const, ...resolveAppBehavior({ keepBackground: store.get('keepBackground', true) }) }))
+
+  ipcMain.handle(IpcChannels.setAppBehavior, (_event, payload: unknown) => {
+    const parsed = AppBehaviorSchema.safeParse(payload)
+    if (!parsed.success) return { ok: false as const, error: 'Invalid app behavior.' }
+    store.set('keepBackground', parsed.data.keepBackground)
+    return { ok: true as const, ...parsed.data }
+  })
 
   ipcMain.handle(IpcChannels.setProfile, (_event, payload: unknown) => {
     const parsed = ProfileSettingsSchema.safeParse(payload)
@@ -707,6 +715,13 @@ function wireIpc(): void {
     if (process.platform === 'darwin' && app.dock) app.dock.show()
   })
   ipcMain.on('calendar:closed-to-tray', () => {
+    // Calendar-first: closing the calendar drops back to the command bar +
+    // tray (macOS also hides the Dock icon). Unless the user opted out in
+    // Settings, in which case the app quits instead.
+    if (!resolveAppBehavior({ keepBackground: store.get('keepBackground', true) }).keepBackground) {
+      app.quit()
+      return
+    }
     // macOS: back to accessory-style when only palette/tray remain.
     if (process.platform === 'darwin' && app.dock && !getCalendarWindow()) app.dock.hide()
   })
@@ -738,28 +753,31 @@ async function onReady(): Promise<void> {
   }
 
   // macOS: hide the Dock icon while only the palette is open (keep it in dev so the app is findable).
-  // ponytail: calendar is the main window now — dock stays visible whenever it is open.
+  // Calendar-first: dock stays visible whenever the calendar is open.
   if (process.platform === 'darwin' && app.dock && !process.env['ELECTRON_RENDERER_URL'] && !getCalendarWindow())
     app.dock.hide()
 
-  // Calendar-first: CalTen opens on every launch (unless --toggle tray-only).
-  if (!wantsToggle(process.argv)) {
+  // Calendar-first: the calendar opens on launch (unless --toggle tray-only).
+  // Command bar, tray and schedules are all reachable from there.
+  if (shouldAutoOpenCalendar(process.argv)) {
     openCalendar()
   }
 
   app.on('activate', () => {
     // ponytail: Dock click must show something — recreate only if gone, then show.
     if (BrowserWindow.getAllWindows().length === 0) createPaletteWindow()
-    // ponytail: calendar-first; palette only via hotkey/tray.
+    // Calendar-first: Dock click reopens the calendar.
     openCalendar()
   })
 }
 
 app.whenReady().then(() => void onReady())
 
-// Keep running in the tray after windows close so schedules can fire (M4).
+// Tray keeps the app alive after windows close so schedules can fire —
+// unless the user turned off "keep in background" in Settings.
 app.on('window-all-closed', () => {
-  // Do not quit — tray keeps the app alive.
+  if (!resolveAppBehavior({ keepBackground: store.get('keepBackground', true) }).keepBackground) app.quit()
+  // Otherwise do not quit — tray keeps the app alive.
 })
 
 app.on('will-quit', () => {

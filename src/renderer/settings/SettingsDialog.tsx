@@ -1,5 +1,9 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useGmailConnect } from '../hooks/useGmailConnect.js'
+import { Badge } from '../components/ui/badge.js'
+import { Button } from '../components/ui/button.js'
+import { Card, CardSub, CardTitle, Hint } from '../components/ui/card.js'
+import { Input, Select, Textarea } from '../components/ui/input.js'
 
 export type SettingsTabId = 'general' | 'model' | 'connections' | 'routines' | 'shortcuts' | 'usage'
 
@@ -66,11 +70,7 @@ interface RoutineItem {
   lastStatus?: string
 }
 
-const inputCls =
-  'h-9 w-full rounded-md border border-neutral-700 bg-neutral-950 px-3 text-sm text-neutral-100 outline-none placeholder:text-neutral-600 focus:border-blue-500'
-const cardCls = 'rounded-xl border border-neutral-800 bg-neutral-900 p-4'
 const labelCls = 'text-xs font-medium text-neutral-300'
-const hintCls = 'pt-1 text-xs leading-relaxed text-neutral-400'
 
 function Field({ label, children }: { label: string; children: React.ReactNode }): React.JSX.Element {
   return (
@@ -84,6 +84,8 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
 function GeneralPanel(): React.JSX.Element {
   const [profile, setProfile] = useState<Profile>({ name: '', email: '', about: '', language: 'system' })
   const [status, setStatus] = useState('Loading…')
+  const [keepBackground, setKeepBackground] = useState(true)
+  const [behaviorStatus, setBehaviorStatus] = useState('')
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null)
   const first = useRef(true)
 
@@ -99,6 +101,13 @@ function GeneralPanel(): React.JSX.Element {
         }
       })
       .catch(() => live && setStatus('Could not load profile.'))
+    window.palette
+      .getAppBehavior()
+      .then((r) => {
+        const res = r as unknown as { ok: boolean; keepBackground?: boolean }
+        if (live && res.ok && typeof res.keepBackground === 'boolean') setKeepBackground(res.keepBackground)
+      })
+      .catch(() => {})
     return () => {
       live = false
       if (timer.current) clearTimeout(timer.current)
@@ -131,24 +140,22 @@ function GeneralPanel(): React.JSX.Element {
 
   return (
     <div className="space-y-4">
-      <section className={cardCls}>
-        <h3 className="text-sm font-semibold text-neutral-100">Profile</h3>
-        <p className="pt-0.5 text-xs text-neutral-400">Your details and shared context. {status}</p>
+      <Card>
+        <CardTitle>Profile</CardTitle>
+        <CardSub>Your details and shared context. {status}</CardSub>
         <div className="space-y-3 pt-3">
-          <input
+          <Input
             value={profile.name}
             onChange={(e) => patch({ name: e.target.value })}
             placeholder="Your name"
             aria-label="Your name"
-            className={inputCls}
           />
-          <input
+          <Input
             value={profile.email}
             onChange={(e) => patch({ email: e.target.value })}
             placeholder="you@example.com"
             aria-label="Email"
             inputMode="email"
-            className={inputCls}
           />
           <div>
             <div className="flex items-center gap-1.5">
@@ -157,16 +164,16 @@ function GeneralPanel(): React.JSX.Element {
                 ?
               </span>
             </div>
-            <textarea
+            <Textarea
               value={profile.about}
               onChange={(e) => patch({ about: e.target.value })}
               rows={5}
               aria-label="About me"
-              className="mt-1 min-h-24 w-full resize-y rounded-md border border-neutral-700 bg-neutral-950 px-3 py-2 text-sm text-neutral-100 outline-none placeholder:text-neutral-600 focus:border-blue-500"
+              className="mt-1"
             />
           </div>
         </div>
-      </section>
+      </Card>
       <section className="flex items-start justify-between gap-4">
         <div>
           <h3 className="text-sm font-semibold text-neutral-100">Language</h3>
@@ -174,8 +181,7 @@ function GeneralPanel(): React.JSX.Element {
             The app follows your system language unless you pick one here. Only part of the interface is translated
             so far — untranslated text stays in English.
           </p>
-        </div>
-        <select
+        </div>        <select
           value={profile.language}
           onChange={(e) => patch({ language: e.target.value })}
           aria-label="Language"
@@ -184,6 +190,35 @@ function GeneralPanel(): React.JSX.Element {
           <option value="system">System</option>
           <option value="en">English</option>
         </select>
+      </section>
+      <section className="flex items-start justify-between gap-4">
+        <div>
+          <h3 className="text-sm font-semibold text-neutral-100">When the calendar is closed</h3>
+          <p className="max-w-md pt-1 text-xs leading-relaxed text-neutral-400">
+            Keep the command bar, tray and scheduled routines running in the background.
+            Turn off to quit the app when the calendar closes.
+            {behaviorStatus ? ` ${behaviorStatus}` : ''}
+          </p>
+        </div>
+        <button
+          role="switch"
+          aria-checked={keepBackground}
+          aria-label="Keep command bar in background"
+          onClick={() => {
+            const next = !keepBackground
+            setKeepBackground(next)
+            window.palette
+              .setAppBehavior({ keepBackground: next })
+              .then((r) => {
+                const res = r as unknown as { ok: boolean; error?: string }
+                setBehaviorStatus(res.ok ? 'Saved.' : (res.error ?? 'Save failed.'))
+              })
+              .catch(() => setBehaviorStatus('Save failed.'))
+          }}
+          className={`h-6 w-11 shrink-0 rounded-full p-0.5 transition-colors ${keepBackground ? 'bg-emerald-600' : 'bg-neutral-700'}`}
+        >
+          <span className={`block h-5 w-5 rounded-full bg-white transition-transform ${keepBackground ? 'translate-x-5' : ''}`} />
+        </button>
       </section>
     </div>
   )
@@ -244,52 +279,52 @@ function ModelPanel(): React.JSX.Element {
 
   return (
     <div className="space-y-4">
-      <section className={cardCls}>
-        <h3 className="text-sm font-semibold text-neutral-100">Model</h3>
-        <p className="pt-0.5 text-xs text-neutral-400">Provider, model, and encrypted API key.</p>
+      <Card>
+        <CardTitle>Model</CardTitle>
+        <CardSub>Provider, model, and encrypted API key.</CardSub>
         <div className="grid grid-cols-2 gap-3 pt-3">
           <Field label="Provider">
-            <select value={provider} onChange={(e) => setProvider(e.target.value)} className={inputCls}>
+            <Select value={provider} onChange={(e) => setProvider(e.target.value)}>
               <option value="anthropic">anthropic</option>
               <option value="openai">openai</option>
               <option value="openai-compatible">openai-compatible</option>
-            </select>
+            </Select>
           </Field>
           <Field label="Model">
-            <input value={model} onChange={(e) => setModel(e.target.value)} placeholder="claude-sonnet-4-5" className={`${inputCls} font-mono text-xs`} />
+            <Input monospace value={model} onChange={(e) => setModel(e.target.value)} placeholder="claude-sonnet-4-5" />
           </Field>
         </div>
         {provider === 'openai-compatible' && (
           <div className="pt-3">
             <Field label="Base URL">
-              <input value={baseUrl} onChange={(e) => setBaseUrl(e.target.value)} placeholder="http://localhost:11434/v1" className={`${inputCls} font-mono text-xs`} />
+              <Input monospace value={baseUrl} onChange={(e) => setBaseUrl(e.target.value)} placeholder="http://localhost:11434/v1" />
             </Field>
           </div>
         )}
         <div className="flex flex-wrap items-end gap-2 pt-3">
           <div className="min-w-52 flex-1">
             <Field label={`API key ${s?.keySet ? '(set ✓)' : '(not set)'}`}>
-              <input
+              <Input
+                monospace
                 type="password"
                 value={apiKey}
                 onChange={(e) => setApiKey(e.target.value)}
                 placeholder={s?.keySet ? '•••••• (enter to replace)' : 'sk-…'}
-                className={`${inputCls} font-mono text-xs`}
               />
             </Field>
           </div>
           <Field label="Reset day">
             <input value={resetDay} onChange={(e) => setResetDay(e.target.value)} inputMode="numeric" className="h-9 w-16 rounded-md border border-neutral-700 bg-neutral-950 px-2 font-mono text-xs text-neutral-100 outline-none focus:border-blue-500" />
           </Field>
-          <button onClick={() => void save()} className="h-9 rounded-md bg-blue-500 px-4 text-sm font-medium text-white hover:bg-blue-400">
+          <Button onClick={() => void save()}>
             Save
-          </button>
+          </Button>
         </div>
         {msg && <p className="pt-2 text-xs text-amber-200">{msg}</p>}
-        <p className={hintCls}>Keys are encrypted with the OS keychain (safeStorage) and never leave the main process.</p>
-      </section>
-      <section className={cardCls}>
-        <h3 className="text-sm font-semibold text-neutral-100">Auto-approve</h3>
+        <Hint>Keys are encrypted with the OS keychain (safeStorage) and never leave the main process.</Hint>
+      </Card>
+      <Card>
+        <CardTitle>Auto-approve</CardTitle>
         <label className="flex items-center gap-2 pt-2 text-xs text-neutral-300">
           <input
             type="checkbox"
@@ -298,11 +333,11 @@ function ModelPanel(): React.JSX.Element {
           />
           echo (harmless test tool) — runs without asking
         </label>
-        <p className={hintCls}>
+        <Hint>
           Default: everything asks. Writes (email draft/send/reply/labels) always need approval
           and can never auto-approve; scheduled runs never auto-approve anything.
-        </p>
-      </section>
+        </Hint>
+      </Card>
     </div>
   )
 }
@@ -326,34 +361,34 @@ function ConnectionsPanel(): React.JSX.Element {
     setState((await window.palette.getConnector()) as ConnectorState)
   }
   return (
-    <section className={cardCls}>
-      <h3 className="text-sm font-semibold text-neutral-100">Connections</h3>
-      <p className="pt-0.5 text-xs text-neutral-400">
+    <Card>
+      <CardTitle>Connections</CardTitle>
+      <CardSub>
         One Composio project key unlocks @notion, @gmail, @sheets, @websearch. Keys stay encrypted in the main process.
-      </p>
+      </CardSub>
       <div className="flex flex-wrap items-end gap-2 pt-3">
         <div className="min-w-52 flex-1">
           <Field label="Composio project key">
-            <input type="password" value={key} onChange={(e) => setKey(e.target.value)} placeholder={state?.configured ? '•••••• (enter to replace)' : 'ak_…'} className={`${inputCls} font-mono text-xs`} />
+            <Input monospace type="password" value={key} onChange={(e) => setKey(e.target.value)} placeholder={state?.configured ? '•••••• (enter to replace)' : 'ak_…'} />
           </Field>
         </div>
-        <button onClick={() => void save()} className="h-9 rounded-md bg-blue-500 px-4 text-sm font-medium text-white hover:bg-blue-400">
+        <Button onClick={() => void save()}>
           Save
-        </button>
+        </Button>
       </div>
       {msg && <p className="pt-2 text-xs text-amber-200">{msg}</p>}
       {state && (
         <div className="flex flex-wrap gap-1.5 pt-3">
           {state.services.map((sv) => (
-            <span key={sv.id} title={sv.detail ?? ''} className={`rounded-full px-2.5 py-0.5 font-mono text-xs ${sv.connected ? 'bg-emerald-600/20 text-emerald-200' : 'bg-neutral-800 text-neutral-400'}`}>
+            <Badge key={sv.id} pill title={sv.detail ?? ''} variant={sv.connected ? 'ok' : 'mute'}>
               @{sv.id} {sv.connected ? '✓' : '○'}
-            </span>
+            </Badge>
           ))}
         </div>
       )}
       <GitHubPanel />
       <GmailConnectBlock />
-    </section>
+    </Card>
   )
 }
 
@@ -449,17 +484,14 @@ function GitHubPanel(): React.JSX.Element {
         <span className="text-neutral-400">
           {gh ? (gh.ok ? (gh.detail ?? 'gh status unknown') : (gh.error ?? 'gh check failed')) : 'Checking gh…'}
         </span>
-        <button
-          onClick={() => void refresh()}
-          className="rounded-md border border-neutral-700 px-3 py-1 text-xs text-neutral-300"
-        >
+        <Button variant="secondary" size="sm" onClick={() => void refresh()}>
           Refresh
-        </button>
+        </Button>
       </div>
       {gh?.ok && !gh.authenticated && (
         <p className="pt-1 font-mono text-[11px] text-amber-300">Fix: run `gh auth login` in a terminal, then press Refresh.</p>
       )}
-      <p className={hintCls}>Only these repos are accessible to @github. Each path must exist and be a git repo whose origin matches owner/name.</p>
+      <Hint>Only these repos are accessible to @github. Each path must exist and be a git repo whose origin matches owner/name.</Hint>
       <div className="space-y-1.5 pt-2">
         {repos.length === 0 && <p className="text-xs text-neutral-500">No repos yet.</p>}
         {repos.map((r) => (
@@ -477,22 +509,22 @@ function GitHubPanel(): React.JSX.Element {
       <div className="flex flex-wrap items-end gap-2 pt-2">
         <div className="min-w-40 flex-1">
           <Field label="Local path">
-            <input value={newPath} onChange={(e) => setNewPath(e.target.value)} placeholder="/home/you/code/repo" className={`${inputCls} font-mono text-xs`} />
+            <Input monospace value={newPath} onChange={(e) => setNewPath(e.target.value)} placeholder="/home/you/code/repo" />
           </Field>
         </div>
         <div className="w-44">
           <Field label="owner/name">
-            <input value={newRepo} onChange={(e) => setNewRepo(e.target.value)} placeholder="owner/name" className={`${inputCls} font-mono text-xs`} />
+            <Input monospace value={newRepo} onChange={(e) => setNewRepo(e.target.value)} placeholder="owner/name" />
           </Field>
         </div>
         <div className="min-w-40 flex-1">
           <Field label="Test command (optional)">
-            <input value={newTestCommand} onChange={(e) => setNewTestCommand(e.target.value)} placeholder="npm test" className={`${inputCls} font-mono text-xs`} />
+            <Input monospace value={newTestCommand} onChange={(e) => setNewTestCommand(e.target.value)} placeholder="npm test" />
           </Field>
         </div>
-        <button onClick={add} className="h-9 rounded-md bg-blue-500 px-4 text-sm font-medium text-white hover:bg-blue-400">
+        <Button onClick={add}>
           Add
-        </button>
+        </Button>
       </div>
       {msg && <p className="pt-2 text-xs text-amber-200">{msg}</p>}
     </div>
@@ -508,20 +540,13 @@ function GmailConnectBlock(): React.JSX.Element {
           Gmail {g.status ? (g.status.connected ? 'connected ✓' : 'not connected') : '…'}
         </span>
         {g.status && !g.status.connected && (
-          <button
-            onClick={() => void g.connect()}
-            disabled={g.connecting}
-            className="rounded-md bg-emerald-600 px-3 py-1.5 text-xs font-medium text-white disabled:opacity-50"
-          >
+          <Button variant="success" size="sm" onClick={() => void g.connect()} disabled={g.connecting}>
             {g.connecting ? 'Waiting…' : 'Connect Gmail'}
-          </button>
+          </Button>
         )}
-        <button
-          onClick={() => void g.refresh()}
-          className="rounded-md border border-neutral-700 px-3 py-1.5 text-xs text-neutral-300"
-        >
+        <Button variant="secondary" size="sm" onClick={() => void g.refresh()}>
           Refresh
-        </button>
+        </Button>
       </div>
       {g.status?.detail && <p className="pt-1 text-[11px] text-neutral-500">{g.status.detail}</p>}
       {g.message && <p className="pt-1 text-xs text-amber-200">{g.message}</p>}
@@ -542,11 +567,11 @@ function RoutinesPanel(): React.JSX.Element {
     if (res.ok) setItems(res.routines)
   }
   return (
-    <section className={cardCls}>
-      <h3 className="text-sm font-semibold text-neutral-100">Routines ({items.length})</h3>
-      <p className="pt-0.5 text-xs text-neutral-400">
+    <Card>
+      <CardTitle>Routines ({items.length})</CardTitle>
+      <CardSub>
         Type <span className="font-mono">@calendar @notion at 6:30pm summarize my tasks</span> — the agent runs it at that time.
-      </p>
+      </CardSub>
       <div className="space-y-1.5 pt-3">
         {items.length === 0 && <p className="text-xs text-neutral-500">No routines yet.</p>}
         {items.map((r) => (
@@ -566,7 +591,7 @@ function RoutinesPanel(): React.JSX.Element {
           </div>
         ))}
       </div>
-    </section>
+    </Card>
   )
 }
 
@@ -586,24 +611,23 @@ function ShortcutsPanel(): React.JSX.Element {
     }).catch(() => {})
   }, [])
   return (
-    <section className={cardCls}>
-      <h3 className="text-sm font-semibold text-neutral-100">Shortcuts</h3>
+    <Card>
+      <CardTitle>Shortcuts</CardTitle>
       {hint && <p className="pt-1 text-xs text-amber-300">{hint}</p>}
       <div className="flex items-end gap-2 pt-3">
         <div className="flex-1">
           <Field label="Global hotkey">
-            <input value={hotkey} onChange={(e) => setHotkey(e.target.value)} className={`${inputCls} font-mono text-xs`} />
+            <Input monospace value={hotkey} onChange={(e) => setHotkey(e.target.value)} />
           </Field>
         </div>
-        <button
+        <Button
           onClick={() => void window.palette.setHotkey(hotkey).then((r) => setMsg((r as { ok: boolean; error: string | null }).ok ? 'Hotkey registered.' : ((r as { error: string | null }).error ?? 'Registration failed.')))}
-          className="h-9 rounded-md bg-blue-500 px-4 text-sm font-medium text-white hover:bg-blue-400"
         >
           Save
-        </button>
+        </Button>
       </div>
       {msg && <p className="whitespace-pre-wrap pt-2 text-xs text-amber-200">{msg}</p>}
-    </section>
+    </Card>
   )
 }
 
@@ -613,8 +637,8 @@ function UsagePanel(): React.JSX.Element {
     window.palette.getBudget().then((v) => setBudget(v as BudgetState)).catch(() => {})
   }, [])
   return (
-    <section className={cardCls}>
-      <h3 className="text-sm font-semibold text-neutral-100">Usage</h3>
+    <Card>
+      <CardTitle>Usage</CardTitle>
       <p className="pt-1 text-xs leading-relaxed text-neutral-300">
         {budget ? (
           <>
@@ -629,7 +653,7 @@ function UsagePanel(): React.JSX.Element {
           'Loading…'
         )}
       </p>
-    </section>
+    </Card>
   )
 }
 

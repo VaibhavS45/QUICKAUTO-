@@ -107,7 +107,11 @@ export function showPalette(): void {
   const { x, y } = centerOnCursor()
   win.setPosition(x, y)
   // ponytail: key-window steal; win.focus() alone doesn't activate the app on macOS.
-  if (process.platform === 'darwin') app.focus({ steal: true })
+  // app.show() reverses the app.hide() done in hidePalette (background mode).
+  if (process.platform === 'darwin') {
+    app.show()
+    app.focus({ steal: true })
+  }
   win.show()
   win.focus()
   win.webContents.send('palette:opened')
@@ -116,6 +120,17 @@ export function showPalette(): void {
 export function hidePalette(restoreFocus: boolean): void {
   if (!win || win.isDestroyed()) return
   win.hide()
+  // Raycast behavior on macOS: deactivate the app so focus returns to the
+  // previous app. Only when no other window (calendar) is visible — app.hide()
+  // hides everything, so never call it while the calendar is open.
+  // ponytail: BrowserWindow count instead of importing calendar-window (would cycle).
+  if (process.platform === 'darwin') {
+    const others = BrowserWindow.getAllWindows().filter(
+      (w) => w !== win && !w.isDestroyed() && w.isVisible()
+    )
+    if (others.length === 0) app.hide()
+    return
+  }
   if (restoreFocus && process.platform === 'win32' && lastFocusedWindowId !== null) {
     const prev = BrowserWindow.fromId(lastFocusedWindowId)
     // Windows: restore focus to the previously active window on hide.

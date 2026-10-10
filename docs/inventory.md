@@ -177,3 +177,20 @@ provide the five shell settings surfaces. There is no Shortcuts tab.
 | Chat history store | **READY** | Persistent chat threads/history and validated `shell:chat-*` IPC power Home chat and the sidebar. |
 | Notifications | **READY** | `src/main/shell/notifications.ts` persists validated notifications in the `palette-notifications` electron-store, with namespaced IPC and a shell notification center. |
 | Today's schedule source | **READY** | `src/main/shell/schedule-service.ts` adapts persisted routines and recent agent runs to the schedule contracts; the shell shows today's schedule and recent tasks. |
+
+## U6: Automations host
+
+The shell discovers the Automations feature module from
+`src/renderer/features/*/feature.ts`; when absent, it renders the Schedule,
+Triggers, Webhooks, and Manage placeholder tabs. Feature modules receive
+`initialTemplate` and `focusId` from `templateId` and `focusId` route params,
+and may contribute header buttons through `headerActions`. The shell header
+itself only supplies the feature title.
+
+Home includes the three validated data-only templates in
+`src/shared/contracts/automation-templates.ts`: daily research/file/email,
+meeting reminders, and a GitHub repository watcher. The research template
+includes a separate file-changed email step. Requirement badges use existing
+connector/Gmail status and link to Connectors settings. Template selection
+deep-links to the Automations feature; the shell does not execute templates
+or provide a calendar window or route.

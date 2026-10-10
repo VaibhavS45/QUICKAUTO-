@@ -34,6 +34,8 @@ test('the app opens directly into the shell', async () => {
     await expect(shell).toHaveURL(/#app$/)
     await expect(shell.getByRole('heading', { name: 'What can I help with?' })).toBeVisible()
     await expect(shell.getByRole('button', { name: 'New chat' })).toBeVisible()
+    await expect(shell.getByRole('button', { name: /calendar/i })).toHaveCount(0)
+    await expect.poll(() => app.windows().length).toBe(1)
   } finally {
     await instance.close()
   }
@@ -53,6 +55,11 @@ test('shell navigation, shortcuts, and local account menu work', async () => {
 
     await shell.getByRole('button', { name: 'Automations' }).click()
     await expect(shell.getByText('Automations are coming soon.')).toBeVisible()
+    for (const tab of ['Schedule', 'Triggers', 'Webhooks', 'Manage']) {
+      await expect(shell.getByRole('tab', { name: tab })).toBeVisible()
+    }
+    await expect(shell.getByRole('button', { name: /calendar/i })).toHaveCount(0)
+    await expect.poll(() => app.windows().length).toBe(1)
     await shell.locator('body').press('Control+n')
     await expect(shell.getByRole('heading', { name: 'What can I help with?' })).toBeVisible()
 
@@ -65,6 +72,23 @@ test('shell navigation, shortcuts, and local account menu work', async () => {
     const accountMenu = shell.getByRole('menu')
     await expect(accountMenu.getByRole('menuitem', { name: 'Account settings' })).toBeVisible()
     await expect(accountMenu.getByText('Sign out')).toHaveCount(0)
+  } finally {
+    await instance.close()
+  }
+})
+
+test('home templates navigate to the automation feature without opening another window', async () => {
+  const instance = await launchApp()
+  const { app } = instance
+  try {
+    await expect.poll(() => app.windows().length, { timeout: 30_000 }).toBe(1)
+    const shell = app.windows()[0]!
+    await expect(shell.getByRole('region', { name: 'Automation templates' })).toBeVisible()
+    await shell.getByRole('button', { name: /Repo watcher/ }).click()
+    await expect(shell.getByRole('heading', { name: 'Automations' })).toBeVisible()
+    await expect(shell.getByRole('tab', { name: 'Schedule' })).toBeVisible()
+    await expect.poll(() => app.windows().length).toBe(1)
+    await expect(shell.getByRole('button', { name: /calendar/i })).toHaveCount(0)
   } finally {
     await instance.close()
   }

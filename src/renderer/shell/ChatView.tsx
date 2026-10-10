@@ -1,6 +1,7 @@
 import { useEffect, useRef } from 'react'
 import type { ChatMessage } from '../../shared/chat.js'
 import type { ChatRunState } from './chat-state.js'
+import type { AutomationTemplate } from '../../shared/contracts/automation-templates.js'
 import { ApprovalCard } from './ApprovalCard.js'
 import { ChatComposer } from './ChatComposer.js'
 
@@ -12,7 +13,9 @@ interface ChatViewProps {
   onApprove(approvalId: string, approved: boolean): void
   onStop(): void
   onOpenSettings(): void
+  onOpenConnections(): void
   onOpenAutomations(): void
+  onSelectTemplate(template: AutomationTemplate): void
 }
 
 function MarkdownAnswer({ text }: { text: string }): React.JSX.Element {
@@ -39,7 +42,9 @@ export function ChatView({
   onApprove,
   onStop,
   onOpenSettings,
-  onOpenAutomations
+  onOpenConnections,
+  onOpenAutomations,
+  onSelectTemplate
 }: ChatViewProps): React.JSX.Element {
   const showProviderLink = run?.phase === 'error' && /api key|provider/i.test(run.error ?? '')
   const messageList = useRef<HTMLDivElement>(null)
@@ -96,7 +101,9 @@ export function ChatView({
           busy={busy}
           onSend={onSend}
           onOpenSettings={onOpenSettings}
+          onOpenConnections={onOpenConnections}
           onOpenAutomations={onOpenAutomations}
+          onSelectTemplate={onSelectTemplate}
         />
       </div>
     </div>

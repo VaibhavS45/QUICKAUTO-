@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import {
+  AUTOMATION_TEMPLATES,
   AutomationDefaultsSchema,
   AutomationTemplateSchema
 } from '../../src/shared/contracts/automation-templates.js'
@@ -82,5 +83,24 @@ describe('shell shared schemas', () => {
       missedRunPolicy: 'skip',
       notifyOnComplete: true
     }).success).toBe(false)
+  })
+
+  it('provides the three valid built-in automation templates', () => {
+    expect(AUTOMATION_TEMPLATES.map(({ id }) => id)).toEqual([
+      'daily-research-file-email',
+      'meeting-reminder',
+      'repo-watcher'
+    ])
+    for (const template of AUTOMATION_TEMPLATES) {
+      expect(AutomationTemplateSchema.safeParse(template).success).toBe(true)
+    }
+    expect(AUTOMATION_TEMPLATES[0]?.trigger).toEqual({ kind: 'schedule', at: '20:00', repeat: 'daily' })
+    expect(AUTOMATION_TEMPLATES[0]?.steps?.[1]?.trigger).toEqual({
+      kind: 'file-changed',
+      path: '{{filePath}}'
+    })
+    expect(AUTOMATION_TEMPLATES[0]?.steps?.[1]?.toolIds).toEqual(['gmail'])
+    expect(AUTOMATION_TEMPLATES[1]?.trigger).toEqual({ kind: 'before-event', minutesBefore: 10 })
+    expect(AUTOMATION_TEMPLATES[2]?.trigger).toEqual({ kind: 'schedule', at: '18:00', repeat: 'daily' })
   })
 })

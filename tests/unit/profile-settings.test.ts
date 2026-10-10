@@ -39,7 +39,7 @@ describe('ProfileSettingsService', () => {
 describe('filterSettingsNav', () => {
   it('returns all on empty query, filters case-insensitively', () => {
     expect(filterSettingsNav('').length).toBe(SETTINGS_NAV.length)
-    expect(filterSettingsNav('gen').map((n) => n.id)).toEqual(['general'])
+    expect(filterSettingsNav('gen').map((n) => n.id)).toEqual(['general', 'agents'])
     expect(filterSettingsNav('MODEL').map((n) => n.id)).toEqual(['provider'])
     expect(filterSettingsNav('shader').map((n) => n.id)).toEqual(['appearance'])
     expect(filterSettingsNav('zzz')).toEqual([])

@@ -6,7 +6,8 @@ export const TOOL_IDS = [
   'sheets',
   'opencode',
   'github',
-  'files'
+  'files',
+  'mcp'
 ] as const
 
 export type ActiveToolId = (typeof TOOL_IDS)[number]
@@ -26,7 +27,8 @@ export const TOOL_META: Record<ActiveToolId, { label: string; hint: string }> = 
   sheets: { label: '@sheets', hint: 'Sheets via Composio (M3) — alias @sheet' },
   opencode: { label: '@opencode', hint: 'Coding agent (M5)' },
   github: { label: '@github', hint: 'PR reviews via local gh CLI (read-only)' },
-  files: { label: '@files', hint: 'Local files in granted folders (M2)' }
+  files: { label: '@files', hint: 'Local files in granted folders (M2)' },
+  mcp: { label: '@mcp', hint: 'Tools from MCP servers started in Settings → MCP' }
 }
 
 /** Extract @mentions from free text, resolving aliases.

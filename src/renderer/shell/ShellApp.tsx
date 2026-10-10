@@ -9,6 +9,7 @@ import { ChatComposer } from './ChatComposer.js'
 import { ChatView } from './ChatView.js'
 import { createChatRunState, reduceChatRun, resolveChatApproval, type ChatRunState } from './chat-state.js'
 import { getFeatureRegistry } from './registry.js'
+import PluginsPanel from '../settings/tabs/PluginsPanel.js'
 import { PRIMARY_NAV, SIDEBAR_SECTIONS, ShellRouter } from './nav.js'
 import './shell.css'
 
@@ -610,7 +611,7 @@ export default function ShellApp(): React.JSX.Element {
             {activeFeature ? (
               <activeFeature.Component shell={shellApi} initialTemplate={route.params['template'] as FeatureProps['initialTemplate']} />
             ) : route.view === 'plugins' ? (
-              <p className="shell-empty-state">Plugins are coming soon.</p>
+              <PluginsPanel />
             ) : activeChatId ? (
               activeThread ? (
                 <>

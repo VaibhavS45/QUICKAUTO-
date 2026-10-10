@@ -270,11 +270,7 @@ export class BudgetGuard {
     this.runCalls.delete(runId)
   }
 
-  /** For tests/debug: cache size. */
-  cacheSize(): number {
-    return this.cache.size
-  }
-
+  /** For tests/debug: clear the read cache. */
   clearCache(): void {
     this.cache.clear()
   }

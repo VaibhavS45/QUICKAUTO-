@@ -17,7 +17,6 @@ export function useGmailConnect(): {
   message: string | null
   refresh: () => Promise<GmailConnectionState | null>
   connect: () => Promise<void>
-  stopPolling: () => void
 } {
   const [status, setStatus] = useState<GmailConnectionState | null>(null)
   const [connecting, setConnecting] = useState(false)
@@ -88,5 +87,5 @@ export function useGmailConnect(): {
     return () => stopPolling()
   }, [refresh, stopPolling])
 
-  return { status, connecting, message, refresh, connect, stopPolling }
+  return { status, connecting, message, refresh, connect }
 }

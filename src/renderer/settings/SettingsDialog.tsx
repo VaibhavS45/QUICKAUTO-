@@ -1,32 +1,15 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { useGmailConnect } from '../hooks/useGmailConnect.js'
+import { ShaderBackdrop } from '../components/ShaderBackdrop.js'
 import { Badge } from '../components/ui/badge.js'
 import { Button } from '../components/ui/button.js'
 import { Card, CardSub, CardTitle, Hint } from '../components/ui/card.js'
 import { Input, Select, Textarea } from '../components/ui/input.js'
+import { Switch } from '../components/ui/switch.js'
+import { useGmailConnect } from '../hooks/useGmailConnect.js'
+import { filterSettingsNav, groupedSettingsNav, type SettingsTabId } from './nav.js'
 
-export type SettingsTabId = 'general' | 'model' | 'connections' | 'routines' | 'shortcuts' | 'usage'
-
-export interface SettingsNavItem {
-  id: SettingsTabId
-  label: string
-}
-
-export const SETTINGS_NAV: SettingsNavItem[] = [
-  { id: 'general', label: 'General' },
-  { id: 'model', label: 'Model' },
-  { id: 'connections', label: 'Connections' },
-  { id: 'routines', label: 'Routines' },
-  { id: 'shortcuts', label: 'Shortcuts' },
-  { id: 'usage', label: 'Usage' }
-]
-
-/** Case-insensitive sidebar filter. Pure for unit testing. */
-export function filterSettingsNav(query: string): SettingsNavItem[] {
-  const q = query.trim().toLowerCase()
-  if (!q) return SETTINGS_NAV
-  return SETTINGS_NAV.filter((n) => n.label.toLowerCase().includes(q))
-}
+export { SETTINGS_NAV, filterSettingsNav, groupedSettingsNav } from './nav.js'
+export type { SettingsNavItem, SettingsTabId } from './nav.js'
 
 interface Profile {
   name: string
@@ -221,6 +204,42 @@ function GeneralPanel(): React.JSX.Element {
         </button>
       </section>
     </div>
+  )
+}
+
+function AppearancePanel({
+  shader,
+  onShader
+}: {
+  shader: boolean
+  onShader: (next: boolean) => void
+}): React.JSX.Element {
+  const [status, setStatus] = useState('')
+
+  return (
+    <section className="flex items-start justify-between gap-4">
+      <div>
+        <h3 className="text-sm font-semibold text-neutral-100">Animated background</h3>
+        <p className="max-w-md pt-1 text-xs leading-relaxed text-neutral-400">
+          Slow-moving colour wash behind the command bar and this sidebar. Turn off for a flat, static background and
+          less GPU use on battery. {status}
+        </p>
+      </div>
+      <Switch
+        checked={shader}
+        label="Animated background"
+        onCheckedChange={(next) => {
+          onShader(next)
+          window.palette
+            .setAppBehavior({ shader: next })
+            .then((r) => {
+              const res = r as unknown as { ok: boolean; error?: string }
+              setStatus(res.ok ? 'Saved.' : (res.error ?? 'Save failed.'))
+            })
+            .catch(() => setStatus('Save failed.'))
+        }}
+      />
+    </section>
   )
 }
 
@@ -657,38 +676,105 @@ function UsagePanel(): React.JSX.Element {
   )
 }
 
-/** shadcn-style settings dialog: sidebar + content, dark, search filter, Esc/backdrop close. */
-export default function SettingsDialog({ open, onClose }: { open: boolean; onClose: () => void }): React.JSX.Element | null {
+const TAB_TITLES: Record<SettingsTabId, string> = {
+  general: 'General',
+  appearance: 'Appearance',
+  provider: 'Provider',
+  connectors: 'Connectors',
+  routines: 'Routines',
+  shortcuts: 'Shortcuts',
+  usage: 'Usage'
+}
+
+function NavGlyph({ id }: { id: SettingsTabId }): React.JSX.Element {
+  const common = 'h-4 w-4 shrink-0'
+  if (id === 'general') {
+    return (
+      <svg className={common} viewBox="0 0 16 16" fill="none" aria-hidden>
+        <circle cx="8" cy="6" r="2.2" stroke="currentColor" strokeWidth="1.3" />
+        <path d="M3.5 13c.8-2.2 2.4-3.3 4.5-3.3S11.7 10.8 12.5 13" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" />
+      </svg>
+    )
+  }
+  if (id === 'appearance') {
+    return (
+      <svg className={common} viewBox="0 0 16 16" fill="none" aria-hidden>
+        <circle cx="8" cy="8" r="5" stroke="currentColor" strokeWidth="1.3" />
+        <path d="M8 3v10A5 5 0 0 0 8 3Z" fill="currentColor" />
+      </svg>
+    )
+  }
+  if (id === 'provider') {
+    return (
+      <svg className={common} viewBox="0 0 16 16" fill="none" aria-hidden>
+        <path d="M4 11.5 8 3.5l4 8" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round" />
+        <path d="M5.5 8.5h5" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" />
+      </svg>
+    )
+  }
+  if (id === 'connectors') {
+    return (
+      <svg className={common} viewBox="0 0 16 16" fill="none" aria-hidden>
+        <path d="M6.2 9.8 4.4 11.6a2 2 0 1 1-2.8-2.8l1.8-1.8" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" />
+        <path d="M9.8 6.2 11.6 4.4a2 2 0 1 1 2.8 2.8L12.6 9" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" />
+        <path d="M6.5 9.5l3-3" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" />
+      </svg>
+    )
+  }
+  if (id === 'routines') {
+    return (
+      <svg className={common} viewBox="0 0 16 16" fill="none" aria-hidden>
+        <rect x="2.5" y="3.5" width="11" height="10" rx="1.5" stroke="currentColor" strokeWidth="1.3" />
+        <path d="M2.5 6.5h11M6 2.5v2M10 2.5v2" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" />
+      </svg>
+    )
+  }
+  if (id === 'shortcuts') {
+    return (
+      <svg className={common} viewBox="0 0 16 16" fill="none" aria-hidden>
+        <rect x="2.5" y="9.5" width="4" height="3.5" rx="0.6" stroke="currentColor" strokeWidth="1.2" />
+        <rect x="7.5" y="9.5" width="6" height="3.5" rx="0.6" stroke="currentColor" strokeWidth="1.2" />
+        <rect x="4.5" y="4.5" width="7" height="3.5" rx="0.6" stroke="currentColor" strokeWidth="1.2" />
+      </svg>
+    )
+  }
+  return (
+    <svg className={common} viewBox="0 0 16 16" fill="none" aria-hidden>
+      <path d="M3 12.5 6.2 6.5 8 10l1.6-2.8L13 12.5" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  )
+}
+
+/** Full-window settings: Cursor-like grouped sidebar + content. */
+export default function SettingsApp(): React.JSX.Element {
   const [tab, setTab] = useState<SettingsTabId>('general')
   const [query, setQuery] = useState('')
+  const [shader, setShader] = useState(true)
   const items = useMemo(() => filterSettingsNav(query), [query])
+  const groups = useMemo(() => groupedSettingsNav(items), [items])
 
   useEffect(() => {
-    if (!open) return
-    setQuery('')
-    setTab('general')
+    window.palette
+      .getAppBehavior()
+      .then((r) => {
+        const res = r as unknown as { ok: boolean; shader?: boolean }
+        if (res.ok && typeof res.shader === 'boolean') setShader(res.shader)
+      })
+      .catch(() => {})
     function onKey(e: KeyboardEvent): void {
-      if (e.key === 'Escape') onClose()
+      if (e.key === 'Escape') window.palette.closeSettings()
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
-  }, [open, onClose])
-
-  if (!open) return null
-  const titles: Record<SettingsTabId, string> = {
-    general: 'General',
-    model: 'Model',
-    connections: 'Connections',
-    routines: 'Routines',
-    shortcuts: 'Shortcuts',
-    usage: 'Usage'
-  }
+  }, [])
 
   return (
-    <div role="dialog" aria-modal="true" aria-label="Settings" className="absolute inset-0 z-50 flex items-center justify-center bg-black/70 p-3" onMouseDown={(e) => { if (e.target === e.currentTarget) onClose() }}>
-      <div className="flex max-h-[560px] w-full max-w-[680px] overflow-hidden rounded-xl border border-neutral-700 bg-neutral-950 shadow-2xl">
-        <aside className="flex w-48 shrink-0 flex-col border-r border-neutral-800 bg-neutral-950 p-3">
-          <h2 className="px-1 pb-2 text-sm font-semibold text-neutral-100">Settings</h2>
+    <div className="relative flex h-screen bg-[#0c0c0e] text-neutral-200" role="dialog" aria-label="Settings">
+      <aside className="relative flex w-[240px] shrink-0 flex-col border-r border-white/5 bg-[#141414]">
+        <ShaderBackdrop enabled={shader} />
+        <div className="window-titlebar relative z-10 shrink-0 h-11" />
+        <div className="relative z-10 px-3 pb-2">
+          <h2 className="px-1 pb-2 text-[13px] font-semibold text-neutral-100">Settings</h2>
           <div className="relative">
             <span className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-xs text-neutral-500">⌕</span>
             <input
@@ -696,38 +782,56 @@ export default function SettingsDialog({ open, onClose }: { open: boolean; onClo
               onChange={(e) => setQuery(e.target.value)}
               placeholder="Search"
               aria-label="Search settings"
-              className="h-8 w-full rounded-md border border-neutral-700 bg-neutral-900 pl-7 pr-2 text-xs text-neutral-100 outline-none placeholder:text-neutral-500 focus:border-blue-500"
+              className="h-8 w-full rounded-md border border-white/8 bg-black/30 pl-7 pr-2 text-xs text-neutral-100 outline-none placeholder:text-neutral-500 focus:border-white/20"
             />
           </div>
-          <nav className="space-y-0.5 overflow-y-auto pt-2">
-            {items.map((n) => (
-              <button
-                key={n.id}
-                onClick={() => setTab(n.id)}
-                className={`flex w-full items-center gap-2 rounded-md px-2.5 py-1.5 text-left text-[13px] ${tab === n.id ? 'bg-neutral-800 font-medium text-neutral-100' : 'text-neutral-400 hover:bg-neutral-900 hover:text-neutral-200'}`}
-              >
-                <span className={`h-1.5 w-1.5 rounded-full ${tab === n.id ? 'bg-blue-400' : 'bg-neutral-700'}`} />
-                {n.label}
-              </button>
-            ))}
-            {items.length === 0 && <p className="px-2 py-2 text-xs text-neutral-600">No matches.</p>}
-          </nav>
-        </aside>
-        <div className="flex min-w-0 flex-1 flex-col">
-          <div className="flex items-center justify-between border-b border-neutral-800 px-4 py-2.5">
-            <span className="text-sm font-semibold text-neutral-100">{titles[tab]}</span>
-            <button onClick={onClose} aria-label="Close settings" className="rounded-md px-2 py-0.5 text-neutral-400 hover:bg-neutral-800 hover:text-white">
-              ✕
-            </button>
-          </div>
-          <div className="min-h-0 flex-1 overflow-y-auto bg-neutral-950 p-4">
-            {tab === 'general' && <GeneralPanel />}
-            {tab === 'model' && <ModelPanel />}
-            {tab === 'connections' && <ConnectionsPanel />}
-            {tab === 'routines' && <RoutinesPanel />}
-            {tab === 'shortcuts' && <ShortcutsPanel />}
-            {tab === 'usage' && <UsagePanel />}
-          </div>
+        </div>
+        <nav className="relative z-10 min-h-0 flex-1 space-y-3 overflow-y-auto px-2 pb-3">
+          {groups.map((g) => (
+            <div key={g.id}>
+              <div className="px-2 pb-1 text-[10px] font-medium uppercase tracking-[0.14em] text-neutral-500">
+                {g.label}
+              </div>
+              <div className="space-y-0.5">
+                {g.items.map((n) => (
+                  <button
+                    key={n.id}
+                    onClick={() => setTab(n.id)}
+                    className={`flex w-full items-center gap-2 rounded-md px-2 py-[6px] text-left text-[13px] ${
+                      tab === n.id
+                        ? 'bg-white/8 font-medium text-neutral-50'
+                        : 'text-neutral-400 hover:bg-white/5 hover:text-neutral-200'
+                    }`}
+                  >
+                    <NavGlyph id={n.id} />
+                    {n.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+          ))}
+          {items.length === 0 && <p className="px-2 py-2 text-xs text-neutral-600">No matches.</p>}
+        </nav>
+      </aside>
+      <div className="flex min-w-0 flex-1 flex-col bg-[#0c0c0e]">
+        <div className="window-titlebar flex h-11 shrink-0 items-center justify-between border-b border-white/5 px-5">
+          <span className="text-[13px] font-medium text-neutral-200">{TAB_TITLES[tab]}</span>
+          <button
+            onClick={() => window.palette.closeSettings()}
+            aria-label="Close settings"
+            className="rounded-md px-2 py-0.5 text-neutral-500 hover:bg-white/8 hover:text-white"
+          >
+            ✕
+          </button>
+        </div>
+        <div className="min-h-0 flex-1 overflow-y-auto p-6">
+          {tab === 'general' && <GeneralPanel />}
+          {tab === 'appearance' && <AppearancePanel shader={shader} onShader={setShader} />}
+          {tab === 'provider' && <ModelPanel />}
+          {tab === 'connectors' && <ConnectionsPanel />}
+          {tab === 'routines' && <RoutinesPanel />}
+          {tab === 'shortcuts' && <ShortcutsPanel />}
+          {tab === 'usage' && <UsagePanel />}
         </div>
       </div>
     </div>

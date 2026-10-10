@@ -575,9 +575,4 @@ export class ComposioConnectorProvider implements ConnectorProvider {
       return { ok: false, error: err instanceof Error ? err.message : String(err) }
     }
   }
-
-  /** Test hook: clear the status cache. */
-  clearStatusCache(): void {
-    this.statusCache = null
-  }
 }

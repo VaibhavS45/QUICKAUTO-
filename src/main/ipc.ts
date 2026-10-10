@@ -7,7 +7,7 @@ import {
 } from '../shared/agent.js'
 import { ModelSettingsSchema } from './settings/model-settings.js'
 import { ProfileSettingsSchema } from './agent/profile-settings.js'
-import { AppBehaviorSchema } from './agent/app-prefs.js'
+import { AppBehaviorPatchSchema, AppBehaviorSchema } from './agent/app-prefs.js'
 
 /**
  * Typed IPC contract. Renderers may only invoke these channels
@@ -46,12 +46,12 @@ export const IpcChannels = {
   routineCreate: 'routine:create',
   routineRemove: 'routine:remove',
   routineToggle: 'routine:toggle',
-  getAwake: 'awake:get',
-  setAwake: 'awake:set',
   getProfile: 'settings:get-profile',
   setProfile: 'settings:set-profile',
   getAppBehavior: 'app:get-behavior',
   setAppBehavior: 'app:set-behavior',
+  settingsShow: 'settings:show',
+  settingsHide: 'settings:hide',
   /** GitHub CLI status for @github (local gh; token never crosses IPC). */
   githubStatus: 'github:status'
 } as const
@@ -100,11 +100,15 @@ export const RoutineToggleSchema = z.object({
   enabled: z.boolean()
 })
 
-export const AwakeSetSchema = z.object({
-  enabled: z.boolean()
-})
-
-export { AgentApprovalResponseSchema, AgentRunRequestSchema, PaletteResizeSchema, ModelSettingsSchema, ProfileSettingsSchema, AppBehaviorSchema }
+export {
+  AgentApprovalResponseSchema,
+  AgentRunRequestSchema,
+  PaletteResizeSchema,
+  ModelSettingsSchema,
+  ProfileSettingsSchema,
+  AppBehaviorSchema,
+  AppBehaviorPatchSchema
+}
 
 export interface PlatformInfo {
   platform: NodeJS.Platform

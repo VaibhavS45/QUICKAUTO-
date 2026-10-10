@@ -17,10 +17,6 @@ export function registerConnectorProvider(p: ConnectorProvider): void {
   if (!providers.some((x) => x.id === p.id)) providers.push(p)
 }
 
-export function registeredProviders(): string[] {
-  return providers.map((p) => p.id)
-}
-
 export async function getToolsForMentions(toolIds: ToolId[]): Promise<ToolSet> {
   const builtin = createBuiltinTools()
   const tools: ToolSet = { ...(builtin as unknown as ToolSet) }

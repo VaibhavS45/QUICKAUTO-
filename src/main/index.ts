@@ -10,6 +10,7 @@ import {
   resizePaletteToContent
 } from './palette-window.js'
 import { openCalendar, getCalendarWindow, takePendingDraft } from './calendar-window.js'
+import { openSettings, hideSettings } from './agent/settings-window.js'
 import {
   IpcChannels,
   PaletteSubmitSchema,
@@ -26,7 +27,6 @@ import {
   PaletteResizeSchema,
   ModelSettingsSchema,
   ProfileSettingsSchema,
-  AppBehaviorSchema,
   ConnectionToolSchema,
   type PlatformInfo
 } from './ipc.js'
@@ -58,14 +58,25 @@ import {
 } from './agent/scheduler.js'
 import { parseMentionedTools } from '../shared/types.js'
 import { wantsToggle, shouldAutoOpenCalendar } from './agent/background-mode.js'
-import { resolveAppBehavior } from './agent/app-prefs.js'
+import { applyAppBehaviorPatch, resolveAppBehavior, type AppBehavior } from './agent/app-prefs.js'
+import { installStdioGuard } from './agent/stdio-guard.js'
+
+// Launched without a console, stdio writes hit EPIPE and kill main — swallow it first.
+installStdioGuard()
 
 const gotLock = app.requestSingleInstanceLock()
 if (!gotLock) app.quit()
 
-const store = new Store<{ hotkey: string; openAtLogin: boolean; keepBackground: boolean }>({
-  defaults: { hotkey: defaultHotkey(process.platform), openAtLogin: false, keepBackground: true }
+const store = new Store<{ hotkey: string; openAtLogin: boolean; keepBackground: boolean; shader: boolean }>({
+  defaults: { hotkey: defaultHotkey(process.platform), openAtLogin: false, keepBackground: true, shader: true }
 })
+
+function storedAppBehavior(): AppBehavior {
+  return resolveAppBehavior({
+    keepBackground: store.get('keepBackground', true),
+    shader: store.get('shader', true)
+  })
+}
 
 class ElectronSettingsStore implements SettingsStore {
   get(key: string): unknown {
@@ -300,10 +311,7 @@ function createTray(): void {
     { label: 'Toggle command bar', click: () => togglePalette() },
     {
       label: 'Settings',
-      click: () => {
-        showPalette()
-        getPaletteWindow()?.webContents.send('settings:open')
-      }
+      click: () => openSettings()
     },
     { type: 'separator' },
     {
@@ -370,14 +378,18 @@ function wireIpc(): void {
 
   ipcMain.handle(IpcChannels.getProfile, () => profileService.get())
 
-  ipcMain.handle(IpcChannels.getAppBehavior, () => ({ ok: true as const, ...resolveAppBehavior({ keepBackground: store.get('keepBackground', true) }) }))
+  ipcMain.handle(IpcChannels.getAppBehavior, () => ({ ok: true as const, ...storedAppBehavior() }))
 
   ipcMain.handle(IpcChannels.setAppBehavior, (_event, payload: unknown) => {
-    const parsed = AppBehaviorSchema.safeParse(payload)
-    if (!parsed.success) return { ok: false as const, error: 'Invalid app behavior.' }
-    store.set('keepBackground', parsed.data.keepBackground)
-    return { ok: true as const, ...parsed.data }
+    const next = applyAppBehaviorPatch(storedAppBehavior(), payload)
+    if (!next) return { ok: false as const, error: 'Invalid app behavior.' }
+    store.set('keepBackground', next.keepBackground)
+    store.set('shader', next.shader)
+    return { ok: true as const, ...next }
   })
+
+  ipcMain.on(IpcChannels.settingsShow, () => openSettings())
+  ipcMain.on(IpcChannels.settingsHide, () => hideSettings())
 
   ipcMain.handle(IpcChannels.setProfile, (_event, payload: unknown) => {
     const parsed = ProfileSettingsSchema.safeParse(payload)
@@ -718,7 +730,7 @@ function wireIpc(): void {
     // Calendar-first: closing the calendar drops back to the command bar +
     // tray (macOS also hides the Dock icon). Unless the user opted out in
     // Settings, in which case the app quits instead.
-    if (!resolveAppBehavior({ keepBackground: store.get('keepBackground', true) }).keepBackground) {
+    if (!storedAppBehavior().keepBackground) {
       app.quit()
       return
     }
@@ -776,7 +788,7 @@ app.whenReady().then(() => void onReady())
 // Tray keeps the app alive after windows close so schedules can fire —
 // unless the user turned off "keep in background" in Settings.
 app.on('window-all-closed', () => {
-  if (!resolveAppBehavior({ keepBackground: store.get('keepBackground', true) }).keepBackground) app.quit()
+  if (!storedAppBehavior().keepBackground) app.quit()
   // Otherwise do not quit — tray keeps the app alive.
 })
 

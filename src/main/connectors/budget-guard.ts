@@ -12,7 +12,7 @@
  * hard-clamped to never exceed 19,000. Scheduled runs are limited to 60% of it.
  */
 
-export type RunSource = 'palette' | 'scheduled'
+export type RunSource = 'palette' | 'chat' | 'scheduled'
 
 export interface BudgetUsageState {
   /** "YYYY-MM" bucket for the current period, given the reset day. */
@@ -65,7 +65,7 @@ export interface PreflightResult {
   ok: boolean
   /** Machine-readable reason when refused. */
   reason?: string
-  /** Human message for the palette. */
+  /** Human-readable message for the caller. */
   message?: string
   warning?: 'none' | 'warn70' | 'warn90' | 'exceeded'
 }

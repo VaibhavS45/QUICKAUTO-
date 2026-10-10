@@ -1,8 +1,8 @@
-import type { PaletteApi } from '../preload/index.js'
+import type { AppApi } from '../preload/index.js'
 
 declare global {
   interface Window {
-    palette: PaletteApi
+    app: AppApi
   }
 }
 

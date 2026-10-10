@@ -1,6 +1,6 @@
 import { app, BrowserWindow } from 'electron'
 import { join } from 'path'
-import { preloadPath } from '../palette-window.js'
+import { preloadPath } from '../preload-path.js'
 import {
   SETTINGS_HEIGHT,
   SETTINGS_MIN_HEIGHT,

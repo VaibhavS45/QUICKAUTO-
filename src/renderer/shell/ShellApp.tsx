@@ -1,8 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import type { FeatureProps, ShellApi } from '../contracts/feature.js'
 import { getFeatureRegistry } from './registry.js'
-import { createShellRouter } from './router.js'
-import { SIDEBAR_NAV_ITEMS, SIDEBAR_SECTIONS } from './sidebar-model.js'
+import { PRIMARY_NAV, SIDEBAR_SECTIONS, ShellRouter } from './nav.js'
 import './shell.css'
 
 interface LocalProfile {
@@ -13,7 +12,7 @@ interface LocalProfile {
 function Icon({ name }: { name: string }): React.JSX.Element {
   const paths: Record<string, React.ReactNode> = {
     plus: <path d="M12 5v14M5 12h14" />,
-    calendar: <><rect x="3" y="5" width="18" height="16" rx="2" /><path d="M16 3v4M8 3v4M3 10h18" /></>,
+    automation: <><rect x="3" y="5" width="18" height="16" rx="2" /><path d="M16 3v4M8 3v4M3 10h18" /></>,
     puzzle: <path d="M5 3h4a2 2 0 1 1 4 0h6v6a2 2 0 1 0 0 4v8h-6a2 2 0 1 1-4 0H3v-6a2 2 0 1 0 0-4V3h2Z" />,
     bell: <><path d="M18 8a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9M10 21h4" /></>,
     settings: <><circle cx="12" cy="12" r="3" /><path d="m19.4 15 .1.1 1.4 1.1-1.4 2.4-1.7-.7a8 8 0 0 1-1.5.9l-.3 1.8h-2.8l-.3-1.8a8 8 0 0 1-1.5-.9l-1.7.7-1.4-2.4 1.4-1.1a8 8 0 0 1 0-1.8l-1.4-1.1 1.4-2.4 1.7.7a8 8 0 0 1 1.5-.9l.3-1.8h2.8l.3 1.8a8 8 0 0 1 1.5.9l1.7-.7 1.4 2.4-1.4 1.1a8 8 0 0 1 0 1.8Z" /></>,
@@ -31,8 +30,8 @@ function displayName(profile: LocalProfile): string {
 }
 
 export default function ShellApp(): React.JSX.Element {
-  const router = useMemo(() => createShellRouter(), [])
-  const [route, setRoute] = useState(router.getRoute())
+  const router = useMemo(() => new ShellRouter(), [])
+  const [route, setRoute] = useState(router.current)
   const [collapsed, setCollapsed] = useState(false)
   const [profile, setProfile] = useState<LocalProfile>({ name: '', email: '' })
   const [accountMenuOpen, setAccountMenuOpen] = useState(false)
@@ -41,7 +40,7 @@ export default function ShellApp(): React.JSX.Element {
 
   useEffect(() => {
     let active = true
-    window.palette.getProfile().then((next) => {
+    window.app.getProfile().then((next) => {
       if (active) setProfile({ name: next.name, email: next.email })
     }).catch((error: unknown) => {
       console.error('Could not load local profile.', error)
@@ -50,6 +49,7 @@ export default function ShellApp(): React.JSX.Element {
   }, [])
 
   useEffect(() => {
+    const unsubscribe = router.subscribe(setRoute)
     const onKeyDown = (event: KeyboardEvent): void => {
       if (!event.metaKey && !event.ctrlKey) return
       if (event.key.toLowerCase() === 'n') {
@@ -60,23 +60,26 @@ export default function ShellApp(): React.JSX.Element {
         setCollapsed((value) => !value)
       } else if (event.key === ',') {
         event.preventDefault()
-        window.palette.openSettingsWindow()
+        window.app.openSettingsWindow()
       }
     }
     window.addEventListener('keydown', onKeyDown)
-    return () => window.removeEventListener('keydown', onKeyDown)
+    return () => {
+      unsubscribe()
+      window.removeEventListener('keydown', onKeyDown)
+    }
   }, [router])
 
   function navigate(view: string, params: Record<string, unknown> = {}): void {
-    setRoute(router.navigate(view, params))
+    router.navigate(view, params)
     setAccountMenuOpen(false)
   }
 
   const shellApi: ShellApi = {
     navigate,
-    openCalendarWindow: () => window.palette.openCalendarWindow(),
-    openSettings: (tab) => window.palette.openSettingsWindow(tab),
-    notify: (notification) => window.dispatchEvent(new CustomEvent('palette:notification', { detail: notification }))
+    openCalendarWindow: () => {},
+    openSettings: (tab) => window.app.openSettingsWindow(tab),
+    notify: (notification) => window.dispatchEvent(new CustomEvent('app:notification', { detail: notification }))
   }
   const title = activeFeature?.title ?? (route.view === 'plugins' ? 'Plugins' : 'New chat')
   const initials = displayName(profile).split(/\s+/).slice(0, 2).map((part) => part[0]?.toUpperCase()).join('')
@@ -89,7 +92,7 @@ export default function ShellApp(): React.JSX.Element {
       <div className="shell-workspace">
         <aside className="shell-sidebar" aria-label="Main navigation">
           <nav className="shell-primary-nav">
-            {SIDEBAR_NAV_ITEMS.map((item) => (
+            {PRIMARY_NAV.map((item) => (
               <button
                 key={item.id}
                 type="button"
@@ -98,7 +101,7 @@ export default function ShellApp(): React.JSX.Element {
                 title={collapsed ? item.label : undefined}
                 onClick={() => navigate(item.view)}
               >
-                <Icon name={item.id === 'home' ? 'plus' : item.id === 'plugins' ? 'puzzle' : 'calendar'} />
+                <Icon name={item.id === 'home' ? 'plus' : item.id === 'plugins' ? 'puzzle' : 'automation'} />
                 <span>{item.label}</span>
               </button>
             ))}
@@ -128,7 +131,7 @@ export default function ShellApp(): React.JSX.Element {
                   type="button"
                   role="menuitem"
                   onClick={() => {
-                    window.palette.openSettingsWindow('account')
+                    window.app.openSettingsWindow('account')
                     setAccountMenuOpen(false)
                   }}
                 >
@@ -145,7 +148,7 @@ export default function ShellApp(): React.JSX.Element {
                 className="shell-icon-button"
                 aria-label="Settings"
                 title="Settings (Ctrl/Cmd+,)"
-                onClick={() => window.palette.openSettingsWindow()}
+                onClick={() => window.app.openSettingsWindow()}
               >
                 <Icon name="settings" />
               </button>

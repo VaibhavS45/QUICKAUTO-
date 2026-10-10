@@ -3,6 +3,7 @@ import { mkdir, readFile, writeFile } from 'node:fs/promises'
 import { homedir } from 'node:os'
 import path from 'node:path'
 import { z } from 'zod'
+import type { RunSource } from '../../shared/agent.js'
 
 /**
  * Built-in proof tools. `echo` is a read (auto-runs). `echo_write` is a fake
@@ -99,15 +100,15 @@ export type ToolApprovalValue = 'user-approval' | 'approved' | { type: 'denied';
 
 /**
  * Build the `toolApproval` map for the agent.
- * - Write tools: 'user-approval' in palette runs, ALWAYS — the per-tool
+ * - Write tools: 'user-approval' in interactive runs, ALWAYS — the per-tool
  *   auto-approve setting never applies to writes. Scheduled runs deny them
  *   outright (queued for review, never run silently).
  * - Other tools: 'approved' when the user enabled per-tool auto-approve for
- *   palette runs, otherwise omitted ('not-applicable', runs normally).
+ *   interactive runs, otherwise omitted ('not-applicable', runs normally).
  *   Auto-approve is ignored for every scheduled run.
  */
 export function buildToolApproval(
-  source: 'palette' | 'scheduled',
+  source: RunSource,
   toolNames: string[],
   autoApprove: ReadonlySet<string> = new Set()
 ): Record<string, ToolApprovalValue> {
@@ -120,7 +121,7 @@ export function buildToolApproval(
           : 'user-approval'
       continue
     }
-    if (source === 'palette' && autoApprove.has(name)) {
+    if ((source === 'palette' || source === 'chat') && autoApprove.has(name)) {
       out[name] = 'approved'
     }
   }

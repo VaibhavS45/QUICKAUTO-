@@ -4,6 +4,7 @@ import type { AutomationTemplate } from '../../shared/contracts/automation-templ
 
 export interface ShellApi {
   navigate(view: string, params?: Record<string, unknown>): void
+  /** @deprecated No-op; the calendar window has been removed. */
   openCalendarWindow(): void
   openSettings(tab?: string): void
   notify(notification: Omit<AppNotification, 'id' | 'createdAt' | 'read'>): void

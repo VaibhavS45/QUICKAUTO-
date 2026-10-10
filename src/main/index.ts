@@ -1,21 +1,9 @@
-import { app, globalShortcut, ipcMain, session, Notification, safeStorage, shell } from 'electron'
+import { app, ipcMain, session, Notification, safeStorage, shell } from 'electron'
 import Store from 'electron-store'
 import { randomUUID } from 'node:crypto'
-import {
-  createPaletteWindow,
-  showPalette,
-  hidePalette,
-  togglePalette,
-  getPaletteWindow,
-  resizePaletteToContent
-} from './palette-window.js'
-import { openCalendar, getCalendarWindow, takePendingDraft } from './calendar-window.js'
 import { openSettings, hideSettings } from './agent/settings-window.js'
 import {
   IpcChannels,
-  PaletteSubmitSchema,
-  CalendarDraftSchema,
-  SetHotkeySchema,
   ApiKeySchema,
   ConnectorKeySchema,
   RoutineCreateSchema,
@@ -24,14 +12,12 @@ import {
   AgentCancelSchema,
   AgentRunRequestSchema,
   AgentApprovalResponseSchema,
-  PaletteResizeSchema,
   ModelSettingsSchema,
   ProfileSettingsSchema,
   SettingsTabRequestSchema,
-  ConnectionToolSchema,
-  type PlatformInfo
+  ConnectionToolSchema
 } from './ipc.js'
-import { defaultHotkey, toPaletteSubmit, TOOL_IDS, type ToolId } from '../shared/types.js'
+import { TOOL_IDS, type ToolId } from '../shared/types.js'
 import type { AgentEvent } from '../shared/agent.js'
 import { runAgent, type ApprovalDecision } from './agent/runner.js'
 import { ModelSettingsService, type SettingsStore } from './settings/model-settings.js'
@@ -48,21 +34,20 @@ import { BudgetGuard, type BudgetStore, type BudgetUsageState } from './connecto
 import { ConnectorSettingsService, type ConnectorStore } from './connectors/connector-settings.js'
 import { ComposioProvider } from './connectors/composio-tools.js'
 import { GitHubCliProvider, isZeroCostTool, validateRepoEntry } from './connectors/github-cli.js'
-import { ComposioConnectorProvider, isPaletteGuarded } from './connectors/composio.js'
+import { ComposioConnectorProvider, isBudgetGuardedTool } from './connectors/composio.js'
 import { registerConnectorProvider, getToolsForMentions } from './agent/registry.js'
 import {
   Scheduler,
-  parseScheduleFromText,
-  cleanPromptForRoutine,
   type Routine,
   type RoutineStore
 } from './agent/scheduler.js'
-import { parseMentionedTools } from '../shared/types.js'
-import { wantsToggle } from './agent/background-mode.js'
+import { shouldAutoOpenApp } from './shell/launch-policy.js'
 import { applyAppBehaviorPatch, resolveAppBehavior, type AppBehavior } from './agent/app-prefs.js'
 import { installStdioGuard } from './agent/stdio-guard.js'
-import { createAppTray, startAppLaunch, watchDockVisibility } from './agent/app-lifecycle.js'
+import { createAppTray, watchDockVisibility } from './shell/app-lifecycle.js'
 import { registerAutomationsIpc, registerShellIpc } from './agent/shell-ipc.js'
+import { getShellAppWindow, openShellAppWindow } from './agent/shell-app-window.js'
+import type { RunSource } from '../shared/agent.js'
 
 // Launched without a console, stdio writes hit EPIPE and kill main — swallow it first.
 installStdioGuard()
@@ -70,9 +55,10 @@ installStdioGuard()
 const gotLock = app.requestSingleInstanceLock()
 if (!gotLock) app.quit()
 
-const store = new Store<{ hotkey: string; openAtLogin: boolean; keepBackground: boolean; shader: boolean }>({
-  defaults: { hotkey: defaultHotkey(process.platform), openAtLogin: false, keepBackground: true, shader: true }
+const store = new Store<{ openAtLogin: boolean; keepBackground: boolean; shader: boolean; hotkey?: string }>({
+  defaults: { openAtLogin: false, keepBackground: true, shader: true }
 })
+store.delete('hotkey')
 
 function storedAppBehavior(): AppBehavior {
   return resolveAppBehavior({
@@ -161,7 +147,7 @@ registerConnectorProvider(githubResolveProvider)
 // Real read-only @gmail provider (feat/gmail-read). Registered after the stub
 // so its gmail_* tools are the ones served; distinct provider id avoids the
 // registry's duplicate-id ignore. Its tools guard themselves (with cache and
-// dedupe keys), so the generic wrapper below skips them (isPaletteGuarded) —
+// dedupe keys), so the generic wrapper below skips them —
 // exactly one BudgetGuard hit per Composio call.
 const gmailProvider = new ComposioConnectorProvider({
   getApiKey: () => connectorSettings.getKey(),
@@ -214,8 +200,8 @@ interface ActiveRun {
 }
 const activeRuns = new Map<string, ActiveRun>()
 
-function emitToPalette(e: AgentEvent): void {
-  getPaletteWindow()?.webContents.send(IpcChannels.agentEvent, e)
+function emitToApp(e: AgentEvent): void {
+  getShellAppWindow()?.webContents.send(IpcChannels.agentEvent, e)
 }
 
 setNestedApprovalHandler(
@@ -228,7 +214,7 @@ setNestedApprovalHandler(
       }
       const approvalId = nextNestedApprovalId()
       active.pending.set(approvalId, resolve)
-      emitToPalette({
+      emitToApp({
         type: 'approval-requested',
         runId: req.runId,
         approvalId,
@@ -240,60 +226,7 @@ setNestedApprovalHandler(
     })
 )
 
-let hotkeyError: string | null = null
-
-// Second-instance (palette --toggle CLI) routes through the single-instance lock.
-app.on('second-instance', (_event, argv) => {
-  if (wantsToggle(argv)) togglePalette()
-  else showPalette()
-})
-
-function sessionType(): string {
-  return process.env['XDG_SESSION_TYPE'] ?? (process.platform === 'linux' ? 'unknown' : 'n/a')
-}
-
-function platformInfo(): PlatformInfo {
-  const st = sessionType()
-  const wayland = process.platform === 'linux' && st === 'wayland'
-  return {
-    platform: process.platform,
-    sessionType: st,
-    wayland,
-    // globalShortcut is unreliable on Wayland (Electron docs / portal path).
-    globalShortcutReliable: !wayland
-  }
-}
-
-function waylandToggleHint(): string {
-  const execPath = process.execPath
-  return (
-    `Global hotkeys don't work reliably on Wayland, so the hotkey was not registered.\n\n` +
-    `Fallback: bind a system shortcut in your desktop settings (GNOME: Settings → Keyboard → Custom Shortcut, ` +
-    `KDE: System Settings → Shortcuts) to run:\n${execPath} --toggle`
-  )
-}
-
-function registerHotkey(hotkey: string): boolean {
-  globalShortcut.unregisterAll()
-  try {
-    const ok = globalShortcut.register(hotkey, () => togglePalette())
-    if (!ok) {
-      hotkeyError =
-        process.platform === 'linux' && platformInfo().wayland
-          ? waylandToggleHint()
-          : `Could not register hotkey "${hotkey}". It may be in use by another app. ` +
-            `Pick a different hotkey in Settings, or run with --toggle.`
-      getPaletteWindow()?.webContents.send(IpcChannels.hotkeyError, hotkeyError)
-      return false
-    }
-    hotkeyError = null
-    return true
-  } catch (err) {
-    hotkeyError = `Could not register hotkey "${hotkey}": ${String(err)}`
-    getPaletteWindow()?.webContents.send(IpcChannels.hotkeyError, hotkeyError)
-    return false
-  }
-}
+app.on('second-instance', () => openShellAppWindow())
 
 function applyAutostart(): void {
   const openAtLogin = store.get('openAtLogin', false)
@@ -301,7 +234,14 @@ function applyAutostart(): void {
 }
 
 function createTray(): void {
-  createAppTray(openCalendar, () => openSettings())
+  createAppTray(
+    () => openSettings(),
+    () => store.get('openAtLogin', false),
+    (enabled) => {
+      store.set('openAtLogin', enabled)
+      applyAutostart()
+    }
+  )
 }
 
 function applyStrictCsp(): void {
@@ -324,32 +264,8 @@ function wireIpc(): void {
   registerAutomationsIpc()
   fireRoutine = (routine) => {
     startAgentRun(routine.prompt, routine.tools, 'scheduled', routine.id)
-    new Notification({ title: 'CalTen routine fired', body: routine.prompt.slice(0, 200) }).show()
+    new Notification({ title: 'Palette routine fired', body: routine.prompt.slice(0, 200) }).show()
   }
-  ipcMain.handle(IpcChannels.platformInfo, (): PlatformInfo => platformInfo())
-
-  ipcMain.handle(IpcChannels.getHotkey, () => ({
-    hotkey: store.get('hotkey', defaultHotkey(process.platform)),
-    error: hotkeyError
-  }))
-
-  ipcMain.handle(IpcChannels.setHotkey, (_event, payload: unknown) => {
-    const parsed = SetHotkeySchema.safeParse(payload)
-    if (!parsed.success) return { ok: false, error: 'Invalid hotkey format.' }
-    store.set('hotkey', parsed.data.hotkey)
-    const ok = registerHotkey(parsed.data.hotkey)
-    return { ok, error: ok ? null : hotkeyError }
-  })
-
-  ipcMain.on(IpcChannels.paletteHide, () => hidePalette(true))
-
-  ipcMain.handle(IpcChannels.paletteResize, (_event, payload: unknown) => {
-    const parsed = PaletteResizeSchema.safeParse(payload)
-    if (!parsed.success) return { ok: false as const, error: 'Invalid resize payload.' }
-    const height = resizePaletteToContent(parsed.data.height)
-    return { ok: true as const, height }
-  })
-
   ipcMain.handle(IpcChannels.getModelSettings, async () => settingsService.getPublicState())
 
   ipcMain.handle(IpcChannels.getProfile, () => profileService.get())
@@ -436,7 +352,7 @@ function wireIpc(): void {
   function startAgentRun(
     prompt: string,
     toolNames: string[],
-    source: 'palette' | 'scheduled',
+    source: RunSource,
     routineId?: string
   ): string {
     const runId = randomUUID()
@@ -452,7 +368,7 @@ function wireIpc(): void {
       source,
       signal: controller.signal,
       runId,
-      emit: emitToPalette,
+      emit: emitToApp,
       decideApproval: (req) =>
         new Promise<ApprovalDecision>((resolve) => {
           active.pending.set(req.approvalId, resolve)
@@ -470,7 +386,7 @@ function wireIpc(): void {
           for (const [name, t] of Object.entries(set)) {
             if (name === 'echo' || name === 'echo_write') continue
             if (name.startsWith('github_') || isZeroCostTool(t)) continue
-            if (isPaletteGuarded(t)) continue
+            if (isBudgetGuardedTool(t)) continue
             const orig = (t as { execute?: unknown }).execute
             if (typeof orig !== 'function') continue
             const fn = orig as (args: never, opts: never) => Promise<unknown>
@@ -484,7 +400,7 @@ function wireIpc(): void {
       }
     })
       .catch((err) => {
-        emitToPalette({
+        emitToApp({
           type: 'error',
           runId,
           message: err instanceof Error ? err.message : String(err)
@@ -533,65 +449,6 @@ function wireIpc(): void {
     active.pending.delete(parsed.data.approvalId)
     resolve({ approved: parsed.data.approved, reason: parsed.data.reason })
     return { ok: true as const }
-  })
-
-  ipcMain.on(IpcChannels.calendarMinimize, () => getCalendarWindow()?.minimize())
-  ipcMain.on(IpcChannels.calendarMaximize, () => {
-    const w = getCalendarWindow()
-    if (!w) return
-    if (w.isMaximized()) w.unmaximize()
-    else w.maximize()
-  })
-  ipcMain.on(IpcChannels.calendarClose, () => getCalendarWindow()?.close())
-  ipcMain.on(IpcChannels.calendarOpen, () => openCalendar())
-
-  // Step 0 (fix/palette-pop): cold-start draft race fix. openCalendar pushes
-  // the draft on ready-to-show, which can fire before the calendar renderer
-  // mounts its listener. The renderer therefore also pulls on mount via this
-  // channel. Take-once: returns the draft and clears it, so a draft is never
-  // delivered twice. No payload, so nothing to validate.
-  ipcMain.handle(IpcChannels.calendarTakeDraft, () => ({ draft: takePendingDraft() }))
-
-  ipcMain.handle(IpcChannels.paletteSubmit, (_event, payload: unknown) => {
-    const parsed = PaletteSubmitSchema.safeParse(payload)
-    if (!parsed.success) return { ok: false as const, error: 'Invalid request.' }
-    const submit = toPaletteSubmit(parsed.data.text)
-
-    // @calendar + @tools + a time ("@calendar @notion at 6:30pm summarize X")
-    // creates a scheduled routine that fires the agent later as source
-    // 'scheduled'. Plain "@calendar <draft>" keeps the old open-draft path.
-    if (submit.tools.includes('calendar')) {
-      const withoutCal = parsed.data.text.replace(/@calendar\s*/gi, '').trim()
-      const others = parseMentionedTools(withoutCal)
-      const sched = parseScheduleFromText(parsed.data.text, new Date())
-      if (sched && others.length > 0) {
-        try {
-          const routine = scheduler.create(parsed.data.text, new Date())
-          const draft = cleanPromptForRoutine(withoutCal, sched.timePhrase)
-          const draftParsed = CalendarDraftSchema.safeParse({
-            text: `⏰ ${new Date(routine.runAt).toLocaleString()} — ${draft}`
-          })
-          openCalendar(draftParsed.success ? draftParsed.data.text : draft)
-          if (process.platform === 'darwin' && app.dock) app.dock.show()
-          hidePalette(false)
-          return { ok: true as const, action: 'scheduled', tools: submit.tools, routine }
-        } catch (err) {
-          return { ok: false as const, error: err instanceof Error ? err.message : String(err) }
-        }
-      }
-      const draft = withoutCal
-      const draftParsed = CalendarDraftSchema.safeParse({ text: draft })
-      openCalendar(draftParsed.success ? draftParsed.data.text : '')
-      // macOS: showing the calendar restores the Dock icon.
-      if (process.platform === 'darwin' && app.dock) app.dock.show()
-      hidePalette(false)
-      return { ok: true as const, action: 'calendar', tools: submit.tools }
-    }
-
-    // Everything else runs the agent loop (Prompt 0 foundation: ToolLoopAgent
-    // + built-in echo tools). The renderer streams events via agent:event.
-    const runId = startAgentRun(parsed.data.text, submit.tools, 'palette')
-    return { ok: true as const, action: 'agent', tools: submit.tools, runId }
   })
 
   ipcMain.handle(IpcChannels.getConnector, async () => {
@@ -707,39 +564,20 @@ function wireIpc(): void {
       : { ok: false as const, error: 'Routine not found.' }
   })
 
-  ipcMain.on('calendar:opened-with-window', () => {
-    if (process.platform === 'darwin' && app.dock) app.dock.show()
-  })
-  ipcMain.on('calendar:closed-to-tray', () => {
-    // Closing the calendar returns control to the app or tray. Unless the user opted out in
-    // Settings, in which case the app quits instead.
-    if (!storedAppBehavior().keepBackground) {
-      app.quit()
-    }
-  })
 }
 
 async function onReady(): Promise<void> {
-  app.setName('CalTen')
+  app.setName('Palette')
 
   applyStrictCsp()
   watchDockVisibility()
-  createPaletteWindow()
   wireIpc()
   scheduler.startAll()
   createTray()
   applyAutostart()
 
-  const hotkey = store.get('hotkey', defaultHotkey(process.platform))
-  const registered = registerHotkey(hotkey)
-  if (!registered && platformInfo().wayland) {
-    new Notification({
-      title: 'Palette: hotkey unavailable on Wayland',
-      body: 'Bind a system shortcut to palette --toggle. See Settings for the exact command.'
-    }).show()
-  }
-
-  startAppLaunch(process.argv)
+  if (shouldAutoOpenApp(process.argv)) openShellAppWindow()
+  app.on('activate', () => openShellAppWindow())
 }
 
 app.whenReady().then(() => void onReady())
@@ -752,7 +590,6 @@ app.on('window-all-closed', () => {
 })
 
 app.on('will-quit', () => {
-  globalShortcut.unregisterAll()
   setNestedApprovalHandler(null)
   void opencodeManager.stop()
 })

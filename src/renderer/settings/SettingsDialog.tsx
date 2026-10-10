@@ -75,7 +75,7 @@ function GeneralPanel(): React.JSX.Element {
 
   useEffect(() => {
     let live = true
-    window.palette
+    window.app
       .getProfile()
       .then((r) => {
         const res = r as unknown as Partial<Profile>
@@ -85,7 +85,7 @@ function GeneralPanel(): React.JSX.Element {
         }
       })
       .catch(() => live && setStatus('Could not load profile.'))
-    window.palette
+    window.app
       .getAppBehavior()
       .then((r) => {
         const res = r as unknown as { ok: boolean; keepBackground?: boolean }
@@ -110,7 +110,7 @@ function GeneralPanel(): React.JSX.Element {
         setStatus('Saved as you go.')
         return
       }
-      window.palette
+      window.app
         .setProfile(next)
         .then((r) => setStatus((r as { ok: boolean; error?: string }).ok ? 'Saved as you go.' : ((r as { error?: string }).error ?? 'Save failed.')))
         .catch(() => setStatus('Save failed.'))
@@ -177,21 +177,21 @@ function GeneralPanel(): React.JSX.Element {
       </section>
       <section className="flex items-start justify-between gap-4">
         <div>
-          <h3 className="text-sm font-semibold text-neutral-100">When the calendar is closed</h3>
+          <h3 className="text-sm font-semibold text-neutral-100">When the app window is closed</h3>
           <p className="max-w-md pt-1 text-xs leading-relaxed text-neutral-400">
-            Keep the command bar, tray and scheduled routines running in the background.
-            Turn off to quit the app when the calendar closes.
+            Keep the app, tray and scheduled routines running in the background.
+            Turn off to quit the app when its window closes.
             {behaviorStatus ? ` ${behaviorStatus}` : ''}
           </p>
         </div>
         <button
           role="switch"
           aria-checked={keepBackground}
-          aria-label="Keep command bar in background"
+          aria-label="Keep app in background"
           onClick={() => {
             const next = !keepBackground
             setKeepBackground(next)
-            window.palette
+            window.app
               .setAppBehavior({ keepBackground: next })
               .then((r) => {
                 const res = r as unknown as { ok: boolean; error?: string }
@@ -222,7 +222,7 @@ function AppearancePanel({
       <div>
         <h3 className="text-sm font-semibold text-neutral-100">Animated background</h3>
         <p className="max-w-md pt-1 text-xs leading-relaxed text-neutral-400">
-          Slow-moving colour wash behind the command bar and this sidebar. Turn off for a flat, static background and
+          Slow-moving colour wash behind the app interface. Turn off for a flat, static background and
           less GPU use on battery. {status}
         </p>
       </div>
@@ -231,7 +231,7 @@ function AppearancePanel({
         label="Animated background"
         onCheckedChange={(next) => {
           onShader(next)
-          window.palette
+          window.app
             .setAppBehavior({ shader: next })
             .then((r) => {
               const res = r as unknown as { ok: boolean; error?: string }
@@ -255,7 +255,7 @@ function ModelPanel(): React.JSX.Element {
   const [msg, setMsg] = useState<string | null>(null)
 
   useEffect(() => {
-    window.palette
+    window.app
       .getModelSettings()
       .then((v) => {
         const m = v as ModelState
@@ -272,8 +272,8 @@ function ModelPanel(): React.JSX.Element {
   async function save(): Promise<void> {
     setMsg(null)
     const rd = Math.min(28, Math.max(1, parseInt(resetDay, 10) || 1))
-    const current = (await window.palette.getModelSettings()) as ModelState
-    const res = (await window.palette.setModelSettings({
+    const current = (await window.app.getModelSettings()) as ModelState
+    const res = (await window.app.setModelSettings({
       provider,
       model: model.trim(),
       baseUrl: baseUrl.trim() || undefined,
@@ -286,7 +286,7 @@ function ModelPanel(): React.JSX.Element {
       return
     }
     if (apiKey.trim()) {
-      const kr = (await window.palette.setApiKey(apiKey.trim())) as { ok: boolean; error?: string }
+      const kr = (await window.app.setApiKey(apiKey.trim())) as { ok: boolean; error?: string }
       if (!kr.ok) {
         setMsg(kr.error ?? 'Key save failed.')
         return
@@ -294,7 +294,7 @@ function ModelPanel(): React.JSX.Element {
       setApiKey('')
     }
     setMsg('Saved.')
-    setS((await window.palette.getModelSettings()) as ModelState)
+    setS((await window.app.getModelSettings()) as ModelState)
   }
 
   return (
@@ -367,18 +367,18 @@ function ConnectionsPanel(): React.JSX.Element {
   const [key, setKey] = useState('')
   const [msg, setMsg] = useState<string | null>(null)
   useEffect(() => {
-    window.palette.getConnector().then((v) => setState(v as ConnectorState)).catch(() => {})
+    window.app.getConnector().then((v) => setState(v as ConnectorState)).catch(() => {})
   }, [])
   async function save(): Promise<void> {
     setMsg(null)
-    const res = (await window.palette.setConnectorKey(key.trim())) as { ok: boolean; error?: string }
+    const res = (await window.app.setConnectorKey(key.trim())) as { ok: boolean; error?: string }
     if (!res.ok) {
       setMsg(res.error ?? 'Save failed.')
       return
     }
     setKey('')
     setMsg('Saved.')
-    setState((await window.palette.getConnector()) as ConnectorState)
+    setState((await window.app.getConnector()) as ConnectorState)
   }
   return (
     <Card>
@@ -436,12 +436,12 @@ function GitHubPanel(): React.JSX.Element {
 
   async function refresh(): Promise<void> {
     try {
-      setGh((await window.palette.githubStatus()) as GhStatus)
+      setGh((await window.app.githubStatus()) as GhStatus)
     } catch {
       setGh({ ok: false, error: 'Could not check gh status.' })
     }
     try {
-      const m = (await window.palette.getModelSettings()) as ModelState
+      const m = (await window.app.getModelSettings()) as ModelState
       setRepos(m.githubRepos ?? [])
     } catch {
       /* keep current list */
@@ -455,8 +455,8 @@ function GitHubPanel(): React.JSX.Element {
   async function save(next: Array<{ path: string; repo: string; testCommand?: string }>): Promise<void> {
     setMsg(null)
     try {
-      const m = (await window.palette.getModelSettings()) as ModelState
-      const res = (await window.palette.setModelSettings({
+      const m = (await window.app.getModelSettings()) as ModelState
+      const res = (await window.app.setModelSettings({
         provider: m.provider,
         model: m.model,
         baseUrl: m.baseUrl,
@@ -577,27 +577,27 @@ function GmailConnectBlock(): React.JSX.Element {
 function RoutinesPanel(): React.JSX.Element {
   const [items, setItems] = useState<RoutineItem[]>([])
   useEffect(() => {
-    window.palette.routineList().then((r) => {
+    window.app.routineList().then((r) => {
       const res = r as { ok: boolean; routines: RoutineItem[] }
       if (res.ok) setItems(res.routines)
     }).catch(() => {})
   }, [])
   async function refresh(): Promise<void> {
-    const res = (await window.palette.routineList()) as { ok: boolean; routines: RoutineItem[] }
+    const res = (await window.app.routineList()) as { ok: boolean; routines: RoutineItem[] }
     if (res.ok) setItems(res.routines)
   }
   return (
     <Card>
       <CardTitle>Routines ({items.length})</CardTitle>
       <CardSub>
-        Type <span className="font-mono">@calendar @notion at 6:30pm summarize my tasks</span> — the agent runs it at that time.
+        Scheduled agent runs appear here and can be enabled, paused, or removed.
       </CardSub>
       <div className="space-y-1.5 pt-3">
         {items.length === 0 && <p className="text-xs text-neutral-500">No routines yet.</p>}
         {items.map((r) => (
           <div key={r.id} className="flex items-center gap-2 rounded-lg border border-neutral-800 bg-neutral-950 px-2.5 py-2 text-xs">
             <button
-              onClick={() => void window.palette.routineToggle(r.id, !r.enabled).then(() => void refresh())}
+              onClick={() => void window.app.routineToggle(r.id, !r.enabled).then(() => void refresh())}
               className={`rounded-full px-2 py-0.5 font-medium ${r.enabled ? 'bg-emerald-600/25 text-emerald-100' : 'bg-neutral-800 text-neutral-400'}`}
             >
               {r.enabled ? 'on' : 'off'}
@@ -605,7 +605,7 @@ function RoutinesPanel(): React.JSX.Element {
             <span className="text-neutral-200">{new Date(r.runAt).toLocaleString()}</span>
             <span className="truncate text-neutral-400" title={r.prompt}>{r.prompt}</span>
             <span className="flex-1" />
-            <button onClick={() => void window.palette.routineRemove(r.id).then(() => void refresh())} className="text-neutral-500 hover:text-red-400">
+            <button onClick={() => void window.app.routineRemove(r.id).then(() => void refresh())} className="text-neutral-500 hover:text-red-400">
               Remove
             </button>
           </div>
@@ -615,46 +615,10 @@ function RoutinesPanel(): React.JSX.Element {
   )
 }
 
-function ShortcutsPanel(): React.JSX.Element {
-  const [hotkey, setHotkey] = useState('')
-  const [msg, setMsg] = useState<string | null>(null)
-  const [hint, setHint] = useState<string | null>(null)
-  useEffect(() => {
-    window.palette.getHotkey().then((h) => {
-      const v = h as { hotkey: string; error: string | null }
-      setHotkey(v.hotkey)
-      if (v.error) setMsg(v.error)
-    }).catch(() => {})
-    window.palette.platformInfo().then((p) => {
-      const v = p as { wayland: boolean; sessionType: string }
-      if (v.wayland) setHint(`Wayland session (${v.sessionType}): global hotkeys are unreliable. Bind a system shortcut to palette --toggle if the hotkey fails.`)
-    }).catch(() => {})
-  }, [])
-  return (
-    <Card>
-      <CardTitle>Shortcuts</CardTitle>
-      {hint && <p className="pt-1 text-xs text-amber-300">{hint}</p>}
-      <div className="flex items-end gap-2 pt-3">
-        <div className="flex-1">
-          <Field label="Global hotkey">
-            <Input monospace value={hotkey} onChange={(e) => setHotkey(e.target.value)} />
-          </Field>
-        </div>
-        <Button
-          onClick={() => void window.palette.setHotkey(hotkey).then((r) => setMsg((r as { ok: boolean; error: string | null }).ok ? 'Hotkey registered.' : ((r as { error: string | null }).error ?? 'Registration failed.')))}
-        >
-          Save
-        </Button>
-      </div>
-      {msg && <p className="whitespace-pre-wrap pt-2 text-xs text-amber-200">{msg}</p>}
-    </Card>
-  )
-}
-
 function UsagePanel(): React.JSX.Element {
   const [budget, setBudget] = useState<BudgetState | null>(null)
   useEffect(() => {
-    window.palette.getBudget().then((v) => setBudget(v as BudgetState)).catch(() => {})
+    window.app.getBudget().then((v) => setBudget(v as BudgetState)).catch(() => {})
   }, [])
   return (
     <Card>
@@ -683,7 +647,6 @@ const TAB_TITLES: Record<string, string> = {
   provider: 'Provider',
   connectors: 'Connectors',
   routines: 'Routines',
-  shortcuts: 'Shortcuts',
   usage: 'Usage'
 }
 
@@ -730,15 +693,6 @@ function NavGlyph({ id }: { id: SettingsTabId }): React.JSX.Element {
       </svg>
     )
   }
-  if (id === 'shortcuts') {
-    return (
-      <svg className={common} viewBox="0 0 16 16" fill="none" aria-hidden>
-        <rect x="2.5" y="9.5" width="4" height="3.5" rx="0.6" stroke="currentColor" strokeWidth="1.2" />
-        <rect x="7.5" y="9.5" width="6" height="3.5" rx="0.6" stroke="currentColor" strokeWidth="1.2" />
-        <rect x="4.5" y="4.5" width="7" height="3.5" rx="0.6" stroke="currentColor" strokeWidth="1.2" />
-      </svg>
-    )
-  }
   return (
     <svg className={common} viewBox="0 0 16 16" fill="none" aria-hidden>
       <path d="M3 12.5 6.2 6.5 8 10l1.6-2.8L13 12.5" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round" />
@@ -759,7 +713,7 @@ export default function SettingsApp(): React.JSX.Element {
   const ExtraTab = EXTRA_TABS[tab]
 
   useEffect(() => {
-    window.palette
+    window.app
       .getAppBehavior()
       .then((r) => {
         const res = r as unknown as { ok: boolean; shader?: boolean }
@@ -767,9 +721,9 @@ export default function SettingsApp(): React.JSX.Element {
       })
       .catch(() => {})
     function onKey(e: KeyboardEvent): void {
-      if (e.key === 'Escape') window.palette.closeSettings()
+      if (e.key === 'Escape') window.app.closeSettings()
     }
-    const removeSettingsListener = window.palette.onOpenSettings((next) => {
+    const removeSettingsListener = window.app.onOpenSettings((next) => {
       if (next && isSettingsTabRegistered(next)) setTab(next)
     })
     window.addEventListener('keydown', onKey)
@@ -830,7 +784,7 @@ export default function SettingsApp(): React.JSX.Element {
             {TAB_TITLES[tab] ?? SETTINGS_NAV.find((item) => item.id === tab)?.label ?? 'Settings'}
           </span>
           <button
-            onClick={() => window.palette.closeSettings()}
+            onClick={() => window.app.closeSettings()}
             aria-label="Close settings"
             className="rounded-md px-2 py-0.5 text-neutral-500 hover:bg-white/8 hover:text-white"
           >
@@ -843,7 +797,6 @@ export default function SettingsApp(): React.JSX.Element {
           {tab === 'provider' && <ModelPanel />}
           {tab === 'connectors' && <ConnectionsPanel />}
           {tab === 'routines' && <RoutinesPanel />}
-          {tab === 'shortcuts' && <ShortcutsPanel />}
           {tab === 'usage' && <UsagePanel />}
           {ExtraTab && <ExtraTab />}
         </div>

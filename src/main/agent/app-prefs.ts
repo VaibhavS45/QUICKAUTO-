@@ -2,7 +2,7 @@ import { z } from 'zod'
 
 /**
  * App behavior prefs. The shell opens on launch and schedules stay available
- * from the tray. When the calendar window closes, `keepBackground` decides
+ * from the tray. When the app window closes, `keepBackground` decides
  * whether the app/tray/scheduler keep running (true, default) or the app quits.
  *
  * Appearance (`shader`) is non-secret UI chrome stored alongside.

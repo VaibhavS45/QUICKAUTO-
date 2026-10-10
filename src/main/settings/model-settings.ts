@@ -33,7 +33,7 @@ export const ModelSettingsSchema = z.object({
     .optional(),
   /**
    * Per-tool auto-approve list. Default OFF (empty). Applies only to
-   * non-write tools in palette runs — writes always need the approval card
+   * non-write tools in interactive runs — writes always need the approval card
    * and scheduled runs never auto-approve (see agent/tools.ts).
    */
   autoApprove: z.array(z.string().min(1).max(64)).max(32).optional()

@@ -46,7 +46,7 @@ describe('filterSettingsNav', () => {
   })
 
   it('groups remaining items and drops empty groups', () => {
-    const groups = groupedSettingsNav(filterSettingsNav('hotkey'))
-    expect(groups).toEqual([{ id: 'system', label: 'System', items: [expect.objectContaining({ id: 'shortcuts' })] }])
+    const groups = groupedSettingsNav(filterSettingsNav('shortcut'))
+    expect(groups).toEqual([])
   })
 })

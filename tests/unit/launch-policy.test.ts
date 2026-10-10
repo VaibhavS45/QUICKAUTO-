@@ -1,28 +1,21 @@
 import { describe, expect, it } from 'vitest'
-import { wantsToggle, shouldAutoOpenApp } from '../../src/main/agent/background-mode.js'
+import { shouldAutoOpenApp, wantsBackground } from '../../src/main/shell/launch-policy.js'
 import {
   resolveAppBehavior,
   applyAppBehaviorPatch,
   DEFAULT_APP_BEHAVIOR
 } from '../../src/main/agent/app-prefs.js'
 
-describe('background-mode', () => {
-  it('routes --toggle through the single-instance lock', () => {
-    expect(wantsToggle(['palette', '--toggle'])).toBe(true)
-    expect(wantsToggle(['palette --toggle'])).toBe(true)
-    expect(wantsToggle(['palette'])).toBe(false)
-  })
-
-  it('opens the app by default and stays tray-only only with --background', () => {
-    expect(shouldAutoOpenApp(['palette'])).toBe(true)
-    expect(shouldAutoOpenApp(['palette', '--background'])).toBe(false)
-    expect(shouldAutoOpenApp(['palette', '--toggle'])).toBe(true)
-    expect(shouldAutoOpenApp(['palette', '--calendar'])).toBe(true)
+describe('launch policy', () => {
+  it('opens the app by default and only stays in the background when requested', () => {
+    expect(shouldAutoOpenApp(['app'])).toBe(true)
+    expect(shouldAutoOpenApp(['app', '--background'])).toBe(false)
+    expect(wantsBackground(['--background'])).toBe(true)
   })
 })
 
 describe('app-prefs', () => {
-  it('defaults to keeping the command bar in the background', () => {
+  it('defaults to keeping the app in the background after its window closes', () => {
     expect(DEFAULT_APP_BEHAVIOR).toEqual({ keepBackground: true, shader: true })
     expect(resolveAppBehavior(undefined)).toEqual({ keepBackground: true, shader: true })
     expect(resolveAppBehavior({ keepBackground: false })).toEqual({ keepBackground: false, shader: true })

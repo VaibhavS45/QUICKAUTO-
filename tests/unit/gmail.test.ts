@@ -9,7 +9,7 @@ import {
   GMAIL_READ_TOOLS,
   GMAIL_SEARCH_SLUG,
   GMAIL_WRITE_TOOLS,
-  isPaletteGuarded,
+  isBudgetGuardedTool,
   type ComposioClientLike
 } from '../../src/main/connectors/composio.js'
 import { runWithContext } from '../../src/main/agent/run-context.js'
@@ -88,9 +88,9 @@ describe('gmail read-only tools', () => {
     const fake = fakeClient()
     const { provider } = providerWith(fake)
     for (const t of Object.values(provider.getTools(['gmail']))) {
-      expect(isPaletteGuarded(t)).toBe(true)
+      expect(isBudgetGuardedTool(t)).toBe(true)
     }
-    expect(isPaletteGuarded({})).toBe(false)
+    expect(isBudgetGuardedTool({})).toBe(false)
   })
 })
 

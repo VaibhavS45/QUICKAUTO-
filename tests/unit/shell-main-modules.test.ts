@@ -6,7 +6,6 @@ import type { NewNotification } from '../../src/shared/contracts/notifications.j
 import type { ScheduleSource } from '../../src/shared/contracts/schedule.js'
 import { automationsApi } from '../../src/preload/automations.js'
 import { shellApi } from '../../src/preload/shell.js'
-import { IpcChannels } from '../../src/main/ipc.js'
 
 describe('shell main-process contract modules', () => {
   it('replaces the registered schedule source', () => {
@@ -31,10 +30,9 @@ describe('shell main-process contract modules', () => {
     expect(listNotifications()).toHaveLength(200)
   })
 
-  it('exposes the calendar action and callable IPC registration hooks', () => {
-    expect(shellApi.openCalendarWindow).toEqual(expect.any(Function))
-    expect(IpcChannels.calendarOpen).toBe('calendar:open')
+  it('exposes no window actions from the shell preload and callable IPC registration hooks', () => {
     expect(automationsApi).toEqual({})
+    expect(shellApi).toEqual({})
     expect(() => registerShellIpc()).not.toThrow()
     expect(() => registerAutomationsIpc()).not.toThrow()
   })

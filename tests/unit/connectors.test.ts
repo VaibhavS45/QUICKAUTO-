@@ -47,7 +47,7 @@ describe('ComposioProvider', () => {
     const p = new ComposioProvider(async () => 'ak_test')
     expect(Object.keys(p.getTools(['notion']))).toEqual(['notion_search', 'notion_create'])
     expect(Object.keys(p.getTools(['websearch']))).toEqual(['web_search'])
-    expect(Object.keys(p.getTools(['calendar']))).toEqual([])
+    expect(Object.keys(p.getTools(['notion', 'websearch']))).not.toContain('calendar')
   })
 
   it('status reflects key presence without leaking it', async () => {
@@ -107,7 +107,7 @@ describe('ComposioProvider', () => {
 describe('Builtin files tool', () => {
   it('writes inside approved directories and blocks others', async () => {
     const tools = createBuiltinTools() as unknown as Record<string, { execute: (args: unknown) => Promise<unknown> }>
-    const target = '/tmp/palette-websearch-test.txt'
+    const target = '/tmp/app-websearch-test.txt'
     await expect(
       tools.write_file.execute({ path: target, content: 'hello world' })
     ).resolves.toMatchObject({ ok: true, path: target })

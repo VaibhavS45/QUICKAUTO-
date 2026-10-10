@@ -1,6 +1,6 @@
 import { app, BrowserWindow } from 'electron'
 import { join } from 'node:path'
-import { preloadPath } from '../palette-window.js'
+import { preloadPath } from '../preload-path.js'
 
 let win: BrowserWindow | null = null
 

@@ -8,7 +8,7 @@ export interface GmailConnectionState {
 /**
  * Shared Gmail connect flow (feat/gmail-read): status check, "Connect Gmail"
  * (main opens the Composio auth link in the browser), and status polling up
- * to 2 minutes. Used by both the Settings Connections panel and the palette
+ * to 2 minutes. Used by the Settings Connections panel and app views.
  * results-panel Connect card so the logic lives in exactly one place.
  */
 export function useGmailConnect(): {
@@ -32,7 +32,7 @@ export function useGmailConnect(): {
 
   const refresh = useCallback(async (): Promise<GmailConnectionState | null> => {
     try {
-      const res = (await window.palette.connectionStatus('gmail')) as {
+      const res = (await window.app.connectionStatus('gmail')) as {
         ok: boolean
         connected?: boolean
         detail?: string
@@ -49,7 +49,7 @@ export function useGmailConnect(): {
   const connect = useCallback(async (): Promise<void> => {
     stopPolling()
     setMessage(null)
-    const res = (await window.palette.connectionConnect('gmail')) as {
+    const res = (await window.app.connectionConnect('gmail')) as {
       ok: boolean
       url?: string
       error?: string

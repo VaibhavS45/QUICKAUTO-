@@ -22,7 +22,7 @@ describe('cn', () => {
 })
 
 describe('buttonClass', () => {
-  it('maps variants to the previous raw palette classes', () => {
+  it('maps variants to the existing neutral utility classes', () => {
     expect(buttonClass()).toContain('bg-blue-500')
     expect(buttonClass('destructive', 'sm')).toContain('bg-red-700')
     expect(buttonClass('success', 'sm')).toContain('bg-emerald-600')
@@ -62,7 +62,7 @@ describe('switch / kbd / separator / shader', () => {
 })
 
 describe('settings window size', () => {
-  it('is larger than the command bar overlay it replaced', () => {
+  it('uses a roomy standalone settings window size', () => {
     expect(SETTINGS_WIDTH).toBeGreaterThanOrEqual(900)
     expect(SETTINGS_HEIGHT).toBeGreaterThanOrEqual(600)
     expect(SETTINGS_MIN_WIDTH).toBeLessThan(SETTINGS_WIDTH)

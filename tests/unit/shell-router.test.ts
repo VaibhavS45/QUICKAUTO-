@@ -1,20 +1,15 @@
 import { describe, expect, it } from 'vitest'
-import { createShellRouter } from '../../src/renderer/shell/router.js'
+import { ShellRouter } from '../../src/renderer/shell/nav.js'
 
-describe('shell router', () => {
-  it('keeps navigation and params in memory', () => {
-    const router = createShellRouter()
-    expect(router.getRoute()).toEqual({ view: 'home', params: {} })
-    expect(router.navigate('automations', { focusId: 'routine-1' })).toEqual({
-      view: 'automations',
-      params: { focusId: 'routine-1' }
-    })
-    expect(router.getRoute()).toEqual({ view: 'automations', params: { focusId: 'routine-1' } })
-  })
-
-  it('replaces the current route when navigating without params', () => {
-    const router = createShellRouter('plugins')
-    router.navigate('home')
-    expect(router.getRoute()).toEqual({ view: 'home', params: {} })
+describe('ShellRouter', () => {
+  it('publishes navigation and falls back to home for unknown views', () => {
+    const router = new ShellRouter()
+    const seen: string[] = []
+    router.subscribe((route) => seen.push(route.view))
+    router.navigate('automations', { focusId: 'routine-1' })
+    expect(router.current).toEqual({ view: 'automations', params: { focusId: 'routine-1' } })
+    router.navigate('unknown-view')
+    expect(seen).toEqual(['automations', 'home'])
+    expect(router.current).toEqual({ view: 'home', params: {} })
   })
 })

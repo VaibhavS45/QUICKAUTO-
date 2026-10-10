@@ -11,7 +11,7 @@ import {
   GMAIL_TOOLKIT_VERSION,
   GMAIL_WRITE_PROMPT,
   GMAIL_WRITE_TOOLS,
-  isPaletteGuarded,
+  isBudgetGuardedTool,
   type ComposioClientLike
 } from '../../src/main/connectors/composio.js'
 import { APPROVAL_REQUIRED_TOOLS, buildToolApproval } from '../../src/main/agent/tools.js'
@@ -80,7 +80,7 @@ describe('write tool surface', () => {
     const { provider } = providerWith()
     const tools = toolsOf(provider)
     for (const name of GMAIL_WRITE_TOOLS) {
-      expect(isPaletteGuarded(tools[name])).toBe(true)
+      expect(isBudgetGuardedTool(tools[name])).toBe(true)
     }
   })
 

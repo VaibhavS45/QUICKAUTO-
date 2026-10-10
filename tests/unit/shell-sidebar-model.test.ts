@@ -1,15 +1,10 @@
 import { describe, expect, it } from 'vitest'
-import { SIDEBAR_NAV_ITEMS, SIDEBAR_SECTIONS } from '../../src/renderer/shell/sidebar-model.js'
+import { FORBIDDEN_LABELS, PRIMARY_NAV, SIDEBAR_SECTIONS } from '../../src/renderer/shell/nav.js'
 
 describe('shell sidebar model', () => {
-  it('contains only the requested primary navigation entries', () => {
-    expect(SIDEBAR_NAV_ITEMS.map(({ label }) => label)).toEqual(['New chat', 'Automations', 'Plugins'])
-    expect(SIDEBAR_SECTIONS).toEqual(["Today's schedule", 'Recent tasks', 'Chats'])
-  })
-
-  it('does not include removed sidebar destinations', () => {
-    const forbidden = ['Computers', 'Agents', 'Library', 'Creations', 'Projects', 'More']
-    const visibleLabels = [...SIDEBAR_NAV_ITEMS.map(({ label }) => label), ...SIDEBAR_SECTIONS]
-    expect(visibleLabels).not.toEqual(expect.arrayContaining(forbidden))
+  it('contains only the requested navigation and section labels', () => {
+    const labels = [...PRIMARY_NAV.map(({ label }) => label), ...SIDEBAR_SECTIONS]
+    expect(labels).toEqual(['New chat', 'Automations', 'Plugins', "Today's schedule", 'Recent tasks', 'Chats'])
+    for (const label of FORBIDDEN_LABELS) expect(labels).not.toContain(label)
   })
 })

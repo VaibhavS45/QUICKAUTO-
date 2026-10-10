@@ -721,7 +721,7 @@ export default function SettingsApp({ initialTab }: { initialTab?: string }): Re
         </div>
         <div className="settings-body">
           <div className="settings-body-inner">
-            {tab === 'general' && <GeneralPanel />}
+            {(tab === 'general' || tab === 'account') && <GeneralPanel />}
             {tab === 'appearance' && <AppearancePanel shader={shader} onShader={setShader} />}
             {tab === 'provider' && <ModelPanel />}
             {tab === 'connectors' && <ConnectionsPanel />}

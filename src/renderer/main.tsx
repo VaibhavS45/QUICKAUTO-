@@ -3,6 +3,7 @@ import { createRoot } from 'react-dom/client'
 import PaletteApp from './palette/App'
 import CalendarApp from './calendar/App'
 import SettingsApp from './settings/SettingsDialog'
+import ShellApp from './shell/ShellApp'
 import './styles.css'
 
 /** Single renderer entry; windows pick their UI by URL hash (#palette / #calendar). */
@@ -14,7 +15,8 @@ function Root(): React.JSX.Element {
     return () => window.removeEventListener('hashchange', onChange)
   }, [])
   if (hash === '#calendar') return <CalendarApp />
-  if (hash === '#settings') return <SettingsApp />
+  if (hash.startsWith('#settings')) return <SettingsApp />
+  if (hash === '#app') return <ShellApp />
   return <PaletteApp />
 }
 

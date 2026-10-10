@@ -100,6 +100,10 @@ export const RoutineToggleSchema = z.object({
   enabled: z.boolean()
 })
 
+export const SettingsTabRequestSchema = z.object({
+  tab: z.string().min(1).max(80).regex(/^[a-z0-9-]+$/i).optional()
+}).strict().optional()
+
 export {
   AgentApprovalResponseSchema,
   AgentRunRequestSchema,

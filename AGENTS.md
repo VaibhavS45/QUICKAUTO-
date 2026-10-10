@@ -41,3 +41,18 @@ Docs findings baked in (verified Oct 2026, this repo):
   (conservative meter) with a 15K soft budget / 60% scheduled share so small
   counting differences can never push anyone over the 20K shared-app cap.
   Settings links the Composio dashboard usage page as source of truth.
+
+Ownership rules for the shell and automation work are documented in
+[`docs/ownership.md`](docs/ownership.md). In short:
+- Shell work belongs in `src/renderer/shell/**` and `src/main/agent/**`.
+- Automations work belongs to the other developer; do not edit
+  `src/renderer/features/automations/**`, `src/main/automations/**`, or
+  `src/main/agent/scheduler.ts`.
+- The calendar view is frozen: do not edit `src/renderer/calendar/**` or
+  `src/main/calendar-window.ts`.
+- Shared contracts are additive only; never rename or remove existing fields.
+- Shared entry points may only receive their agreed one-line integration
+  hooks. If more changes are needed, stop and agree first.
+- IPC channels must be namespaced, allowlisted in preload, and validated with
+  zod in main. Production UI must use real data; mock data is allowed only
+  behind a dev flag or in tests and must be labeled as mock.

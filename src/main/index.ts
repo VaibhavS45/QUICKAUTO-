@@ -27,6 +27,7 @@ import {
   PaletteResizeSchema,
   ModelSettingsSchema,
   ProfileSettingsSchema,
+  SettingsTabRequestSchema,
   ConnectionToolSchema,
   type PlatformInfo
 } from './ipc.js'
@@ -60,6 +61,8 @@ import { parseMentionedTools } from '../shared/types.js'
 import { wantsToggle, shouldAutoOpenCalendar } from './agent/background-mode.js'
 import { applyAppBehaviorPatch, resolveAppBehavior, type AppBehavior } from './agent/app-prefs.js'
 import { installStdioGuard } from './agent/stdio-guard.js'
+import { openShellAppWindow } from './agent/shell-app-window.js'
+import { registerAutomationsIpc, registerShellIpc } from './agent/shell-ipc.js'
 
 // Launched without a console, stdio writes hit EPIPE and kill main — swallow it first.
 installStdioGuard()
@@ -307,6 +310,7 @@ function createTray(): void {
   tray = new Tray(icon)
   tray.setToolTip('CalTen')
   const menu = Menu.buildFromTemplate([
+    { label: 'Open app', click: () => openShellAppWindow() },
     { label: 'Open calendar', click: () => openCalendar() },
     { label: 'Toggle command bar', click: () => togglePalette() },
     {
@@ -346,6 +350,8 @@ function applyStrictCsp(): void {
 }
 
 function wireIpc(): void {
+  registerShellIpc()
+  registerAutomationsIpc()
   fireRoutine = (routine) => {
     startAgentRun(routine.prompt, routine.tools, 'scheduled', routine.id)
     new Notification({ title: 'CalTen routine fired', body: routine.prompt.slice(0, 200) }).show()
@@ -388,7 +394,14 @@ function wireIpc(): void {
     return { ok: true as const, ...next }
   })
 
-  ipcMain.on(IpcChannels.settingsShow, () => openSettings())
+  ipcMain.on(IpcChannels.settingsShow, (_event, payload: unknown) => {
+    const parsed = SettingsTabRequestSchema.safeParse(payload)
+    if (!parsed.success) {
+      console.warn('Rejected invalid Settings tab request.')
+      return
+    }
+    openSettings(parsed.data?.tab)
+  })
   ipcMain.on(IpcChannels.settingsHide, () => hideSettings())
 
   ipcMain.handle(IpcChannels.setProfile, (_event, payload: unknown) => {
@@ -773,6 +786,7 @@ async function onReady(): Promise<void> {
   // Command bar, tray and schedules are all reachable from there.
   if (shouldAutoOpenCalendar(process.argv)) {
     openCalendar()
+    openShellAppWindow()
   }
 
   app.on('activate', () => {

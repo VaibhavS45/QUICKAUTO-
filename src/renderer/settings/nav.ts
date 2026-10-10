@@ -1,3 +1,5 @@
+import { EXTRA_NAV } from './extra-tabs.js'
+
 export type SettingsTabId =
   | 'general'
   | 'appearance'
@@ -6,6 +8,7 @@ export type SettingsTabId =
   | 'routines'
   | 'shortcuts'
   | 'usage'
+  | (string & {})
 
 export type SettingsGroupId = 'app' | 'ai' | 'system'
 
@@ -22,15 +25,25 @@ export const SETTINGS_GROUPS: Array<{ id: SettingsGroupId; label: string }> = [
   { id: 'system', label: 'System' }
 ]
 
-export const SETTINGS_NAV: SettingsNavItem[] = [
+const BUILTIN_SETTINGS_NAV: SettingsNavItem[] = [
   { id: 'general', label: 'General', group: 'app', keywords: ['profile', 'language', 'background'] },
   { id: 'appearance', label: 'Appearance', group: 'app', keywords: ['shader', 'theme', 'sidebar'] },
   { id: 'provider', label: 'Provider', group: 'ai', keywords: ['model', 'anthropic', 'openai', 'api', 'key'] },
   { id: 'connectors', label: 'Connectors', group: 'ai', keywords: ['composio', 'gmail', 'github', 'notion', 'sheets'] },
   { id: 'routines', label: 'Routines', group: 'system', keywords: ['schedule', 'calendar'] },
   { id: 'shortcuts', label: 'Shortcuts', group: 'system', keywords: ['hotkey'] },
-  { id: 'usage', label: 'Usage', group: 'system', keywords: ['budget', 'composio'] }
+  { id: 'usage', label: 'Usage', group: 'system', keywords: ['budget', 'composio'] },
 ]
+
+export function createSettingsNav(extraNav: SettingsNavItem[] = EXTRA_NAV): SettingsNavItem[] {
+  return [...BUILTIN_SETTINGS_NAV, ...extraNav]
+}
+
+export const SETTINGS_NAV: SettingsNavItem[] = createSettingsNav()
+
+export function isSettingsTabRegistered(id: string, items: SettingsNavItem[] = SETTINGS_NAV): boolean {
+  return items.some((item) => item.id === id)
+}
 
 /** Case-insensitive sidebar filter over label, id, and keywords. Pure for unit testing. */
 export function filterSettingsNav(query: string): SettingsNavItem[] {

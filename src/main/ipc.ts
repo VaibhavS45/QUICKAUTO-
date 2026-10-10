@@ -6,6 +6,15 @@ import {
 import { ModelSettingsSchema } from './settings/model-settings.js'
 import { ProfileSettingsSchema } from './agent/profile-settings.js'
 import { AppBehaviorPatchSchema, AppBehaviorSchema } from './agent/app-prefs.js'
+import {
+  ChatAppendSchema,
+  ChatClearSchema,
+  ChatCreateSchema,
+  ChatRenameSchema,
+  ChatThreadIdSchema
+} from '../shared/chat.js'
+import { ShellIpcChannels } from './shell/ipc.js'
+import { SettingsShellChannels } from './shell/settings-ipc.js'
 
 /**
  * Typed IPC contract. Renderers may only invoke these channels
@@ -39,7 +48,16 @@ export const IpcChannels = {
   settingsShow: 'settings:show',
   settingsHide: 'settings:hide',
   /** GitHub CLI status for @github (local gh; token never crosses IPC). */
-  githubStatus: 'github:status'
+  githubStatus: 'github:status',
+  chatList: 'shell:chat-list',
+  chatGet: 'shell:chat-get',
+  chatCreate: 'shell:chat-create',
+  chatAppend: 'shell:chat-append',
+  chatRename: 'shell:chat-rename',
+  chatRemove: 'shell:chat-remove',
+  chatClear: 'shell:chat-clear',
+  ...ShellIpcChannels,
+  ...SettingsShellChannels
 } as const
 
 export type IpcChannel = (typeof IpcChannels)[keyof typeof IpcChannels]
@@ -72,6 +90,14 @@ export const RoutineToggleSchema = z.object({
   id: z.string().min(1).max(128),
   enabled: z.boolean()
 })
+
+export {
+  ChatAppendSchema,
+  ChatClearSchema,
+  ChatCreateSchema,
+  ChatRenameSchema,
+  ChatThreadIdSchema
+}
 
 export const SettingsTabRequestSchema = z.object({
   tab: z.string().min(1).max(80).regex(/^[a-z0-9-]+$/i).optional()

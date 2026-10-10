@@ -114,7 +114,7 @@ export function buildToolApproval(
 ): Record<string, ToolApprovalValue> {
   const out: Record<string, ToolApprovalValue> = {}
   for (const name of toolNames) {
-    if (APPROVAL_REQUIRED_TOOLS.has(name)) {
+    if (APPROVAL_REQUIRED_TOOLS.has(name) || name.startsWith('mcp_')) {
       out[name] =
         source === 'scheduled'
           ? { type: 'denied', reason: 'Scheduled runs cannot auto-approve writes; queued for review.' }

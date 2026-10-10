@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { ChatMessageSchema } from './chat.js'
 
 /** Where an agent run originated. Scheduled runs get stricter budget/approval rules. */
 export const RunSourceSchema = z.enum(['palette', 'chat', 'scheduled'])
@@ -22,10 +23,44 @@ export type AgentEvent =
   | { type: 'error'; runId: string; message: string }
   | { type: 'aborted'; runId: string }
 
+const AgentEventBase = { runId: z.string().min(1).max(128) }
+export const AgentEventSchema = z.discriminatedUnion('type', [
+  z.object({ type: z.literal('text-delta'), ...AgentEventBase, delta: z.string() }).strict(),
+  z.object({
+    type: z.literal('tool-call'),
+    ...AgentEventBase,
+    toolCallId: z.string(),
+    toolName: z.string(),
+    input: z.unknown()
+  }).strict(),
+  z.object({
+    type: z.literal('tool-result'),
+    ...AgentEventBase,
+    toolCallId: z.string(),
+    toolName: z.string(),
+    output: z.unknown()
+  }).strict(),
+  z.object({
+    type: z.literal('approval-requested'),
+    ...AgentEventBase,
+    approvalId: z.string(),
+    toolCallId: z.string(),
+    toolName: z.string(),
+    input: z.unknown(),
+    reason: z.string().optional()
+  }).strict(),
+  z.object({ type: z.literal('done'), ...AgentEventBase, text: z.string(), steps: z.number().int().nonnegative() }).strict(),
+  z.object({ type: z.literal('error'), ...AgentEventBase, message: z.string() }).strict(),
+  z.object({ type: z.literal('aborted'), ...AgentEventBase }).strict()
+])
+
 export const AgentRunRequestSchema = z.object({
   prompt: z.string().min(1).max(20000),
   tools: z.array(z.string()).max(16),
-  source: RunSourceSchema
+  source: RunSourceSchema,
+  chatId: z.string().min(1).max(128).optional(),
+  history: z.array(ChatMessageSchema).max(20).optional(),
+  systemPrompt: z.string().max(12000).optional()
 })
 export type AgentRunRequest = z.infer<typeof AgentRunRequestSchema>
 

@@ -33,6 +33,7 @@ export type ScheduleItem = z.infer<typeof ScheduleItemSchema>
 export const RunRecordSchema = z.object({
   id: z.string().min(1),
   routineId: z.string().min(1).optional(),
+  chatId: z.string().min(1).optional(),
   title: z.string(),
   startedAt: z.number().int(),
   endedAt: z.number().int().optional(),

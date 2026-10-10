@@ -4,10 +4,6 @@ Raycast-style pop-up command palette (global hotkey) + calendar app for scheduli
 AI agent tasks. All data stays local except what your chosen model provider, web
 search provider, and Composio receive. No telemetry.
 
-> **Milestone 1 done.** Frameless palette window with `@` autocomplete, tray,
-> configurable hotkey (with Wayland fallback), calendar shell, typed IPC + CSP.
-> No agent loop yet — that lands in M2. See *Milestone status* below.
-
 ## Quick start
 
 ```bash
@@ -80,11 +76,11 @@ itself runs a Wayland session.
 | Package | Pinned | Finding |
 |---|---|---|
 | Electron | `^44.5.0` (installed 44.6.0) | Wayland native since 38.2, but `globalShortcut` still restricted → CLI fallback stands. Latest 3 majors supported. |
-| Vercel AI SDK `ai` | **v7** (`^7`, needs Node 22+) | `ToolLoopAgent` exists; per-call `needsApproval` on `tool()` is **deprecated** → use `toolApproval` on the agent/generate call. Spec updated accordingly (M2). |
-| `@composio/core` / `@composio/vercel` | `^0.13` / `^0.11` (M3) | `@composio/vercel@0.11+` supports `ai@^6 \|\| ^7`. REST API is v3.1; manual `execute()` now requires a toolkit version (agentic flows set the skip flag internally). |
-| `@opencode-ai/sdk` | `^1.18.35` (M5) | `createOpencodeClient({ baseUrl, fetch })` attaches to the local server; session, event subscription, and permission APIs power conflict resolution. |
+| Vercel AI SDK `ai` | **v7** (`^7`, needs Node 22+) | `ToolLoopAgent` exists; per-call `needsApproval` on `tool()` is **deprecated** → use `toolApproval` on the agent/generate call. |
+| `@composio/core` / `@composio/vercel` | `^0.13` / `^0.11` | `@composio/vercel@0.11+` supports `ai@^6 \|\| ^7`. REST API is v3.1; manual `execute()` now requires a toolkit version (agentic flows set the skip flag internally). |
+| `@opencode-ai/sdk` | `^1.18.35` | `createOpencodeClient({ baseUrl, fetch })` attaches to the local server; session, event subscription, and permission APIs power conflict resolution. |
 | electron-vite | `^5.0.0` | Single renderer entry + hash routing (`#palette` / `#calendar`) — multi-page `rollupOptions.input` objects are dropped by its config merge, so we don't use them. |
-| electron-builder | `^26` | AppImage + deb, dmg, nsis targets (M6). |
+| electron-builder | `^26` | AppImage + deb, dmg, nsis targets. |
 
 ## Composio free-plan counting (source of truth, verified Oct 2026)
 
@@ -100,17 +96,16 @@ The spec asked to count every request including meta-tools until confirmed.
 Confirmed now: meta-tools are free and failures are free — but the app still
 counts **every attempted Composio call locally** (conservative meter) and keeps
 the 15K soft budget / scheduled-vs-interactive split, so small counting
-differences can never push anyone over 20K. Full BudgetGuard lands in M3;
-Settings will link the Composio dashboard usage page as the source of truth.
+differences can never push anyone over 20K. The Composio dashboard usage page
+is the source of truth.
 
 ## Security model
 
 - `contextIsolation: true`, `nodeIntegration: false`, `sandbox: true` renderers.
 - Preload exposes a small `window.palette` API only; every IPC payload is
   validated with zod in main. Strict CSP (dev allows localhost HMR).
-- Secrets (model keys, Composio keys) will live in the OS keychain
-  (keytar / safeStorage) in M2–M3 — never in the renderer, localStorage, or
-  plain files. Nothing secret exists yet in M1.
+- Secrets (model keys, Composio keys) must never live in the renderer,
+  localStorage, or plain files.
 
 ## Repo notes / deviations from the spec
 
@@ -121,18 +116,4 @@ Settings will link the Composio dashboard usage page as the source of truth.
   `build`/`dev` scripts; `preloadPath()` resolves it in both modes.
 - electron 44.6.0 installed (caret range above the 44.5.0 pin) — same major, fine.
 - `needsApproval` → `toolApproval` (AI SDK v7), per deprecation notice.
-- Tray icon uses an empty `nativeImage` placeholder until M6 artwork lands.
-
-## Milestone status
-
-- [x] **M1** — scaffold, tray, hotkey (+Wayland `--toggle`), frameless palette
-  with `@` autocomplete + aliases, calendar shell with draft handoff, unit +
-  Playwright smoke tests. **Stop for review here.**
-- [ ] M2 — agent loop (`ai` v7 `ToolLoopAgent` + `toolApproval`), one provider,
-  `@websearch` + `@files` tools, streaming + approval cards.
-- [ ] M3 — `ConnectorProvider` + Composio (Gmail/Sheets/Notion), Connections
-  page, full BudgetGuard (meter, caps, cache, dedupe, pre-flight) with tests.
-- [ ] M4 — SQLite, croner scheduler, FullCalendar UI, run history,
-  notifications, missed-run recovery.
-- [ ] M5 — `@opencode`/`@github` via `opencode serve` + SDK, two seeded tasks.
-- [ ] M6 — packaging, autostart polish, full test suite, setup docs.
+- Tray icon uses an empty `nativeImage` placeholder.

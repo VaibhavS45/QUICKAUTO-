@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react'
-import type { AgentProfile } from '../../../main/shell/agent-store.js'
+import type { AgentProfile } from '../../../main/agent/agent-store.js'
 import { Button } from '../../components/ui/button.js'
 import { Card, CardSub, CardTitle } from '../../components/ui/card.js'
 import { Input, Textarea } from '../../components/ui/input.js'

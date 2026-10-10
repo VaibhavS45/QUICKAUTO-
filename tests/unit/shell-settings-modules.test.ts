@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { buildToolApproval } from '../../src/main/agent/tools.js'
-import { AgentStore, MAX_AGENTS } from '../../src/main/shell/agent-store.js'
+import { AgentStore, MAX_AGENTS } from '../../src/main/agent/agent-store.js'
 import { isSafeMcpHttpUrl } from '../../src/main/shell/mcp-client.js'
 import { McpConnectorProvider } from '../../src/main/shell/mcp-provider.js'
 import {

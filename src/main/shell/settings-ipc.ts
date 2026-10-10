@@ -1,6 +1,6 @@
 import { z } from 'zod'
 import { EmptyShellRequestSchema } from './ipc.js'
-import { AgentProfileSchema, type AgentStore } from './agent-store.js'
+import { AgentProfileSchema, type AgentStore } from '../agent/agent-store.js'
 import { McpServerConfigSchema, type McpRegistry } from './mcp-registry.js'
 import type { PluginRegistry } from './plugin-registry.js'
 

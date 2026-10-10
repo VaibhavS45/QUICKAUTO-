@@ -12,7 +12,7 @@ import {
   SETTINGS_HEIGHT,
   SETTINGS_MIN_WIDTH,
   SETTINGS_WIDTH
-} from '../../src/main/agent/settings-layout.js'
+} from '../../src/main/shell/settings-layout.js'
 
 describe('cn', () => {
   it('joins truthy classes only', () => {

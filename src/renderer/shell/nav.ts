@@ -11,11 +11,10 @@ export interface ShellRoute {
 
 export const PRIMARY_NAV: PrimaryNavItem[] = [
   { id: 'home', label: 'New chat', view: 'home' },
-  { id: 'automations', label: 'Automations', view: 'automations' },
-  { id: 'plugins', label: 'Plugins', view: 'plugins' }
+  { id: 'automations', label: 'Automations', view: 'automations' }
 ]
 
-export const SIDEBAR_SECTIONS = ["Today's schedule", 'Recent tasks', 'Chats'] as const
+export const SIDEBAR_SECTIONS = ['Chats'] as const
 
 export const FORBIDDEN_LABELS = [
   'Computers',

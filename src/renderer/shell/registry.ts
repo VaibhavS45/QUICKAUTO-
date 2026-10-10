@@ -1,5 +1,5 @@
 import type { FeatureModule } from '../contracts/feature.js'
-import { AutomationsPlaceholder } from './placeholders/AutomationsPlaceholder.js'
+import { AutomationsPlaceholder } from './AutomationsPlaceholder.js'
 
 const placeholder: FeatureModule = {
   id: 'automations',

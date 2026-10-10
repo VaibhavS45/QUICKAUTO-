@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import type { FeatureProps } from '../../contracts/feature.js'
+import type { FeatureProps } from '../contracts/feature.js'
 
 export function AutomationsPlaceholder(_props: FeatureProps): React.JSX.Element {
   const [tab, setTab] = useState('Schedule')

@@ -1,7 +1,7 @@
 import { ipcRenderer } from 'electron'
 import type { AppNotification } from '../shared/contracts/notifications.js'
 import type { RunRecord, TodaySchedule } from '../shared/contracts/schedule.js'
-import type { AgentProfile } from '../main/shell/agent-store.js'
+import type { AgentProfile } from '../main/agent/agent-store.js'
 import type { McpServerConfig, McpServerPublic } from '../main/shell/mcp-registry.js'
 import type { Plugin } from '../main/shell/plugin-registry.js'
 

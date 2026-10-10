@@ -8,9 +8,8 @@ import { buildInstructions, getToolsForMentions } from './registry.js'
 import { runWithContext } from './run-context.js'
 import { buildToolApproval } from './tools.js'
 import type { ModelSettings } from '../settings/model-settings.js'
-import type { AgentProvider } from './agent-provider.js'
-import type { OpencodeClientLike } from './opencode-server.js'
-import { runOpencodePrompt } from './opencode-resolve.js'
+import { DEFAULT_ACP_MODEL, type AgentProvider } from './agent-provider.js'
+import { runAcpPrompt } from './acp-client.js'
 import { runPiPrompt } from './pi-run.js'
 
 /**
@@ -56,9 +55,11 @@ export interface RunnerDeps {
   getTools?: (toolIds: ToolId[]) => Promise<ToolSet>
   /** Selected agent harness; absent = builtin Vercel AI SDK loop. */
   getAgentProvider?: () => AgentProvider
-  /** Injected in main (server manager); tests may stub. */
-  getOpencodeClient?: () => Promise<OpencodeClientLike>
   getHarnessDirectory?: () => string
+  /** ACP model id for opencode runs; null = free default (DEFAULT_ACP_MODEL). */
+  getAcpModel?: () => string | null
+  /** Injected in tests to avoid spawning `opencode acp`. */
+  runAcp?: (req: { prompt: string; systemPrompt?: string; model?: string; runId: string; signal?: AbortSignal; emit: (e: AgentEvent) => void; onPermission?: (perm: { id: string; toolCallId: string; toolName: string; input: unknown; reason?: string }) => Promise<boolean> }) => Promise<{ text: string; steps: number }>
   /** Injected in tests to avoid spawning pi. */
   runPi?: (req: { prompt: string; systemPrompt?: string; runId: string; signal?: AbortSignal; emit: (e: AgentEvent) => void }) => Promise<{ text: string; steps: number }>
   /** Injected in tests to avoid network/model calls. */
@@ -126,36 +127,37 @@ async function runViaHarness(args: HarnessRunArgs): Promise<{ text: string; step
         const runPi = deps.runPi ?? ((r) => runPiPrompt({ ...r, cwd: deps.getHarnessDirectory?.() }))
         return await runPi({ prompt, systemPrompt: args.systemPrompt, runId, signal, emit })
       }
-      if (!deps.getOpencodeClient || !deps.getHarnessDirectory) {
+      if (!deps.getHarnessDirectory) {
         return fail('OpenCode harness is not wired in this build.')
       }
-      const client = await deps.getOpencodeClient()
-      const text = await runOpencodePrompt({
-        client,
-        directory: deps.getHarnessDirectory(),
-        prompt: [args.systemPrompt?.trim() ? `Additional user-provided instructions:\n${args.systemPrompt.trim()}` : '', prompt]
-          .filter(Boolean)
-          .join('\n\n'),
-        signal,
-        onPermission: async (perm) => {
-          if (!args.decideApproval) return false
-          const decision = await args.decideApproval({
-            approvalId: perm.id,
-            toolCallId: perm.id,
-            toolName: `opencode: ${perm.type} ${perm.title}`,
-            input: { pattern: perm.pattern ?? null, metadata: perm.metadata ?? null },
-            reason: 'OpenCode requests permission.'
-          })
-          return decision.approved
-        }
+      const runAcp = deps.runAcp ?? ((r) => runAcpPrompt({ ...r, cwd: deps.getHarnessDirectory?.() }))
+      const acp = await runAcp({
+          prompt: [args.systemPrompt?.trim() ? `Additional user-provided instructions:\n${args.systemPrompt.trim()}` : '', prompt]
+            .filter(Boolean)
+            .join('\n\n'),
+          model: deps.getAcpModel?.() ?? DEFAULT_ACP_MODEL,
+          runId,
+          signal,
+          emit,
+          onPermission: async (perm) => {
+            if (!args.decideApproval) return false
+            const decision = await args.decideApproval({
+              approvalId: perm.id,
+              toolCallId: perm.toolCallId,
+              toolName: perm.toolName,
+              input: perm.input,
+              reason: perm.reason ?? 'OpenCode requests permission.'
+            })
+            return decision.approved
+          }
       })
+      const { text, steps } = acp
       if (signal?.aborted) {
         emit({ type: 'aborted', runId })
         return { text: '', steps: 0 }
       }
-      // ponytail: steps=1, harnesses don't report tool-step counts
-      emit({ type: 'done', runId, text, steps: 1 })
-      return { text, steps: 1 }
+      emit({ type: 'done', runId, text, steps })
+      return { text, steps }
     } catch (err) {
       if (signal?.aborted || (err instanceof Error && err.name === 'AbortError')) {
         emit({ type: 'aborted', runId })

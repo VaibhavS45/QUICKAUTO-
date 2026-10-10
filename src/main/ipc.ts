@@ -6,7 +6,7 @@ import {
 import { ModelSettingsSchema } from './settings/model-settings.js'
 import { AgentProviderSchema } from './agent/agent-provider.js'
 import { ProfileSettingsSchema } from './agent/profile-settings.js'
-import { AppBehaviorPatchSchema, AppBehaviorSchema } from './agent/app-prefs.js'
+import { AppBehaviorPatchSchema, AppBehaviorSchema } from './shell/app-prefs.js'
 import {
   ChatAppendSchema,
   ChatClearSchema,
@@ -53,6 +53,10 @@ export const IpcChannels = {
   agentProviderGet: 'agent-provider:get',
   agentProviderSet: 'agent-provider:set',
   agentProviderDetect: 'agent-provider:detect',
+  /** ACP model list for the chat model picker (ids + labels only, never secrets). */
+  opencodeModels: 'opencode:models',
+  opencodeModelGet: 'opencode:model-get',
+  opencodeModelSet: 'opencode:model-set',
   githubStatus: 'github:status',
   chatList: 'shell:chat-list',
   chatGet: 'shell:chat-get',
@@ -77,6 +81,10 @@ export const ConnectionToolSchema = z.object({
 
 export const AgentCancelSchema = z.object({
   runId: z.string().min(1).max(128)
+})
+
+export const AcpModelSchema = z.object({
+  model: z.string().min(1).max(160)
 })
 
 export const ConnectorKeySchema = z.object({

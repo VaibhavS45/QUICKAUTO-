@@ -11,6 +11,7 @@ import {
   RoutineIdSchema,
   RoutineToggleSchema,
   AgentCancelSchema,
+  AcpModelSchema,
   AgentRunRequestSchema,
   AgentApprovalResponseSchema,
   ModelSettingsSchema,
@@ -22,10 +23,11 @@ import { TOOL_IDS, type ToolId } from '../shared/types.js'
 import type { AgentEvent } from '../shared/agent.js'
 import { runAgent, type ApprovalDecision } from './agent/runner.js'
 import { ModelSettingsService, type SettingsStore } from './settings/model-settings.js'
-import { AgentProviderService, detectHarnesses } from './agent/agent-provider.js'
+import { AgentProviderService, AcpModelService, DEFAULT_ACP_MODEL, detectHarnesses, pickAutoEngine } from './agent/agent-provider.js'
 import { ProfileSettingsService } from './agent/profile-settings.js'
 import { GitHubResolveProvider } from './connectors/github-resolve.js'
 import { OpencodeServerManager } from './agent/opencode-server.js'
+import { listAcpModels } from './agent/acp-client.js'
 import { runOpencodeResolve, type OpencodePermission } from './agent/opencode-resolve.js'
 import {
   setNestedApprovalHandler,
@@ -33,7 +35,7 @@ import {
   requestNestedApprovalForCurrentRun
 } from './agent/nested-approval.js'
 import { BudgetGuard, type BudgetStore, type BudgetUsageState } from './connectors/budget-guard.js'
-import { ConnectorSettingsService, type ConnectorStore } from './connectors/connector-settings.js'
+import { ConnectorSettingsService, type ConnectorStore } from './settings/connector-settings.js'
 import { ComposioProvider } from './connectors/composio-tools.js'
 import { GitHubCliProvider, isZeroCostTool, validateRepoEntry } from './connectors/github-cli.js'
 import { ComposioConnectorProvider, isBudgetGuardedTool } from './connectors/composio.js'
@@ -44,11 +46,10 @@ import {
   type RoutineStore
 } from './agent/scheduler.js'
 import { shouldAutoOpenApp } from './shell/launch-policy.js'
-import { applyAppBehaviorPatch, resolveAppBehavior, type AppBehavior } from './agent/app-prefs.js'
+import { applyAppBehaviorPatch, resolveAppBehavior, type AppBehavior } from './shell/app-prefs.js'
 import { installStdioGuard } from './agent/stdio-guard.js'
 import { createAppTray, watchDockVisibility } from './shell/app-lifecycle.js'
-import { registerAutomationsIpc, registerShellIpc } from './agent/shell-ipc.js'
-import { getShellAppWindow, openShellAppWindow } from './agent/shell-app-window.js'
+import { getShellAppWindow, openShellAppWindow } from './shell/shell-app-window.js'
 import type { RunSource } from '../shared/agent.js'
 import { ChatStore, type ChatStoreStorage } from './shell/chat-store.js'
 import { registerChatIpc } from './shell/chat-ipc.js'
@@ -105,6 +106,8 @@ const settingsService = new ModelSettingsService(new ElectronSettingsStore(), {
 const profileService = new ProfileSettingsService(new ElectronSettingsStore())
 
 const agentProviderService = new AgentProviderService(new ElectronSettingsStore())
+
+const acpModelService = new AcpModelService(new ElectronSettingsStore())
 
 const chatFile = new Store<{ 'chat-threads': unknown[] }>({
   name: 'palette-chats',
@@ -305,8 +308,6 @@ function applyStrictCsp(): void {
 function wireIpc(): void {
   const shellRuntime = createShellRuntime(ipcMain, () => scheduler.list(), getShellAppWindow, (id, status) => scheduler.markRan(id, status))
   routineChangeHook = () => shellRuntime.scheduleChanged()
-  registerShellIpc()
-  registerAutomationsIpc()
   registerChatIpc(ipcMain, chatStore)
   settingsShellRuntime.registerIpc(ipcMain)
   fireRoutine = (routine) => {
@@ -333,6 +334,28 @@ function wireIpc(): void {
   ipcMain.handle(IpcChannels.agentProviderDetect, async () => {
     try {
       return { ok: true as const, harnesses: await detectHarnesses() }
+    } catch (err) {
+      return { ok: false as const, error: err instanceof Error ? err.message : String(err) }
+    }
+  })
+
+  ipcMain.handle(IpcChannels.opencodeModels, async () => {
+    try {
+      // Harness workspace, same cwd chat runs use.
+      const models = await listAcpModels({ cwd: os.homedir() })
+      return { ok: true as const, ...models }
+    } catch (err) {
+      return { ok: false as const, error: err instanceof Error ? err.message : String(err) }
+    }
+  })
+
+  ipcMain.handle(IpcChannels.opencodeModelGet, () => ({ ok: true as const, model: acpModelService.get() }))
+
+  ipcMain.handle(IpcChannels.opencodeModelSet, (_event, payload: unknown) => {
+    const parsed = AcpModelSchema.safeParse(payload)
+    if (!parsed.success) return { ok: false as const, error: 'Invalid model.' }
+    try {
+      return { ok: true as const, model: acpModelService.set(parsed.data.model) }
     } catch (err) {
       return { ok: false as const, error: err instanceof Error ? err.message : String(err) }
     }
@@ -467,10 +490,7 @@ function wireIpc(): void {
         getConfig: () => settingsService.getConfig(),
         getApiKey: () => settingsService.getApiKey(),
         getAgentProvider: () => agentProviderService.get(),
-        getOpencodeClient: async () => {
-          await opencodeManager.start()
-          return opencodeManager.client()
-        },
+        getAcpModel: () => acpModelService.get(),
         // Harness workspace: the user's home dir (their machine, their agent).
         getHarnessDirectory: () => os.homedir(),
         // Every Composio tool execution goes through BudgetGuard here.
@@ -689,6 +709,35 @@ async function onReady(): Promise<void> {
   scheduler.startAll()
   createTray()
   applyAutostart()
+
+  // First run with an installed harness but no model key: auto-connect the
+  // harness (opencode preferred) so chat works immediately. Never overrides
+  // an explicit engine choice or a ready builtin key.
+  void (async () => {
+    try {
+      const [key, harnesses] = await Promise.all([settingsService.getApiKey(), detectHarnesses()])
+      const pick = pickAutoEngine({
+        explicit: agentProviderService.hasExplicit(),
+        keySet: key !== null,
+        harnesses
+      })
+      if (pick) agentProviderService.set(pick)
+      // Default chat to big-pickle when it is actually available (needs
+      // `opencode auth login`); never overrides an explicit model choice.
+      if ((pick === 'opencode' || agentProviderService.get() === 'opencode') && !acpModelService.get()) {
+        try {
+          const models = await listAcpModels({ cwd: os.homedir() })
+          if (models.options.some((o) => o.value === DEFAULT_ACP_MODEL)) {
+            acpModelService.set(DEFAULT_ACP_MODEL)
+          }
+        } catch {
+          /* picker stays on the agent default; models IPC explains */
+        }
+      }
+    } catch {
+      /* stay on builtin; Settings explains setup */
+    }
+  })()
 
   if (shouldAutoOpenApp(process.argv)) openShellAppWindow()
   app.on('activate', () => openShellAppWindow())

@@ -4,7 +4,7 @@ import {
   resolveAppBehavior,
   applyAppBehaviorPatch,
   DEFAULT_APP_BEHAVIOR
-} from '../../src/main/agent/app-prefs.js'
+} from '../../src/main/shell/app-prefs.js'
 
 describe('launch policy', () => {
   it('opens the app by default and only stays in the background when requested', () => {

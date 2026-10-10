@@ -46,8 +46,6 @@ export const IpcChannels = {
   routineCreate: 'routine:create',
   routineRemove: 'routine:remove',
   routineToggle: 'routine:toggle',
-  getAwake: 'awake:get',
-  setAwake: 'awake:set',
   getProfile: 'settings:get-profile',
   setProfile: 'settings:set-profile',
   getAppBehavior: 'app:get-behavior',
@@ -97,10 +95,6 @@ export const RoutineIdSchema = z.object({
 
 export const RoutineToggleSchema = z.object({
   id: z.string().min(1).max(128),
-  enabled: z.boolean()
-})
-
-export const AwakeSetSchema = z.object({
   enabled: z.boolean()
 })
 

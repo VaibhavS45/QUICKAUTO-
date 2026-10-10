@@ -81,8 +81,6 @@ export function createBuiltinTools() {
   return { echo, echo_write, write_file }
 }
 
-export type BuiltinToolName = keyof ReturnType<typeof createBuiltinTools>
-
 /** Tools that need an in-app approve/deny card before they may run. */
 export const APPROVAL_REQUIRED_TOOLS: ReadonlySet<string> = new Set([
   'echo_write',

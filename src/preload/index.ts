@@ -103,10 +103,6 @@ const api = {
   routineCreate: (text: string) => ipcRenderer.invoke('routine:create', { text }),
   routineRemove: (id: string) => ipcRenderer.invoke('routine:remove', { id }),
   routineToggle: (id: string, enabled: boolean) => ipcRenderer.invoke('routine:toggle', { id, enabled }),
-  getAwake: (): Promise<{ ok: boolean; enabled: boolean; holding: boolean }> =>
-    ipcRenderer.invoke('awake:get'),
-  setAwake: (enabled: boolean): Promise<{ ok: boolean; enabled: boolean; holding: boolean }> =>
-    ipcRenderer.invoke('awake:set', { enabled }),
   getProfile: (): Promise<{ name: string; email: string; about: string; language: string }> =>
     ipcRenderer.invoke('settings:get-profile'),
   setProfile: (p: { name: string; email: string; about: string; language: string }) =>

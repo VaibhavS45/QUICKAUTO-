@@ -66,8 +66,6 @@ export const HotkeySchema = z
   .max(60)
   .regex(/^[A-Za-z0-9+ ]+$/, 'Hotkey may only contain letters, digits, + and space')
 
-export type HotkeyString = z.infer<typeof HotkeySchema>
-
 /** Platform default: macOS uses Alt+Space (Cmd+Space = Spotlight). Others Ctrl+Space. */
 export function defaultHotkey(platform: string): string {
   return platform === 'darwin' ? 'Alt+Space' : 'Ctrl+Space'

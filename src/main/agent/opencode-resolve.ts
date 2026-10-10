@@ -65,6 +65,10 @@ export interface OpencodeResolveRequest {
   onPermission: (perm: OpencodePermission) => Promise<boolean>
 }
 
+export interface OpencodePromptRequest extends OpencodeResolveRequest {
+  title?: string
+}
+
 export interface OpencodeResolveResult {
   /** Assistant text (tail). */
   summary: string
@@ -146,10 +150,15 @@ export function parseResolveOutcome(text: string): { resolved: string[]; unresol
   return { resolved, unresolved }
 }
 
-export async function runOpencodeResolve(req: OpencodeResolveRequest): Promise<OpencodeResolveResult> {
+/**
+ * Generic one-shot prompt in an OpenCode session with the same permission
+ * gating as conflict resolution. Returns the tail of the assistant text.
+ * Streaming text-deltas are skipped: the prompt result is authoritative.
+ */
+export async function runOpencodePrompt(req: OpencodePromptRequest): Promise<string> {
   const { client, directory } = req
   const session = unwrapData<{ id: string }>(
-    await req.client.session.create({ query: { directory }, body: { title: 'Palette: resolve PR conflicts' } }),
+    await req.client.session.create({ query: { directory }, body: { title: req.title ?? 'Palette agent run' } }),
     'session.create'
   )
 
@@ -209,8 +218,7 @@ export async function runOpencodeResolve(req: OpencodeResolveRequest): Promise<O
       'session.prompt'
     )
     const summary = assistantText(promptResult).slice(-4000)
-    const { resolved, unresolved } = parseResolveOutcome(summary)
-    return { summary, resolved, unresolved }
+    return summary
   } catch (err) {
     if (req.signal?.aborted) {
       await abortSession(client, directory, session.id).catch(() => undefined)
@@ -222,6 +230,12 @@ export async function runOpencodeResolve(req: OpencodeResolveRequest): Promise<O
   }
 }
 
+export async function runOpencodeResolve(req: OpencodeResolveRequest): Promise<OpencodeResolveResult> {
+  const summary = await runOpencodePrompt({ ...req, title: 'Palette: resolve PR conflicts' })
+  const { resolved, unresolved } = parseResolveOutcome(summary)
+  return { summary, resolved, unresolved }
+}
+
 async function abortSession(client: OpencodeClientLike, directory: string, id: string): Promise<void> {
   try {
     await client.session.abort({ path: { id }, query: { directory } })
@@ -231,5 +245,5 @@ async function abortSession(client: OpencodeClientLike, directory: string, id: s
 }
 
 function abortError(): Error {
-  return Object.assign(new Error('Conflict resolution aborted.'), { name: 'AbortError' })
+  return Object.assign(new Error('OpenCode run aborted.'), { name: 'AbortError' })
 }

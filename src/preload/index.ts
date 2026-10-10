@@ -90,6 +90,15 @@ const api = {
     repos?: Array<{ path: string; repo: string }>
     error?: string
   }> => ipcRenderer.invoke('github:status'),
+  getAgentProvider: (): Promise<{ ok: boolean; provider?: string; error?: string }> =>
+    ipcRenderer.invoke('agent-provider:get'),
+  setAgentProvider: (provider: string): Promise<{ ok: boolean; provider?: string; error?: string }> =>
+    ipcRenderer.invoke('agent-provider:set', { provider }),
+  detectHarnesses: (): Promise<{
+    ok: boolean
+    harnesses?: Array<{ id: string; installed: boolean; version?: string; detail: string }>
+    error?: string
+  }> => ipcRenderer.invoke('agent-provider:detect'),
   routineList: (): Promise<{
     ok: boolean
     routines: Array<{

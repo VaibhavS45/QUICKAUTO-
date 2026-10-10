@@ -8,6 +8,10 @@ import { buildInstructions, getToolsForMentions } from './registry.js'
 import { runWithContext } from './run-context.js'
 import { buildToolApproval } from './tools.js'
 import type { ModelSettings } from '../settings/model-settings.js'
+import type { AgentProvider } from './agent-provider.js'
+import type { OpencodeClientLike } from './opencode-server.js'
+import { runOpencodePrompt } from './opencode-resolve.js'
+import { runPiPrompt } from './pi-run.js'
 
 /**
  * Agent runner. Uses the Vercel AI SDK `ai` v7 `ToolLoopAgent` with
@@ -50,6 +54,13 @@ export interface RunnerDeps {
   getConfig: () => ModelSettings
   getApiKey: () => Promise<string | null>
   getTools?: (toolIds: ToolId[]) => Promise<ToolSet>
+  /** Selected agent harness; absent = builtin Vercel AI SDK loop. */
+  getAgentProvider?: () => AgentProvider
+  /** Injected in main (server manager); tests may stub. */
+  getOpencodeClient?: () => Promise<OpencodeClientLike>
+  getHarnessDirectory?: () => string
+  /** Injected in tests to avoid spawning pi. */
+  runPi?: (req: { prompt: string; systemPrompt?: string; runId: string; signal?: AbortSignal; emit: (e: AgentEvent) => void }) => Promise<{ text: string; steps: number }>
   /** Injected in tests to avoid network/model calls. */
   createAgent?: (args: {
     model: unknown
@@ -86,6 +97,75 @@ function asRecord(v: unknown): Record<string, unknown> {
   return typeof v === 'object' && v !== null ? (v as Record<string, unknown>) : {}
 }
 
+interface HarnessRunArgs {
+  harness: 'opencode' | 'pi'
+  prompt: string
+  source: RunSource
+  signal?: AbortSignal
+  runId: string
+  emit: (e: AgentEvent) => void
+  systemPrompt?: string
+  decideApproval?: RunAgentOptions['decideApproval']
+  deps: RunnerDeps
+}
+
+/** Whole-run delegation to an external harness. Always emits done/error/aborted. */
+async function runViaHarness(args: HarnessRunArgs): Promise<{ text: string; steps: number }> {
+  const { harness, prompt, signal, runId, emit, deps } = args
+  const fail = (message: string): { text: string; steps: number } => {
+    emit({ type: 'error', runId, message })
+    return { text: '', steps: 0 }
+  }
+  if (signal?.aborted) {
+    emit({ type: 'aborted', runId })
+    return { text: '', steps: 0 }
+  }
+  return runWithContext({ runId, source: args.source, signal }, async () => {
+    try {
+      if (harness === 'pi') {
+        const runPi = deps.runPi ?? ((r) => runPiPrompt({ ...r, cwd: deps.getHarnessDirectory?.() }))
+        return await runPi({ prompt, systemPrompt: args.systemPrompt, runId, signal, emit })
+      }
+      if (!deps.getOpencodeClient || !deps.getHarnessDirectory) {
+        return fail('OpenCode harness is not wired in this build.')
+      }
+      const client = await deps.getOpencodeClient()
+      const text = await runOpencodePrompt({
+        client,
+        directory: deps.getHarnessDirectory(),
+        prompt: [args.systemPrompt?.trim() ? `Additional user-provided instructions:\n${args.systemPrompt.trim()}` : '', prompt]
+          .filter(Boolean)
+          .join('\n\n'),
+        signal,
+        onPermission: async (perm) => {
+          if (!args.decideApproval) return false
+          const decision = await args.decideApproval({
+            approvalId: perm.id,
+            toolCallId: perm.id,
+            toolName: `opencode: ${perm.type} ${perm.title}`,
+            input: { pattern: perm.pattern ?? null, metadata: perm.metadata ?? null },
+            reason: 'OpenCode requests permission.'
+          })
+          return decision.approved
+        }
+      })
+      if (signal?.aborted) {
+        emit({ type: 'aborted', runId })
+        return { text: '', steps: 0 }
+      }
+      // ponytail: steps=1, harnesses don't report tool-step counts
+      emit({ type: 'done', runId, text, steps: 1 })
+      return { text, steps: 1 }
+    } catch (err) {
+      if (signal?.aborted || (err instanceof Error && err.name === 'AbortError')) {
+        emit({ type: 'aborted', runId })
+        return { text: '', steps: 0 }
+      }
+      return fail(err instanceof Error ? err.message : String(err))
+    }
+  })
+}
+
 export async function runAgent(opts: RunAgentOptions): Promise<{ text: string; steps: number }> {
   const { prompt, tools, source, signal, emit } = opts
   const deps = opts.deps
@@ -101,6 +181,18 @@ export async function runAgent(opts: RunAgentOptions): Promise<{ text: string; s
   }
 
   const config = deps.getConfig()
+  const harness = deps.getAgentProvider?.() ?? 'builtin'
+
+  // Harness runs bring their own models + auth (opencode config, pi /login),
+  // so no model API key is needed. Scheduled runs fall back to builtin:
+  // harness CLIs have no in-app per-tool approval protocol, and scheduled
+  // runs must never execute writes unapproved.
+  if ((harness === 'opencode' || harness === 'pi') && source !== 'scheduled') {
+    // Harness selected: authoritative, no builtin fall-through (one outcome
+    // per run; failures emit a single error with the install/auth fix).
+    return runViaHarness({ harness, prompt, source, signal, runId, emit, systemPrompt: opts.systemPrompt, decideApproval: opts.decideApproval, deps })
+  }
+
   const apiKey = await deps.getApiKey()
   if (!apiKey) {
     return fail(

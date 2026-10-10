@@ -638,7 +638,7 @@ export default function ShellApp(): React.JSX.Element {
                     onSend={sendMessage}
                     onApprove={(approvalId, approved) => void decideApproval(approvalId, approved)}
                     onStop={() => void stopRun()}
-                    onOpenSettings={() => window.app.openSettingsWindow('provider')}
+                    onOpenSettings={() => window.app.openSettingsWindow('agents')}
                     onOpenConnections={() => window.app.openSettingsWindow('connectors')}
                     onOpenAutomations={() => navigate('automations')}
                     onSelectTemplate={(template: AutomationTemplate) => navigate('automations', { templateId: template.id })}
@@ -651,7 +651,7 @@ export default function ShellApp(): React.JSX.Element {
               <ChatComposer
                 busy={busy}
                 onSend={sendMessage}
-                onOpenSettings={() => window.app.openSettingsWindow('provider')}
+                onOpenSettings={() => window.app.openSettingsWindow('agents')}
                 onOpenConnections={() => window.app.openSettingsWindow('connectors')}
                 onOpenAutomations={() => navigate('automations')}
                 onSelectTemplate={(template: AutomationTemplate) => navigate('automations', { templateId: template.id })}

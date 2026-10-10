@@ -1,9 +1,11 @@
 import { app, ipcMain, session, Notification, safeStorage, shell } from 'electron'
 import Store from 'electron-store'
 import { randomUUID } from 'node:crypto'
+import os from 'node:os'
 import {
   IpcChannels,
   ApiKeySchema,
+  AgentProviderSchema,
   ConnectorKeySchema,
   RoutineCreateSchema,
   RoutineIdSchema,
@@ -20,6 +22,7 @@ import { TOOL_IDS, type ToolId } from '../shared/types.js'
 import type { AgentEvent } from '../shared/agent.js'
 import { runAgent, type ApprovalDecision } from './agent/runner.js'
 import { ModelSettingsService, type SettingsStore } from './settings/model-settings.js'
+import { AgentProviderService, detectHarnesses } from './agent/agent-provider.js'
 import { ProfileSettingsService } from './agent/profile-settings.js'
 import { GitHubResolveProvider } from './connectors/github-resolve.js'
 import { OpencodeServerManager } from './agent/opencode-server.js'
@@ -100,6 +103,8 @@ const settingsService = new ModelSettingsService(new ElectronSettingsStore(), {
 })
 
 const profileService = new ProfileSettingsService(new ElectronSettingsStore())
+
+const agentProviderService = new AgentProviderService(new ElectronSettingsStore())
 
 const chatFile = new Store<{ 'chat-threads': unknown[] }>({
   name: 'palette-chats',
@@ -312,6 +317,27 @@ function wireIpc(): void {
   }
   ipcMain.handle(IpcChannels.getModelSettings, async () => settingsService.getPublicState())
 
+  ipcMain.handle(IpcChannels.agentProviderGet, () => ({ ok: true as const, provider: agentProviderService.get() }))
+
+  ipcMain.handle(IpcChannels.agentProviderSet, (_event, payload: unknown) => {
+    const parsed = AgentProviderSchema.safeParse((payload as { provider?: unknown } | null)?.provider ?? payload)
+    if (!parsed.success) return { ok: false as const, error: 'Invalid agent provider.' }
+    try {
+      const provider = agentProviderService.set(parsed.data)
+      return { ok: true as const, provider }
+    } catch (err) {
+      return { ok: false as const, error: err instanceof Error ? err.message : String(err) }
+    }
+  })
+
+  ipcMain.handle(IpcChannels.agentProviderDetect, async () => {
+    try {
+      return { ok: true as const, harnesses: await detectHarnesses() }
+    } catch (err) {
+      return { ok: false as const, error: err instanceof Error ? err.message : String(err) }
+    }
+  })
+
   ipcMain.handle(IpcChannels.getProfile, () => profileService.get())
 
   ipcMain.handle(IpcChannels.getAppBehavior, () => ({ ok: true as const, ...storedAppBehavior() }))
@@ -440,6 +466,13 @@ function wireIpc(): void {
       deps: {
         getConfig: () => settingsService.getConfig(),
         getApiKey: () => settingsService.getApiKey(),
+        getAgentProvider: () => agentProviderService.get(),
+        getOpencodeClient: async () => {
+          await opencodeManager.start()
+          return opencodeManager.client()
+        },
+        // Harness workspace: the user's home dir (their machine, their agent).
+        getHarnessDirectory: () => os.homedir(),
         // Every Composio tool execution goes through BudgetGuard here.
         // Local gh tools are free; Gmail tools already guard themselves with
         // cache and dedupe keys, so neither should be metered here again.

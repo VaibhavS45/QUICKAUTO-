@@ -1,13 +1,11 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { ShaderBackdrop } from '../components/ShaderBackdrop.js'
-import { Badge } from '../components/ui/badge.js'
-import { Button } from '../components/ui/button.js'
-import { Card, CardSub, CardTitle, Hint } from '../components/ui/card.js'
-import { Input, Select, Textarea } from '../components/ui/input.js'
+import { Card, CardSub, CardTitle } from '../components/ui/card.js'
+import { Input, Textarea } from '../components/ui/input.js'
 import { Switch } from '../components/ui/switch.js'
-import { useGmailConnect } from '../hooks/useGmailConnect.js'
 import { filterSettingsNav, groupedSettingsNav, isSettingsTabRegistered, SETTINGS_NAV, type SettingsTabId } from './nav.js'
 import { EXTRA_TABS } from './extra-tabs.js'
+import ConnectorsTab from './tabs/ConnectorsTab.js'
 import './settings.css'
 
 export { SETTINGS_NAV, filterSettingsNav, groupedSettingsNav } from './nav.js'
@@ -20,17 +18,6 @@ interface Profile {
   language: string
 }
 
-interface ModelState {
-  provider: string
-  model: string
-  baseUrl?: string
-  resetDay?: number
-  githubRepos?: Array<{ path: string; repo: string; testCommand?: string }>
-  autoApprove?: string[]
-  keySet: boolean
-  encryptionAvailable: boolean
-}
-
 interface BudgetState {
   used: number
   budget: number
@@ -39,20 +26,6 @@ interface BudgetState {
   scheduledUsed: number
   scheduledBudget: number
   periodKey: string
-}
-
-interface ConnectorState {
-  configured: boolean
-  services: Array<{ id: string; connected: boolean; detail?: string }>
-}
-
-function Field({ label, children }: { label: string; children: React.ReactNode }): React.JSX.Element {
-  return (
-    <label className="set-field">
-      <span className="set-field-label">{label}</span>
-      {children}
-    </label>
-  )
 }
 
 function GeneralPanel(): React.JSX.Element {
@@ -227,336 +200,6 @@ function AppearancePanel({
   )
 }
 
-function ModelPanel(): React.JSX.Element {
-  const [s, setS] = useState<ModelState | null>(null)
-  const [provider, setProvider] = useState('anthropic')
-  const [model, setModel] = useState('')
-  const [baseUrl, setBaseUrl] = useState('')
-  const [resetDay, setResetDay] = useState('1')
-  const [autoApproveEcho, setAutoApproveEcho] = useState(false)
-  const [apiKey, setApiKey] = useState('')
-  const [msg, setMsg] = useState<string | null>(null)
-
-  useEffect(() => {
-    window.app
-      .getModelSettings()
-      .then((v) => {
-        const m = v as ModelState
-        setS(m)
-        setProvider(m.provider)
-        setModel(m.model)
-        setBaseUrl(m.baseUrl ?? '')
-        setResetDay(String(m.resetDay ?? 1))
-        setAutoApproveEcho((m.autoApprove ?? []).includes('echo'))
-      })
-      .catch(() => {})
-  }, [])
-
-  async function save(): Promise<void> {
-    setMsg(null)
-    const rd = Math.min(28, Math.max(1, parseInt(resetDay, 10) || 1))
-    const current = (await window.app.getModelSettings()) as ModelState
-    const res = (await window.app.setModelSettings({
-      provider,
-      model: model.trim(),
-      baseUrl: baseUrl.trim() || undefined,
-      resetDay: rd,
-      githubRepos: current.githubRepos,
-      autoApprove: autoApproveEcho ? ['echo'] : []
-    })) as { ok: boolean; error?: string }
-    if (!res.ok) {
-      setMsg(res.error ?? 'Save failed.')
-      return
-    }
-    if (apiKey.trim()) {
-      const kr = (await window.app.setApiKey(apiKey.trim())) as { ok: boolean; error?: string }
-      if (!kr.ok) {
-        setMsg(kr.error ?? 'Key save failed.')
-        return
-      }
-      setApiKey('')
-    }
-    setMsg('Saved.')
-    setS((await window.app.getModelSettings()) as ModelState)
-  }
-
-  return (
-    <div className="set-stack">
-      <Card>
-        <CardTitle>Model</CardTitle>
-        <CardSub>Provider, model, and encrypted API key.</CardSub>
-        <div className="set-list">
-          <div className="set-grid2">
-            <Field label="Provider">
-              <Select value={provider} onChange={(e) => setProvider(e.target.value)}>
-                <option value="anthropic">anthropic</option>
-                <option value="openai">openai</option>
-                <option value="openai-compatible">openai-compatible</option>
-              </Select>
-            </Field>
-            <Field label="Model">
-              <Input monospace value={model} onChange={(e) => setModel(e.target.value)} placeholder="claude-sonnet-4-5" />
-            </Field>
-          </div>
-          {provider === 'openai-compatible' && (
-            <Field label="Base URL">
-              <Input monospace value={baseUrl} onChange={(e) => setBaseUrl(e.target.value)} placeholder="http://localhost:11434/v1" />
-            </Field>
-          )}
-          <div className="set-row">
-            <div className="set-grow">
-              <Field label={`API key ${s?.keySet ? '(set ✓)' : '(not set)'}`}>
-                <Input
-                  monospace
-                  type="password"
-                  value={apiKey}
-                  onChange={(e) => setApiKey(e.target.value)}
-                  placeholder={s?.keySet ? '•••••• (enter to replace)' : 'sk-…'}
-                />
-              </Field>
-            </div>
-            <Field label="Reset day">
-              <input value={resetDay} onChange={(e) => setResetDay(e.target.value)} inputMode="numeric" className="set-reset" />
-            </Field>
-            <Button onClick={() => void save()}>
-              Save
-            </Button>
-          </div>
-        </div>
-        {msg && <p className="set-msg">{msg}</p>}
-        <Hint>Keys are encrypted with the OS keychain (safeStorage) and never leave the main process.</Hint>
-      </Card>
-      <Card>
-        <CardTitle>Auto-approve</CardTitle>
-        <label className="set-check">
-          <input
-            type="checkbox"
-            checked={autoApproveEcho}
-            onChange={(e) => setAutoApproveEcho(e.target.checked)}
-          />
-          echo (harmless test tool) — runs without asking
-        </label>
-        <Hint>
-          Default: everything asks. Writes (email draft/send/reply/labels) always need approval
-          and can never auto-approve; scheduled runs never auto-approve anything.
-        </Hint>
-      </Card>
-    </div>
-  )
-}
-
-function ConnectionsPanel(): React.JSX.Element {
-  const [state, setState] = useState<ConnectorState | null>(null)
-  const [key, setKey] = useState('')
-  const [msg, setMsg] = useState<string | null>(null)
-  useEffect(() => {
-    window.app.getConnector().then((v) => setState(v as ConnectorState)).catch(() => {})
-  }, [])
-  async function save(): Promise<void> {
-    setMsg(null)
-    const res = (await window.app.setConnectorKey(key.trim())) as { ok: boolean; error?: string }
-    if (!res.ok) {
-      setMsg(res.error ?? 'Save failed.')
-      return
-    }
-    setKey('')
-    setMsg('Saved.')
-    setState((await window.app.getConnector()) as ConnectorState)
-  }
-  return (
-    <Card>
-      <CardTitle>Connections</CardTitle>
-      <CardSub>
-        One Composio project key unlocks @notion, @gmail, @sheets, @websearch. Keys stay encrypted in the main process.
-      </CardSub>
-      <div className="set-list">
-        <div className="set-row">
-          <div className="set-grow">
-            <Field label="Composio project key">
-              <Input monospace type="password" value={key} onChange={(e) => setKey(e.target.value)} placeholder={state?.configured ? '•••••• (enter to replace)' : 'ak_…'} />
-            </Field>
-          </div>
-          <Button onClick={() => void save()}>
-            Save
-          </Button>
-        </div>
-      </div>
-      {msg && <p className="set-msg">{msg}</p>}
-      {state && (
-        <div className="set-badges">
-          {state.services.map((sv) => (
-            <Badge key={sv.id} pill title={sv.detail ?? ''} variant={sv.connected ? 'ok' : 'mute'}>
-              @{sv.id} {sv.connected ? '✓' : '○'}
-            </Badge>
-          ))}
-        </div>
-      )}
-      <GitHubPanel />
-      <GmailConnectBlock />
-    </Card>
-  )
-}
-
-interface GhStatus {
-  ok: boolean
-  installed?: boolean
-  authenticated?: boolean
-  detail?: string
-  error?: string
-}
-
-/**
- * @github settings: local `gh` CLI status + repo allowlist. Auth happens via
- * `gh auth login` in the user's terminal — the token is never read or stored.
- * Only allowlisted repos are accessible to the agent; entries are validated
- * (path exists, git repo, origin match) when saved.
- */
-function GitHubPanel(): React.JSX.Element {
-  const [gh, setGh] = useState<GhStatus | null>(null)
-  const [repos, setRepos] = useState<Array<{ path: string; repo: string; testCommand?: string }>>([])
-  const [newPath, setNewPath] = useState('')
-  const [newRepo, setNewRepo] = useState('')
-  const [newTestCommand, setNewTestCommand] = useState('')
-  const [msg, setMsg] = useState<string | null>(null)
-
-  async function refresh(): Promise<void> {
-    try {
-      setGh((await window.app.githubStatus()) as GhStatus)
-    } catch {
-      setGh({ ok: false, error: 'Could not check gh status.' })
-    }
-    try {
-      const m = (await window.app.getModelSettings()) as ModelState
-      setRepos(m.githubRepos ?? [])
-    } catch {
-      /* keep current list */
-    }
-  }
-
-  useEffect(() => {
-    void refresh()
-  }, [])
-
-  async function save(next: Array<{ path: string; repo: string; testCommand?: string }>): Promise<void> {
-    setMsg(null)
-    try {
-      const m = (await window.app.getModelSettings()) as ModelState
-      const res = (await window.app.setModelSettings({
-        provider: m.provider,
-        model: m.model,
-        baseUrl: m.baseUrl,
-        resetDay: m.resetDay,
-        githubRepos: next,
-        autoApprove: m.autoApprove
-      })) as { ok: boolean; error?: string }
-      if (!res.ok) {
-        setMsg(res.error ?? 'Save failed.')
-        return
-      }
-      setRepos(next)
-      setMsg('Saved.')
-    } catch {
-      setMsg('Save failed.')
-    }
-  }
-
-  function add(): void {
-    const path = newPath.trim()
-    const repo = newRepo.trim()
-    if (!path || !repo) {
-      setMsg('Enter both a local path and owner/name.')
-      return
-    }
-    if (repos.some((r) => r.repo.toLowerCase() === repo.toLowerCase())) {
-      setMsg(`"${repo}" is already in the list.`)
-      return
-    }
-    setNewPath('')
-    setNewRepo('')
-    const testCommand = newTestCommand.trim()
-    setNewTestCommand('')
-    void save([...repos, { path, repo, ...(testCommand ? { testCommand } : {}) }])
-  }
-
-  function remove(repo: string): void {
-    void save(repos.filter((r) => r.repo.toLowerCase() !== repo.toLowerCase()))
-  }
-
-  return (
-    <div>
-      <h4 className="set-subhead">GitHub (local CLI, read-only)</h4>
-      <div className="set-status-line">
-        <span>
-          {gh ? (gh.ok ? (gh.detail ?? 'gh status unknown') : (gh.error ?? 'gh check failed')) : 'Checking gh…'}
-        </span>
-        <Button variant="secondary" size="sm" onClick={() => void refresh()}>
-          Refresh
-        </Button>
-      </div>
-      {gh?.ok && !gh.authenticated && (
-        <p className="set-fix">Fix: run `gh auth login` in a terminal, then press Refresh.</p>
-      )}
-      <Hint>Only these repos are accessible to @github. Each path must exist and be a git repo whose origin matches owner/name.</Hint>
-      <div className="set-list">
-        {repos.length === 0 && <p className="set-list-empty">No repos yet.</p>}
-        {repos.map((r) => (
-          <div key={r.repo.toLowerCase()} className="set-list-item">
-            <span className="mono">{r.repo}</span>
-            <span className="dim" title={r.path}>{r.path}</span>
-            {r.testCommand && <span className="dim" title={r.testCommand}>tests: {r.testCommand}</span>}
-            <span className="spacer" />
-            <button onClick={() => remove(r.repo)} className="set-link-danger">
-              Remove
-            </button>
-          </div>
-        ))}
-      </div>
-      <div className="set-row">
-        <div className="set-grow">
-          <Field label="Local path">
-            <Input monospace value={newPath} onChange={(e) => setNewPath(e.target.value)} placeholder="/home/you/code/repo" />
-          </Field>
-        </div>
-        <Field label="owner/name">
-          <Input monospace value={newRepo} onChange={(e) => setNewRepo(e.target.value)} placeholder="owner/name" />
-        </Field>
-        <div className="set-grow">
-          <Field label="Test command (optional)">
-            <Input monospace value={newTestCommand} onChange={(e) => setNewTestCommand(e.target.value)} placeholder="npm test" />
-          </Field>
-        </div>
-        <Button onClick={add}>
-          Add
-        </Button>
-      </div>
-      {msg && <p className="set-msg">{msg}</p>}
-    </div>
-  )
-}
-
-function GmailConnectBlock(): React.JSX.Element {
-  const g = useGmailConnect()
-  return (
-    <div>
-      <div className="set-status-line">
-        <span>
-          Gmail {g.status ? (g.status.connected ? 'connected ✓' : 'not connected') : '…'}
-        </span>
-        {g.status && !g.status.connected && (
-          <Button variant="success" size="sm" onClick={() => void g.connect()} disabled={g.connecting}>
-            {g.connecting ? 'Waiting…' : 'Connect Gmail'}
-          </Button>
-        )}
-        <Button variant="secondary" size="sm" onClick={() => void g.refresh()}>
-          Refresh
-        </Button>
-      </div>
-      {g.status?.detail && <p className="set-detail">{g.status.detail}</p>}
-      {g.message && <p className="set-msg">{g.message}</p>}
-    </div>
-  )
-}
-
 function UsagePanel(): React.JSX.Element {
   const [budget, setBudget] = useState<BudgetState | null>(null)
   useEffect(() => {
@@ -586,7 +229,7 @@ function UsagePanel(): React.JSX.Element {
 const TAB_TITLES: Record<string, string> = {
   general: 'General',
   appearance: 'Appearance',
-  provider: 'Provider',
+  agents: 'Agents',
   connectors: 'Connectors',
   usage: 'Usage'
 }
@@ -608,7 +251,7 @@ function NavGlyph({ id }: { id: SettingsTabId }): React.JSX.Element {
       </svg>
     )
   }
-  if (id === 'provider') {
+  if (id === 'agents') {
     return (
       <svg viewBox="0 0 16 16" fill="none" aria-hidden>
         <path d="M4 11.5 8 3.5l4 8" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round" />
@@ -723,8 +366,7 @@ export default function SettingsApp({ initialTab }: { initialTab?: string }): Re
           <div className="settings-body-inner">
             {(tab === 'general' || tab === 'account') && <GeneralPanel />}
             {tab === 'appearance' && <AppearancePanel shader={shader} onShader={setShader} />}
-            {tab === 'provider' && <ModelPanel />}
-            {tab === 'connectors' && <ConnectionsPanel />}
+            {tab === 'connectors' && <ConnectorsTab />}
             {tab === 'usage' && <UsagePanel />}
             {ExtraTab && <ExtraTab />}
           </div>

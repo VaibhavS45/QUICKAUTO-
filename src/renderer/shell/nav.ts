@@ -41,7 +41,10 @@ export class ShellRouter {
   }
 
   navigate(view: string, params: Record<string, unknown> = {}): ShellRoute {
-    const knownView = view === 'home' || PRIMARY_NAV.some((item) => item.view === view)
+    const knownView =
+      view === 'home' ||
+      PRIMARY_NAV.some((item) => item.view === view) ||
+      (view === 'chat' && typeof params['chatId'] === 'string')
     this.route = knownView ? { view, params } : { view: 'home', params: {} }
     for (const listener of this.listeners) listener(this.route)
     return this.route

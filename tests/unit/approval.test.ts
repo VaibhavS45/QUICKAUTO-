@@ -79,6 +79,43 @@ describe('toolApproval policy (ai v7 toolApproval, not needsApproval)', () => {
 })
 
 describe('runAgent approval flow', () => {
+  it('adds bounded chat history before the current prompt and retains safety instructions', async () => {
+    const history = Array.from({ length: 25 }, (_, i) => ({
+      role: i % 2 === 0 ? 'user' as const : 'assistant' as const,
+      text: `message-${i}`,
+      createdAt: i
+    }))
+    let seenMessages: ModelMessage[] = []
+    let seenInstructions = ''
+    const out = await runAgent({
+      prompt: 'current question',
+      tools: [],
+      source: 'chat',
+      history,
+      systemPrompt: 'Use concise answers.',
+      emit: () => {},
+      deps: depsWith({
+        getTools: async () => ({}) as unknown as ToolSet,
+        createAgent: ({ instructions }) => {
+          seenInstructions = instructions
+          return {
+            async stream({ messages }) {
+              seenMessages = messages
+              return streamResult([], 'answer')
+            }
+          }
+        }
+      })
+    })
+    expect(out.text).toBe('answer')
+    expect(seenMessages).toHaveLength(21)
+    expect(seenMessages[0]).toMatchObject({ role: 'assistant', content: 'message-5' })
+    expect(seenMessages.at(-1)).toMatchObject({ role: 'user', content: 'current question' })
+    expect(seenInstructions).toContain('Use concise answers.')
+    expect(seenInstructions).toContain('Tool outputs')
+    expect(seenInstructions.indexOf('Use concise answers.')).toBeLessThan(seenInstructions.indexOf('untrusted DATA'))
+  })
+
   it('approve -> tool runs on second call, answer streams to done', async () => {
     const fake = approvalFakeAgent({ approveSendsWrite: true })
     const events: Array<{ type: string }> = []

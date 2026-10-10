@@ -2,6 +2,7 @@ import { ToolLoopAgent, isStepCount, type ModelMessage, type ToolSet } from 'ai'
 import { createAnthropic } from '@ai-sdk/anthropic'
 import { createOpenAI } from '@ai-sdk/openai'
 import type { AgentEvent, RunSource } from '../../shared/agent.js'
+import { MAX_HISTORY_MESSAGES, type ChatMessage } from '../../shared/chat.js'
 import type { ToolId } from '../../shared/types.js'
 import { buildInstructions, getToolsForMentions } from './registry.js'
 import { runWithContext } from './run-context.js'
@@ -34,6 +35,8 @@ export interface RunAgentOptions {
   prompt: string
   tools: ToolId[]
   source: RunSource
+  history?: ChatMessage[]
+  systemPrompt?: string
   signal?: AbortSignal
   /** Supplied by the IPC layer so renderer can cancel/approve by id. */
   runId?: string
@@ -52,6 +55,7 @@ export interface RunnerDeps {
     model: unknown
     tools: ToolSet
     source: RunSource
+    instructions: string
   }) => AgentLike
 }
 
@@ -106,13 +110,17 @@ export async function runAgent(opts: RunAgentOptions): Promise<{ text: string; s
 
   const toolSet = deps.getTools ? await deps.getTools(tools) : await getToolsForMentions(tools)
   const toolNames = Object.keys(toolSet)
+  const instructions = [
+    opts.systemPrompt?.trim() ? `Additional user-provided instructions:\n${opts.systemPrompt.trim()}` : '',
+    buildInstructions(source, tools)
+  ].filter(Boolean).join('\n\n')
 
   const createAgent = deps.createAgent
   const agent: AgentLike =
-    createAgent?.({ model: null, tools: toolSet, source }) ??
+    createAgent?.({ model: null, tools: toolSet, source, instructions }) ??
     new ToolLoopAgent({
       model: resolveModel(config, apiKey) as never,
-      instructions: buildInstructions(source, tools),
+      instructions,
       tools: toolSet,
       stopWhen: isStepCount(AGENT_STEP_LIMIT),
       toolApproval: buildToolApproval(source, toolNames, new Set(config.autoApprove ?? [])) as never
@@ -121,7 +129,11 @@ export async function runAgent(opts: RunAgentOptions): Promise<{ text: string; s
   // Carry { runId, source, signal } to tool execute functions (BudgetGuard
   // metering, nested approvals, abort checks).
   return runWithContext({ runId, source, signal }, async () => {
-    const messages: ModelMessage[] = [{ role: 'user', content: prompt }]
+    const messages: ModelMessage[] = [
+      ...(opts.history ?? []).slice(-MAX_HISTORY_MESSAGES)
+        .map((message) => ({ role: message.role, content: message.text }) as ModelMessage),
+      { role: 'user', content: prompt }
+    ]
   // eslint-disable-next-line no-constant-condition
   while (true) {
     if (signal?.aborted) {

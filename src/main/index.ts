@@ -48,6 +48,8 @@ import { createAppTray, watchDockVisibility } from './shell/app-lifecycle.js'
 import { registerAutomationsIpc, registerShellIpc } from './agent/shell-ipc.js'
 import { getShellAppWindow, openShellAppWindow } from './agent/shell-app-window.js'
 import type { RunSource } from '../shared/agent.js'
+import { ChatStore, type ChatStoreStorage } from './shell/chat-store.js'
+import { registerChatIpc } from './shell/chat-ipc.js'
 
 // Launched without a console, stdio writes hit EPIPE and kill main — swallow it first.
 installStdioGuard()
@@ -97,6 +99,22 @@ const settingsService = new ModelSettingsService(new ElectronSettingsStore(), {
 })
 
 const profileService = new ProfileSettingsService(new ElectronSettingsStore())
+
+const chatFile = new Store<{ 'chat-threads': unknown[] }>({
+  name: 'palette-chats',
+  defaults: { 'chat-threads': [] }
+})
+
+class ElectronChatStore implements ChatStoreStorage {
+  get(key: string): unknown {
+    return (chatFile as unknown as { get: (k: string) => unknown }).get(key)
+  }
+  set(key: string, value: unknown): void {
+    ;(chatFile as unknown as { set: (k: string, v: unknown) => void }).set(key, value)
+  }
+}
+
+const chatStore = new ChatStore(new ElectronChatStore())
 
 const connectorFile = new Store<Record<string, unknown>>({ name: 'palette-connectors', defaults: {} })
 
@@ -262,6 +280,7 @@ function applyStrictCsp(): void {
 function wireIpc(): void {
   registerShellIpc()
   registerAutomationsIpc()
+  registerChatIpc(ipcMain, chatStore)
   fireRoutine = (routine) => {
     startAgentRun(routine.prompt, routine.tools, 'scheduled', routine.id)
     new Notification({ title: 'Palette routine fired', body: routine.prompt.slice(0, 200) }).show()
@@ -353,7 +372,9 @@ function wireIpc(): void {
     prompt: string,
     toolNames: string[],
     source: RunSource,
-    routineId?: string
+    routineId?: string,
+    history?: import('../shared/chat.js').ChatMessage[],
+    systemPrompt?: string
   ): string {
     const runId = randomUUID()
     const controller = new AbortController()
@@ -366,6 +387,8 @@ function wireIpc(): void {
       prompt,
       tools,
       source,
+      history,
+      systemPrompt,
       signal: controller.signal,
       runId,
       emit: emitToApp,
@@ -422,7 +445,25 @@ function wireIpc(): void {
   ipcMain.handle(IpcChannels.agentRun, (_event, payload: unknown) => {
     const parsed = AgentRunRequestSchema.safeParse(payload)
     if (!parsed.success) return { ok: false as const, error: 'Invalid agent request.' }
-    const runId = startAgentRun(parsed.data.prompt, parsed.data.tools, parsed.data.source)
+    let history = parsed.data.history
+    if (parsed.data.chatId) {
+      if (!chatStore.get(parsed.data.chatId)) return { ok: false as const, error: 'Chat not found.' }
+      history = chatStore.historyFor(parsed.data.chatId)
+      const appended = chatStore.append(parsed.data.chatId, {
+        role: 'user',
+        text: parsed.data.prompt,
+        createdAt: Date.now()
+      })
+      if (!appended) return { ok: false as const, error: 'Chat not found.' }
+    }
+    const runId = startAgentRun(
+      parsed.data.prompt,
+      parsed.data.tools,
+      parsed.data.source,
+      undefined,
+      history,
+      parsed.data.systemPrompt
+    )
     return { ok: true as const, runId }
   })
 

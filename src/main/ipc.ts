@@ -4,6 +4,7 @@ import {
   AgentRunRequestSchema
 } from '../shared/agent.js'
 import { ModelSettingsSchema } from './settings/model-settings.js'
+import { AgentProviderSchema } from './agent/agent-provider.js'
 import { ProfileSettingsSchema } from './agent/profile-settings.js'
 import { AppBehaviorPatchSchema, AppBehaviorSchema } from './agent/app-prefs.js'
 import {
@@ -48,6 +49,10 @@ export const IpcChannels = {
   settingsShow: 'settings:show',
   settingsHide: 'settings:hide',
   /** GitHub CLI status for @github (local gh; token never crosses IPC). */
+  /** Local harness CLIs on this system (installed/version only, never secrets). */
+  agentProviderGet: 'agent-provider:get',
+  agentProviderSet: 'agent-provider:set',
+  agentProviderDetect: 'agent-provider:detect',
   githubStatus: 'github:status',
   chatList: 'shell:chat-list',
   chatGet: 'shell:chat-get',
@@ -107,6 +112,7 @@ export {
   AgentApprovalResponseSchema,
   AgentRunRequestSchema,
   ModelSettingsSchema,
+  AgentProviderSchema,
   ProfileSettingsSchema,
   AppBehaviorSchema,
   AppBehaviorPatchSchema

@@ -154,7 +154,7 @@ export class Scheduler {
       prompt,
       tools,
       runAt: sched.runAt,
-      repeat: /weekday|mon|tue|wed|thu|fri/i.test(parsed.text) ? 'weekdays' : 'once',
+      repeat: /weekday|mon|tue|wed|thu|fri/i.test(parsed.text) ? 'weekdays' : /daily|every day/i.test(parsed.text) ? 'daily' : 'once',
       enabled: true,
       createdAt: now.getTime()
     }

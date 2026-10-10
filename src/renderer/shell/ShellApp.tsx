@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import type { FeatureProps, ShellApi } from '../contracts/feature.js'
+import type { ShellApi } from '../contracts/feature.js'
 import type { ChatThread } from '../../shared/chat.js'
 import type { AgentEvent } from '../../shared/agent.js'
 import type { AppNotification } from '../../shared/contracts/notifications.js'
@@ -9,6 +9,8 @@ import { ChatComposer } from './ChatComposer.js'
 import { ChatView } from './ChatView.js'
 import { createChatRunState, reduceChatRun, resolveChatApproval, type ChatRunState } from './chat-state.js'
 import { getFeatureRegistry } from './registry.js'
+import { FeatureContent, FeatureHeaderActions } from './FeatureHost.js'
+import type { AutomationTemplate } from '../../shared/contracts/automation-templates.js'
 import PluginsPanel from '../settings/tabs/PluginsPanel.js'
 import { PRIMARY_NAV, SIDEBAR_SECTIONS, ShellRouter } from './nav.js'
 import './shell.css'
@@ -600,6 +602,7 @@ export default function ShellApp(): React.JSX.Element {
         <section className="shell-main-pane">
           <header className="shell-pane-header">
             <h1>{title}</h1>
+            {activeFeature && <FeatureHeaderActions feature={activeFeature} shell={shellApi} />}
           </header>
           {(chatError || dashboardError) && (
             <div className="shell-chat-error" role="alert">
@@ -609,7 +612,7 @@ export default function ShellApp(): React.JSX.Element {
           )}
           <div className={`shell-content${route.view === 'chat' ? ' has-chat-view' : ''}`}>
             {activeFeature ? (
-              <activeFeature.Component shell={shellApi} initialTemplate={route.params['template'] as FeatureProps['initialTemplate']} />
+              <FeatureContent feature={activeFeature} shell={shellApi} params={route.params} />
             ) : route.view === 'plugins' ? (
               <PluginsPanel />
             ) : activeChatId ? (
@@ -624,7 +627,9 @@ export default function ShellApp(): React.JSX.Element {
                     onApprove={(approvalId, approved) => void decideApproval(approvalId, approved)}
                     onStop={() => void stopRun()}
                     onOpenSettings={() => window.app.openSettingsWindow('provider')}
+                    onOpenConnections={() => window.app.openSettingsWindow('connectors')}
                     onOpenAutomations={() => navigate('automations')}
+                    onSelectTemplate={(template: AutomationTemplate) => navigate('automations', { templateId: template.id })}
                   />
                 </>
               ) : (
@@ -635,7 +640,9 @@ export default function ShellApp(): React.JSX.Element {
                 busy={busy}
                 onSend={sendMessage}
                 onOpenSettings={() => window.app.openSettingsWindow('provider')}
+                onOpenConnections={() => window.app.openSettingsWindow('connectors')}
                 onOpenAutomations={() => navigate('automations')}
+                onSelectTemplate={(template: AutomationTemplate) => navigate('automations', { templateId: template.id })}
               />
             )}
           </div>

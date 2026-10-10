@@ -1,4 +1,6 @@
 import { useMemo, useRef, useState } from 'react'
+import { AutomationTemplateCards } from './AutomationTemplateCards.js'
+import type { AutomationTemplate } from '../../shared/contracts/automation-templates.js'
 import { activeMention, parseMentionedTools, TOOL_META } from '../../shared/types.js'
 
 interface ChatComposerProps {
@@ -6,7 +8,9 @@ interface ChatComposerProps {
   compact?: boolean
   onSend(text: string): Promise<boolean>
   onOpenSettings(): void
+  onOpenConnections(): void
   onOpenAutomations(): void
+  onSelectTemplate(template: AutomationTemplate): void
 }
 
 export function ChatComposer({
@@ -14,7 +18,9 @@ export function ChatComposer({
   compact = false,
   onSend,
   onOpenSettings,
-  onOpenAutomations
+  onOpenConnections,
+  onOpenAutomations,
+  onSelectTemplate
 }: ChatComposerProps): React.JSX.Element {
   const [value, setValue] = useState('')
   const [caret, setCaret] = useState(0)
@@ -119,10 +125,16 @@ export function ChatComposer({
       </div>
       {error && <p className="chat-inline-error" role="alert">{error}</p>}
       {!compact && (
-        <div className="chat-template-row">
-          <span>Get started with automation</span>
-          <button type="button" onClick={onOpenAutomations}>＋ New automation</button>
-        </div>
+        <>
+          <div className="chat-template-row">
+            <span>Get started with automation</span>
+            <button type="button" onClick={onOpenAutomations}>＋ New automation</button>
+          </div>
+          <AutomationTemplateCards
+            onSelect={onSelectTemplate}
+            onConnect={onOpenConnections}
+          />
+        </>
       )}
       {error.toLowerCase().includes('api key') && (
         <button type="button" className="chat-settings-link" onClick={onOpenSettings}>Open Provider settings</button>

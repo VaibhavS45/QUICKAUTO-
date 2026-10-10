@@ -596,6 +596,36 @@
   gap: 4px;
 }
 
+/* Floating settings panel: centered card over a blurred shell. Card size
+   comes from settings-layout.ts via inline style; the max bounds keep it
+   inside small windows. */
+.shell-settings-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+  display: grid;
+  place-items: center;
+  padding: 32px;
+  background: rgb(0 0 0 / 45%);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+}
+
+.shell-settings-card {
+  max-width: calc(100vw - 64px);
+  max-height: calc(100vh - 64px);
+  overflow: hidden;
+  border: 1px solid rgb(255 255 255 / 10%);
+  border-radius: 12px;
+  background: #0c0c0e;
+  box-shadow: 0 24px 64px rgb(0 0 0 / 55%);
+}
+
+.shell-settings-card .settings {
+  height: 100%;
+  border-radius: 12px;
+}
+
 .shell-chats-section {
   display: flex;
   flex-direction: column;

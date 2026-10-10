@@ -13,6 +13,8 @@ import { FeatureContent, FeatureHeaderActions } from './FeatureHost.js'
 import type { AutomationTemplate } from '../../shared/contracts/automation-templates.js'
 import PluginsPanel from '../settings/tabs/PluginsPanel.js'
 import { PRIMARY_NAV, SIDEBAR_SECTIONS, ShellRouter } from './nav.js'
+import SettingsApp from '../settings/SettingsDialog.js'
+import { SETTINGS_HEIGHT, SETTINGS_WIDTH } from '../../main/agent/settings-layout.js'
 import './shell.css'
 
 interface LocalProfile {
@@ -54,6 +56,7 @@ export default function ShellApp(): React.JSX.Element {
   const [collapsed, setCollapsed] = useState(false)
   const [profile, setProfile] = useState<LocalProfile>({ name: '', email: '' })
   const [accountMenuOpen, setAccountMenuOpen] = useState(false)
+  const [settings, setSettings] = useState<{ tab?: string } | null>(null)
   const [notificationsOpen, setNotificationsOpen] = useState(false)
   const [notifications, setNotifications] = useState<AppNotification[]>([])
   const [todaySchedule, setTodaySchedule] = useState<TodaySchedule | null>(null)
@@ -171,6 +174,15 @@ export default function ShellApp(): React.JSX.Element {
     window.addEventListener('app:notification', onNotification)
     return () => window.removeEventListener('app:notification', onNotification)
   }, [refreshNotifications])
+
+  useEffect(() => {
+    const offOpen = window.app.onOpenSettings((tab) => setSettings({ tab }))
+    const offClose = window.app.onSettingsClose(() => setSettings(null))
+    return () => {
+      offOpen()
+      offClose()
+    }
+  }, [])
 
   useEffect(() => {
     const unsubscribe = router.subscribe(setRoute)
@@ -648,6 +660,18 @@ export default function ShellApp(): React.JSX.Element {
           </div>
         </section>
       </div>
+      {settings !== null && (
+        <div
+          className="shell-settings-overlay"
+          onClick={(event) => {
+            if (event.target === event.currentTarget) window.app.closeSettings()
+          }}
+        >
+          <div className="shell-settings-card" style={{ width: SETTINGS_WIDTH, height: SETTINGS_HEIGHT }}>
+            <SettingsApp key={settings.tab ?? 'general'} initialTab={settings.tab} />
+          </div>
+        </div>
+      )}
     </main>
   )
 }

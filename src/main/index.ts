@@ -1,7 +1,6 @@
 import { app, ipcMain, session, Notification, safeStorage, shell } from 'electron'
 import Store from 'electron-store'
 import { randomUUID } from 'node:crypto'
-import { openSettings, hideSettings } from './agent/settings-window.js'
 import {
   IpcChannels,
   ApiKeySchema,
@@ -257,9 +256,24 @@ function applyAutostart(): void {
   app.setLoginItemSettings({ openAtLogin })
 }
 
+/** Settings lives in the shell window as a centered floating panel (no separate window). */
+function showSettingsInShell(tab?: string): void {
+  const existing = getShellAppWindow()
+  if (existing && !existing.isDestroyed()) {
+    existing.show()
+    existing.focus()
+    existing.webContents.send('settings:open', tab)
+    return
+  }
+  const created = openShellAppWindow()
+  created.once('ready-to-show', () => {
+    if (!created.isDestroyed()) created.webContents.send('settings:open', tab)
+  })
+}
+
 function createTray(): void {
   createAppTray(
-    () => openSettings(),
+    () => showSettingsInShell(),
     () => store.get('openAtLogin', false),
     (enabled) => {
       store.set('openAtLogin', enabled)
@@ -316,9 +330,11 @@ function wireIpc(): void {
       console.warn('Rejected invalid Settings tab request.')
       return
     }
-    openSettings(parsed.data?.tab)
+    showSettingsInShell(parsed.data?.tab)
   })
-  ipcMain.on(IpcChannels.settingsHide, () => hideSettings())
+  ipcMain.on(IpcChannels.settingsHide, () => {
+    getShellAppWindow()?.webContents.send('settings:close')
+  })
 
   ipcMain.handle(IpcChannels.setProfile, (_event, payload: unknown) => {
     const parsed = ProfileSettingsSchema.safeParse(payload)

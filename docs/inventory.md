@@ -22,7 +22,7 @@ agents.
 | `src/preload/shell.ts` | Present | Schedule/notification, plugin, MCP, and agent APIs are exposed through `window.app`. |
 | `src/preload/automations.ts` | Present | Empty extension object. |
 | `EXTRA_TABS` / `EXTRA_NAV` | Present | Settings extension points register Account, Plugins, MCP, API, and Agents tabs. |
-| `openSettings(tab?)` | Present | Settings window supports an optional tab. |
+| `openSettings(tab?)` via `settings:show` | Present | Opens the centered floating settings panel in the shell window (blurred backdrop, no separate window). |
 | `docs/ownership.md` | Present | Documents shell/Automations ownership. |
 | `CODEOWNERS` | Present | Contains repository ownership entries. |
 | `AGENTS.md` | Present | Reflects current ownership and removed-window constraints. |

@@ -6,7 +6,7 @@ const Placeholder = (): null => null
 const Automations: FeatureModule = {
   id: 'automations',
   title: 'Automations',
-  icon: 'calendar',
+  icon: 'automation',
   Component: Placeholder
 }
 

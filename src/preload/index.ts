@@ -8,29 +8,11 @@ import { shellApi } from './shell.js'
  */
 
 const api = {
-  submit: (payload: { text: string; tools: string[] }) =>
-    ipcRenderer.invoke('palette:submit', payload),
-  hide: () => ipcRenderer.send('palette:hide'),
-  resize: (height: number) => ipcRenderer.invoke('palette:resize', { height }),
-  onOpened: (cb: () => void) => {
-    const fn = (): void => cb()
-    ipcRenderer.on('palette:opened', fn)
-    return () => ipcRenderer.removeListener('palette:opened', fn)
-  },
   onOpenSettings: (cb: (tab?: string) => void) => {
     const fn = (_event: unknown, tab?: string): void => cb(tab)
     ipcRenderer.on('settings:open', fn)
     return () => ipcRenderer.removeListener('settings:open', fn)
   },
-  onHotkeyError: (cb: (msg: string) => void) => {
-    const fn = (_e: unknown, msg: string): void => cb(msg)
-    ipcRenderer.on('settings:hotkey-error', fn)
-    return () => ipcRenderer.removeListener('settings:hotkey-error', fn)
-  },
-  getHotkey: (): Promise<{ hotkey: string; error: string | null }> =>
-    ipcRenderer.invoke('settings:get-hotkey'),
-  setHotkey: (hotkey: string) => ipcRenderer.invoke('settings:set-hotkey', { hotkey }),
-  platformInfo: () => ipcRenderer.invoke('app:platform-info'),
   getModelSettings: (): Promise<{
     provider: string
     model: string
@@ -56,7 +38,7 @@ const api = {
     ipcRenderer.invoke('connections:status', { toolId }),
   connectionConnect: (toolId: string): Promise<{ ok: boolean; url?: string; error?: string }> =>
     ipcRenderer.invoke('connections:connect', { toolId }),
-  agentRun: (payload: { prompt: string; tools: string[]; source: 'palette' | 'scheduled' }) =>
+  agentRun: (payload: { prompt: string; tools: string[]; source: 'palette' | 'chat' | 'scheduled' }) =>
     ipcRenderer.invoke('agent:run', payload),
   agentCancel: (runId: string) => ipcRenderer.invoke('agent:cancel', { runId }),
   agentApproval: (payload: { runId: string; approvalId: string; approved: boolean; reason?: string }) =>
@@ -117,20 +99,6 @@ const api = {
   }): Promise<{ ok: boolean; keepBackground?: boolean; shader?: boolean; error?: string }> =>
     ipcRenderer.invoke('app:set-behavior', p),
   openSettingsWindow: (tab?: string) => ipcRenderer.send('settings:show', tab ? { tab } : undefined),
-  onCalendarDraft: (cb: (text: string) => void) => {
-    const fn = (_e: unknown, text: string): void => cb(text)
-    ipcRenderer.on('calendar:new-draft', fn)
-    return () => ipcRenderer.removeListener('calendar:new-draft', fn)
-  },
-  takeCalendarDraft: (): Promise<{ draft: string | null }> =>
-    ipcRenderer.invoke('calendar:take-draft'),
-  calendarWindowEvent: (kind: 'opened' | 'closed') => {
-    if (kind === 'opened') ipcRenderer.send('calendar:opened-with-window')
-    else ipcRenderer.send('calendar:closed-to-tray')
-  },
-  calendarMinimize: () => ipcRenderer.send('calendar:minimize'),
-  calendarMaximize: () => ipcRenderer.send('calendar:toggle-maximize'),
-  calendarClose: () => ipcRenderer.send('calendar:close'),
   closeSettings: () => ipcRenderer.send('settings:hide'),
   onSettingsClose: (cb: () => void) => {
     const fn = (): void => cb()
@@ -141,6 +109,6 @@ const api = {
   ...automationsApi
 }
 
-export type PaletteApi = typeof api
+export type AppApi = typeof api
 
-contextBridge.exposeInMainWorld('palette', api)
+contextBridge.exposeInMainWorld('app', api)

@@ -58,6 +58,11 @@ describe('toolApproval policy (ai v7 toolApproval, not needsApproval)', () => {
     expect('echo' in policy).toBe(false)
   })
 
+  it('keeps chat writes behind approval and supports interactive auto-approve', () => {
+    const policy = buildToolApproval('chat', ['echo', 'echo_write'], new Set(['echo', 'echo_write']))
+    expect(policy).toEqual({ echo: 'approved', echo_write: 'user-approval' })
+  })
+
   it('denies writes outright for scheduled runs', () => {
     const policy = buildToolApproval('scheduled', ['echo_write'])
     expect(policy['echo_write']).toEqual({

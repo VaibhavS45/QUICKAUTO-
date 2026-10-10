@@ -1,7 +1,7 @@
 import { z } from 'zod'
 
 /** Where an agent run originated. Scheduled runs get stricter budget/approval rules. */
-export const RunSourceSchema = z.enum(['palette', 'scheduled'])
+export const RunSourceSchema = z.enum(['palette', 'chat', 'scheduled'])
 export type RunSource = z.infer<typeof RunSourceSchema>
 
 /** Events streamed from main -> renderer during an agent run. */
@@ -36,16 +36,3 @@ export const AgentApprovalResponseSchema = z.object({
   reason: z.string().max(2000).optional()
 })
 export type AgentApprovalResponse = z.infer<typeof AgentApprovalResponseSchema>
-
-export const PaletteResizeSchema = z.object({
-  height: z.number().min(0).max(5000)
-})
-
-export const PALETTE_WIDTH = 720
-export const PALETTE_MIN_HEIGHT = 120
-export const PALETTE_MAX_HEIGHT = 640
-
-export function clampPaletteHeight(h: number): number {
-  if (!Number.isFinite(h)) return PALETTE_MIN_HEIGHT
-  return Math.min(PALETTE_MAX_HEIGHT, Math.max(PALETTE_MIN_HEIGHT, Math.round(h)))
-}

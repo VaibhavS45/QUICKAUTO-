@@ -5,7 +5,7 @@ const mocks = vi.hoisted(() => ({
   appQuit: vi.fn(),
   buildFromTemplate: vi.fn((items: unknown[]) => items),
   openShellAppWindow: vi.fn(),
-  getAllWindows: vi.fn(() => [] as Array<{ isDestroyed(): boolean; isVisible(): boolean; on: () => void }>),
+  getAllWindows: vi.fn(() => [] as Array<{ isDestroyed(): boolean; on: () => void }>),
   trayOn: vi.fn(),
   traySetContextMenu: vi.fn(),
   traySetToolTip: vi.fn(),
@@ -35,49 +35,37 @@ vi.mock('../../src/main/agent/shell-app-window.js', () => ({
   openShellAppWindow: mocks.openShellAppWindow
 }))
 
-import { createAppTray, hasVisibleWindow, startAppLaunch } from '../../src/main/agent/app-lifecycle.js'
+import { createAppTray, hasOpenWindow } from '../../src/main/shell/app-lifecycle.js'
 
 describe('app lifecycle', () => {
   beforeEach(() => {
     vi.clearAllMocks()
   })
 
-  it('opens the shell by default and on app activation', () => {
-    startAppLaunch(['palette'])
-    expect(mocks.openShellAppWindow).toHaveBeenCalledOnce()
-    expect(mocks.appOn).toHaveBeenCalledWith('activate', expect.any(Function))
-  })
-
-  it('keeps --background startup tray-only', () => {
-    startAppLaunch(['palette', '--background'])
-    expect(mocks.openShellAppWindow).not.toHaveBeenCalled()
-    expect(mocks.appOn).toHaveBeenCalledWith('activate', expect.any(Function))
-  })
-
-  it('shows the Dock only for a live visible window', () => {
-    expect(hasVisibleWindow([{ isDestroyed: () => false, isVisible: () => true }])).toBe(true)
-    expect(hasVisibleWindow([{ isDestroyed: () => true, isVisible: () => true }])).toBe(false)
-    expect(hasVisibleWindow([{ isDestroyed: () => false, isVisible: () => false }])).toBe(false)
+  it('keeps the Dock visible while any window remains open', () => {
+    expect(hasOpenWindow([{ isDestroyed: () => false }])).toBe(true)
+    expect(hasOpenWindow([{ isDestroyed: () => true }])).toBe(false)
   })
 
   it('creates the requested tray menu and opens the shell on tray click', () => {
-    const openCalendar = vi.fn()
     const openSettings = vi.fn()
-    createAppTray(openCalendar, openSettings)
+    const values = { startOnLogin: false }
+    const setStartOnLogin = vi.fn((enabled: boolean) => { values.startOnLogin = enabled })
+    createAppTray(openSettings, () => values.startOnLogin, setStartOnLogin)
     const menu = mocks.buildFromTemplate.mock.calls.at(-1)?.[0] as Array<{
       label?: string
-      click?: () => void
+      click?: (item: { checked: boolean }) => void
     }>
     expect(menu.flatMap((item) => item.label ?? [])).toEqual([
       'Open app',
-      'Open calendar',
       'Settings',
+      'Start on login',
       'Quit'
     ])
-    menu.find((item) => item.label === 'Open calendar')?.click?.()
-    menu.find((item) => item.label === 'Settings')?.click?.()
-    expect(openCalendar).toHaveBeenCalledOnce()
+    menu.find((item) => item.label === 'Settings')?.click?.({ checked: false })
     expect(openSettings).toHaveBeenCalledOnce()
+    menu.find((item) => item.label === 'Start on login')?.click?.({ checked: true })
+    expect(setStartOnLogin).toHaveBeenCalledWith(true)
     const click = mocks.trayInstance.on.mock.calls.at(-1)?.[1]
     expect(click).toEqual(expect.any(Function))
     click()

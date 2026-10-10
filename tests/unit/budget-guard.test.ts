@@ -78,6 +78,9 @@ describe('BudgetGuard scheduled share', () => {
     expect(pre.reason).toBe('scheduled-share-exhausted')
     // Interactive calls still allowed.
     expect(g.preflight('palette', 1).ok).toBe(true)
+    expect(g.preflight('chat', 1).ok).toBe(true)
+    await g.execute({ source: 'chat', runId: 'chat', label: 'interactive', fn: async () => 1 })
+    expect(g.status().scheduledUsed).toBe(6)
   })
 })
 

@@ -4,7 +4,7 @@ import { AutomationsPlaceholder } from './placeholders/AutomationsPlaceholder.js
 const placeholder: FeatureModule = {
   id: 'automations',
   title: 'Automations',
-  icon: 'calendar',
+  icon: 'automation',
   Component: AutomationsPlaceholder
 }
 

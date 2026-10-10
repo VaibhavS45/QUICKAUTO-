@@ -1,9 +1,7 @@
 import { z } from 'zod'
-import { HotkeySchema } from '../shared/types.js'
 import {
   AgentApprovalResponseSchema,
-  AgentRunRequestSchema,
-  PaletteResizeSchema
+  AgentRunRequestSchema
 } from '../shared/agent.js'
 import { ModelSettingsSchema } from './settings/model-settings.js'
 import { ProfileSettingsSchema } from './agent/profile-settings.js'
@@ -15,19 +13,6 @@ import { AppBehaviorPatchSchema, AppBehaviorSchema } from './agent/app-prefs.js'
  */
 
 export const IpcChannels = {
-  paletteSubmit: 'palette:submit',
-  paletteHide: 'palette:hide',
-  paletteResize: 'palette:resize',
-  getHotkey: 'settings:get-hotkey',
-  setHotkey: 'settings:set-hotkey',
-  hotkeyError: 'settings:hotkey-error',
-  platformInfo: 'app:platform-info',
-  calendarMinimize: 'calendar:minimize',
-  calendarMaximize: 'calendar:toggle-maximize',
-  calendarClose: 'calendar:close',
-  /** Renderer pulls the pending @calendar draft on mount (cold-start race fix). */
-  calendarTakeDraft: 'calendar:take-draft',
-  calendarOpen: 'calendar:open',
   getModelSettings: 'settings:get-model',
   setModelSettings: 'settings:set-model',
   setApiKey: 'settings:set-api-key',
@@ -58,19 +43,6 @@ export const IpcChannels = {
 } as const
 
 export type IpcChannel = (typeof IpcChannels)[keyof typeof IpcChannels]
-
-export const PaletteSubmitSchema = z.object({
-  text: z.string().max(8000),
-  tools: z.array(z.string())
-})
-
-export const CalendarDraftSchema = z.object({
-  text: z.string().max(8000)
-})
-
-export const SetHotkeySchema = z.object({
-  hotkey: HotkeySchema
-})
 
 export const ApiKeySchema = z.object({
   key: z.string().min(1).max(10000)
@@ -108,16 +80,8 @@ export const SettingsTabRequestSchema = z.object({
 export {
   AgentApprovalResponseSchema,
   AgentRunRequestSchema,
-  PaletteResizeSchema,
   ModelSettingsSchema,
   ProfileSettingsSchema,
   AppBehaviorSchema,
   AppBehaviorPatchSchema
-}
-
-export interface PlatformInfo {
-  platform: NodeJS.Platform
-  sessionType: string
-  wayland: boolean
-  globalShortcutReliable: boolean
 }

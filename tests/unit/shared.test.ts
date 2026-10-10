@@ -1,5 +1,12 @@
 import { describe, expect, it } from 'vitest'
-import { activeMention, defaultHotkey, parseMentionedTools, toPaletteSubmit } from '../../src/shared/types.js'
+import { activeMention, parseMentionedTools, TOOL_IDS, TOOL_META } from '../../src/shared/types.js'
+
+describe('tool catalog', () => {
+  it('does not expose the removed calendar view as a selectable tool', () => {
+    expect(TOOL_IDS).not.toContain('calendar')
+    expect(Object.keys(TOOL_META)).not.toContain('calendar')
+  })
+})
 
 describe('parseMentionedTools', () => {
   it('finds single and chained tools', () => {
@@ -31,7 +38,6 @@ describe('parseMentionedTools', () => {
     expect(parseMentionedTools('(see @gmail) for the thread')).toEqual(['gmail'])
     // A real mention after whitespace still counts, even next to an email.
     expect(parseMentionedTools('me@gmail.com and @gmail the thread')).toEqual(['gmail'])
-    expect(toPaletteSubmit('write to me@example.com').tools).toEqual([])
   })
 })
 
@@ -52,24 +58,5 @@ describe('activeMention', () => {
     expect(activeMention('just text', 9)).toBeNull()
     expect(activeMention('@gmail done', 11)).toBeNull()
     expect(activeMention('@gmail done @', 13)).toEqual({ start: 12, typed: '' })
-  })
-})
-
-describe('toPaletteSubmit', () => {
-  it('keeps text and extracted tools together', () => {
-    const s = toPaletteSubmit('@calendar buy milk Friday')
-    expect(s.tools).toEqual(['calendar'])
-    expect(s.text).toContain('buy milk')
-  })
-})
-
-describe('defaultHotkey', () => {
-  it('avoids Spotlight conflict on macOS', () => {
-    expect(defaultHotkey('darwin')).toBe('Alt+Space')
-  })
-
-  it('uses Ctrl+Space elsewhere', () => {
-    expect(defaultHotkey('linux')).toBe('Ctrl+Space')
-    expect(defaultHotkey('win32')).toBe('Ctrl+Space')
   })
 })

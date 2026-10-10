@@ -36,12 +36,12 @@ import type { ConnectorProvider, ToolStatus } from './provider.js'
  *   No delete/trash/forward/filter tools are exposed.
  *
  * Every execution goes through BudgetGuard with cache/dedupe keys HERE, so
- * src/main/index.ts must NOT wrap these tools again (see isPaletteGuarded).
+ * src/main/index.ts must NOT wrap these tools again (see isBudgetGuardedTool).
  * That keeps the meter at exactly one hit per call and cache hits at zero.
  *
  * Every write tool requires the in-app approve/deny card (see
  * src/main/agent/tools.ts APPROVAL_REQUIRED_TOOLS): 'user-approval' in
- * palette runs, hard-denied in scheduled runs.
+ * interactive runs, hard-denied in scheduled runs.
  */
 export const COMPOSIO_USER_ID = 'palette-local-user'
 export const GMAIL_TOOLKIT = 'gmail'
@@ -85,10 +85,10 @@ export const GMAIL_WRITE_TOOLS = ['gmail_draft', 'gmail_send', 'gmail_reply', 'g
 export const GMAIL_NOT_CONNECTED = 'GMAIL_NOT_CONNECTED'
 
 const NOT_CONNECTED_MESSAGE =
-  'Gmail is not connected (GMAIL_NOT_CONNECTED). Tell the user to open Palette Settings → Connections and press "Connect Gmail", then try again. Do not invent emails.'
+  'Gmail is not connected (GMAIL_NOT_CONNECTED). Tell the user to open Settings → Connections and press "Connect Gmail", then try again. Do not invent emails.'
 
 const NO_KEY_MESSAGE =
-  'The Composio API key is not set (GMAIL_NOT_CONNECTED). Tell the user to open Palette Settings → Connections, paste their Composio API key, then press "Connect Gmail". Do not invent emails.'
+  'The Composio API key is not set (GMAIL_NOT_CONNECTED). Tell the user to open Settings → Connections, paste their Composio API key, then press "Connect Gmail". Do not invent emails.'
 
 export const GMAIL_SYSTEM_PROMPT = [
   'When @gmail tools are available: answer from tool results only, newest first.',
@@ -160,12 +160,12 @@ function realClient(apiKey: string): ComposioClientLike {
 
 /**
  * Tools returned by this provider already execute under BudgetGuard (with
- * cache/dedupe keys). src/main/index.ts consults isPaletteGuarded() and skips
+ * cache/dedupe keys). src/main/index.ts consults isBudgetGuardedTool() and skips
  * its generic wrapper for them, so each Composio call is metered exactly once.
  */
 const guardedTools = new WeakSet<object>()
 
-export function isPaletteGuarded(t: unknown): boolean {
+export function isBudgetGuardedTool(t: unknown): boolean {
   return typeof t === 'object' && t !== null && guardedTools.has(t)
 }
 

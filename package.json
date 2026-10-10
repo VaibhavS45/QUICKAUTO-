@@ -1,7 +1,7 @@
 {
   "name": "palette",
   "version": "0.1.0",
-  "description": "Palette — Raycast-style command palette + agent task calendar",
+  "description": "Palette — desktop assistant shell with automation routines",
   "type": "module",
   "author": "",
   "license": "MIT",
@@ -25,7 +25,6 @@
     "@opencode-ai/sdk": "^1.18.35",
     "ai": "^7.0.130",
     "electron-store": "^11.0.0",
-    "react-day-picker": "^10.0.2",
     "zod": "^4.6.5"
   },
   "devDependencies": {

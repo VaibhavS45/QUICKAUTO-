@@ -67,6 +67,7 @@ describe('AutomationsView', () => {
     expect(html).toContain('Create')
     expect(html).not.toContain('Back')
     expect(html).not.toContain('Choose how it starts')
+    expect(html).not.toContain('agent will create it')
   })
 
   it('groups update rows by day with title, time, and full summary', () => {

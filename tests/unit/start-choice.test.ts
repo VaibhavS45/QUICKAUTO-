@@ -31,7 +31,7 @@ describe('start choice', () => {
   it('renders the event trigger form for triggered tasks', () => {
     const html = renderToStaticMarkup(
       createElement(Builder, {
-        initial: { ...blankDraft(), triggers: [blankTrigger('event')] },
+        initial: { ...blankDraft(), triggers: [{ ...blankTrigger('event'), event: 'a new conversation is started' }] },
         gmailConnected: false,
         onConnect: () => {},
         onClose: () => {},
@@ -40,5 +40,47 @@ describe('start choice', () => {
     )
     expect(html).toContain('When this happens')
     expect(html).toContain('mailbox')
+    expect(html).toContain('a new conversation is started')
+  })
+
+  it('renders the schedule pills first and Add Trigger when empty', () => {
+    const scheduled = renderToStaticMarkup(
+      createElement(Builder, {
+        initial: blankDraft(),
+        gmailConnected: true,
+        onConnect: () => {},
+        onClose: () => {},
+        onSubmit: async () => null
+      })
+    )
+    expect(scheduled).toContain('When')
+    expect(scheduled).toContain('Daily')
+    expect(scheduled).toContain('AM 9:00')
+    const empty = renderToStaticMarkup(
+      createElement(Builder, {
+        initial: { ...blankDraft(), triggers: [] },
+        gmailConnected: true,
+        onConnect: () => {},
+        onClose: () => {},
+        onSubmit: async () => null
+      })
+    )
+    expect(empty).toContain('When this happens')
+    expect(empty).toContain('Add Trigger')
+  })
+
+  it('shows a plain chat box below the triggers', () => {
+    const html = renderToStaticMarkup(
+      createElement(Builder, {
+        initial: blankDraft(),
+        gmailConnected: true,
+        onConnect: () => {},
+        onClose: () => {},
+        onSubmit: async () => null
+      })
+    )
+    expect(html).toContain('Describe the automation to the agent')
+    expect(html).toContain('Just chat')
+    expect(html).toContain('Send')
   })
 })

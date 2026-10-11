@@ -22,6 +22,7 @@ import {
 import { blankDraft, blankTrigger, templateToDraft, type BuilderDraft } from './builder-compile.js'
 import { parseAutomationTab } from '../../shell/nav.js'
 import Builder from './builder.js'
+import CanvasDescribeBar from './canvas-describe.js'
 import StartChoice, { type StartKind } from './start-choice.js'
 import './automations.css'
 
@@ -172,6 +173,10 @@ export default function AutomationsView(props: FeatureProps): React.JSX.Element 
   const [activeOnly, setActiveOnly] = useState(false)
   const [builderOpen, setBuilderOpen] = useState(false)
   const [choiceOpen, setChoiceOpen] = useState(false)
+  const [canvasDescribe, setCanvasDescribe] = useState(false)
+  const [canvasPrompt, setCanvasPrompt] = useState('')
+  const [canvasBusy, setCanvasBusy] = useState(false)
+  const [canvasError, setCanvasError] = useState('')
   const [builderInitial, setBuilderInitial] = useState<BuilderDraft>(() => blankDraft())
   const [gmailConnected, setGmailConnected] = useState<boolean | undefined>(undefined)
 
@@ -243,8 +248,12 @@ export default function AutomationsView(props: FeatureProps): React.JSX.Element 
     if (!props.initialStartKind || openedStartKind.current === props.initialStartKind) return
     openedStartKind.current = props.initialStartKind
     if (props.initialStartKind === 'schedule') setBuilderInitial({ ...blankDraft(), mode: 'manual', triggers: [blankTrigger('schedule')] })
-    else if (props.initialStartKind === 'triggered') setBuilderInitial({ ...blankDraft(), mode: 'manual', triggers: [blankTrigger('event')] })
-    else if (props.initialStartKind === 'advanced') setBuilderInitial({ ...blankDraft(), mode: 'describe' })
+    else if (props.initialStartKind === 'triggered') setBuilderInitial({ ...blankDraft(), mode: 'manual', triggers: [] })
+    else if (props.initialStartKind === 'advanced') {
+      setTab('canvas')
+      setCanvasDescribe(true)
+      return
+    }
     else return
     setBuilderOpen(true)
   }, [props.initialStartKind])
@@ -267,9 +276,13 @@ export default function AutomationsView(props: FeatureProps): React.JSX.Element 
 
   function pickStart(kind: StartKind): void {
     setChoiceOpen(false)
+    if (kind === 'advanced') {
+      setTab('canvas')
+      setCanvasDescribe(true)
+      return
+    }
     if (kind === 'schedule') setBuilderInitial({ ...blankDraft(), mode: 'manual', triggers: [blankTrigger('schedule')] })
-    else if (kind === 'triggered') setBuilderInitial({ ...blankDraft(), mode: 'manual', triggers: [blankTrigger('event')] })
-    else setBuilderInitial({ ...blankDraft(), mode: 'describe' })
+    else setBuilderInitial({ ...blankDraft(), mode: 'manual', triggers: [] })
     setBuilderOpen(true)
   }
 
@@ -293,6 +306,25 @@ export default function AutomationsView(props: FeatureProps): React.JSX.Element 
       return null
     } catch (reason) {
       return errorText(reason)
+    }
+  }
+
+  async function submitCanvasDescribe(): Promise<void> {
+    const text = canvasPrompt.trim()
+    if (!text || canvasBusy) return
+    setCanvasBusy(true)
+    setCanvasError('')
+    try {
+      const failure = await submitBuilder(text)
+      if (failure) {
+        setCanvasError(failure)
+        return
+      }
+      setCanvasPrompt('')
+      setCanvasDescribe(false)
+      setTab('canvas')
+    } finally {
+      setCanvasBusy(false)
     }
   }
 
@@ -448,6 +480,7 @@ export default function AutomationsView(props: FeatureProps): React.JSX.Element 
   }
 
   function beginPan(event: React.PointerEvent): void {
+    if ((event.target as HTMLElement).closest('input, select, textarea, button')) return
     dragRef.current = { mode: 'pan', sx: event.clientX, sy: event.clientY, ox: vp.x, oy: vp.y }
     const move = (e: PointerEvent): void => {
       const d = dragRef.current
@@ -760,7 +793,7 @@ export default function AutomationsView(props: FeatureProps): React.JSX.Element 
             ref={viewportRef}
             onPointerDown={beginPan}
             onDoubleClick={(e) => {
-              if ((e.target as HTMLElement).closest('.n8n-node, .n8n-menu, .n8n-edge-add, .n8n-end, button, .n8n-toolbar, .n8n-topbar, .n8n-inspector')) return
+              if ((e.target as HTMLElement).closest('.n8n-node, .n8n-menu, .n8n-edge-add, .n8n-end, button, .n8n-toolbar, .n8n-topbar, .n8n-inspector, .n8n-describe')) return
               addAtPoint(e.clientX, e.clientY)
             }}
             aria-label={canvasRoutine ? `Canvas for ${routineTitle(canvasRoutine.prompt)}` : 'Canvas builder'}
@@ -769,8 +802,7 @@ export default function AutomationsView(props: FeatureProps): React.JSX.Element 
               <span className="n8n-status">
                 {canvasRoutine ? `${routineTitle(canvasRoutine.prompt)} · ${canvasRoutine.repeat} · ${timeLabel(canvasRoutine.runAt)}` : 'Blank canvas'}
               </span>
-              {/* ponytail: static until the automation builder lands; wire to it then */}
-              <button type="button" className="n8n-create" disabled title="Automation builder coming next">Create</button>
+              <button type="button" className="n8n-create" title="Describe an automation for the agent to create" onClick={() => setCanvasDescribe(true)}>Create</button>
             </div>
             <div className="n8n-toolbar" role="toolbar" aria-label="Canvas controls">
               <button type="button" aria-label="Zoom out" onClick={() => zoomBy(0.9)}>−</button>
@@ -895,6 +927,16 @@ export default function AutomationsView(props: FeatureProps): React.JSX.Element 
               })()}
             </div>
             <p className="n8n-hint" aria-hidden="true">Drag nodes to arrange · drag background to pan · scroll to zoom · double-click empty canvas to add</p>
+            {canvasDescribe && (
+              <CanvasDescribeBar
+                value={canvasPrompt}
+                busy={canvasBusy}
+                error={canvasError}
+                onChange={(value) => { setCanvasPrompt(value); setCanvasError('') }}
+                onSubmit={() => void submitCanvasDescribe()}
+                onClose={() => { setCanvasDescribe(false); setCanvasError('') }}
+              />
+            )}
             {selectedStep && (
               <div className="n8n-inspector" aria-label={`Configure step ${selectedStep.title}`}>
                 <form className="canvas-editor" onSubmit={saveStepEdit}>

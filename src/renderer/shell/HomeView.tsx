@@ -1,6 +1,6 @@
 import type { ShellApi } from '../contracts/feature.js'
 import { START_OPTIONS, type StartKind } from '../features/automations/start-choice.js'
-import { AutomationTemplateCards } from './AutomationTemplateCards.js'
+import { UpdatesStream } from './UpdatesStream.js'
 import '../features/automations/automations.css'
 
 export function HomeView({ shell }: { shell: ShellApi }): React.JSX.Element {
@@ -28,12 +28,9 @@ export function HomeView({ shell }: { shell: ShellApi }): React.JSX.Element {
         </div>
       </div>
       <div className="home-suggestions-head">
-        <h3>Suggestions</h3>
+        <h3>Updates</h3>
       </div>
-      <AutomationTemplateCards
-        onSelect={(template) => shell.navigate('automations', { templateId: template.id })}
-        onConnect={() => shell.openSettings('connectors')}
-      />
+      <UpdatesStream shell={shell} />
     </section>
   )
 }

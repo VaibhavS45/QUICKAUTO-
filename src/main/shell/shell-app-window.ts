@@ -27,7 +27,7 @@ export function openShellAppWindow(): BrowserWindow {
     // ponytail: transparent only on macOS (frameless there); keep the native
     // frame on Windows/Linux where transparency needs frameless windows.
     transparent: process.platform === 'darwin',
-    trafficLightPosition: process.platform === 'darwin' ? { x: 12, y: 12 } : undefined,
+    trafficLightPosition: process.platform === 'darwin' ? { x: 12, y: 11 } : undefined,
     webPreferences: {
       preload: preloadPath(),
       contextIsolation: true,

@@ -13,12 +13,12 @@ const shell = {
 }
 
 describe('home view', () => {
-  it('shows the start panel with suggestions and no chat bar', () => {
+  it('shows the start panel with updates and no chat bar', () => {
     const html = renderToStaticMarkup(createElement(HomeView, { shell }))
     expect(html).toContain('Automate your work')
     expect(html).toContain('Choose how it starts')
     for (const opt of START_OPTIONS) expect(html).toContain(opt.title)
-    expect(html).toContain('Suggestions')
+    expect(html).toContain('Updates')
     expect(html).not.toContain('<textarea')
   })
 })

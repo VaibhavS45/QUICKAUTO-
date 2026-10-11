@@ -5,6 +5,10 @@
    utilities were never generated, which rendered giant sidebar glyphs). */
 
 .settings {
+  --border: #232328;
+  --input: #232328;
+  --card: #1a1a1d;
+  --ring: #4a4a51;
   display: flex;
   height: 100vh;
   background: #0c0c0e;

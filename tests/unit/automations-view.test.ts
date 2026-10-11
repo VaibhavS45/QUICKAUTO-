@@ -2,7 +2,7 @@ import { createElement } from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { describe, expect, it, vi } from 'vitest'
 import { addDaysKey, dayLabel, localDayKey, monthGrid, monthLabel, pastDayLabel, routineOccursOn, routineTitle } from '../../src/renderer/features/automations/dates.js'
-import AutomationsView, { UpdatesList, stepsForRoutine } from '../../src/renderer/features/automations/AutomationsView.js'
+import AutomationsView, { ManageDetail, RoutineRail, UpdatesList, routineKindLabel, stepsForRoutine } from '../../src/renderer/features/automations/AutomationsView.js'
 import type { ShellApi } from '../../src/renderer/contracts/feature.js'
 
 const shell: ShellApi = {
@@ -85,5 +85,48 @@ describe('AutomationsView', () => {
     expect(html).toContain('Daily Hacker News Top 10 Digest')
     expect(html).toContain('Today digest body.')
     expect(html).toContain('Yesterday digest body.')
+  })
+
+  it('labels multi-tool routines advanced and single-tool routines scheduled', () => {
+    const base = { id: 'r', prompt: 'Do things', runAt: Date.now(), repeat: 'daily', enabled: true }
+    expect(routineKindLabel({ ...base, tools: ['gmail', 'sheets'] })).toBe('Advanced')
+    expect(routineKindLabel({ ...base, tools: ['github'] })).toBe('Scheduled')
+  })
+
+  it('renders the manage detail with sections and history', () => {
+    const routine = { id: 'r1', prompt: 'Summarize inbox', tools: ['gmail'], runAt: new Date(2026, 9, 11, 9).getTime(), repeat: 'daily', enabled: false }
+    const html = renderToStaticMarkup(createElement(ManageDetail, {
+      routine,
+      runs: [
+        { id: 'run1', routineId: 'r1', title: 'Summarize inbox', startedAt: 1, status: 'succeeded', summary: 'Did the thing.' },
+        { id: 'run2', routineId: 'other', title: 'Elsewhere', startedAt: 2, status: 'failed' }
+      ],
+      onToggle: () => {},
+      onRemove: () => {},
+      onSelectRun: () => {}
+    }))
+    expect(html).toContain('Summarize inbox')
+    expect(html).toContain('Paused')
+    expect(html).toContain('Details')
+    expect(html).toContain('History')
+    expect(html).toContain('The agent will')
+    expect(html).toContain('Advanced settings')
+    expect(html).toContain('@gmail')
+    expect(html).not.toContain('Elsewhere')
+  })
+
+  it('renders the config rail with engine and connector states', () => {
+    const html = renderToStaticMarkup(createElement(RoutineRail, {
+      routine: { id: 'r1', prompt: 'x', tools: ['gmail', 'sheets'], runAt: 0, repeat: 'daily', enabled: true },
+      engine: 'builtin',
+      connected: { gmail: false, sheets: true },
+      onOpenConnectors: () => {}
+    }))
+    expect(html).toContain('Agent')
+    expect(html).toContain('Built-in')
+    expect(html).toContain('Connectors')
+    expect(html).toContain('Gmail')
+    expect(html).toContain('Google Sheets')
+    expect(html).toContain('View all')
   })
 })

@@ -4,13 +4,15 @@ import type { ChatThread } from '../../shared/chat.js'
 import type { AgentEvent } from '../../shared/agent.js'
 import type { AppNotification } from '../../shared/contracts/notifications.js'
 import { parseMentionedTools } from '../../shared/types.js'
-import { ChatComposer } from './ChatComposer.js'
 import { ChatView } from './ChatView.js'
+import { CommandPalette, type PaletteItem } from './CommandPalette.js'
+import { HomeView } from './HomeView.js'
+import { ProfileMenu } from './ProfileMenu.js'
 import { createChatRunState, reduceChatRun, resolveChatApproval, type ChatRunState } from './chat-state.js'
 import { getFeatureRegistry } from './registry.js'
-import { FeatureContent, FeatureHeaderActions } from './FeatureHost.js'
+import { FeatureContent } from './FeatureHost.js'
 import type { AutomationTemplate } from '../../shared/contracts/automation-templates.js'
-import { PRIMARY_NAV, SIDEBAR_SECTIONS, ShellRouter } from './nav.js'
+import { AUTOMATION_TABS, PRIMARY_NAV, ShellRouter, parseAutomationTab } from './nav.js'
 import SettingsApp from '../settings/SettingsDialog.js'
 import { SETTINGS_HEIGHT, SETTINGS_WIDTH } from '../../main/shell/settings-layout.js'
 import './shell.css'
@@ -25,8 +27,9 @@ function Icon({ name }: { name: string }): React.JSX.Element {
     plus: <path d="M12 5v14M5 12h14" />,
     automation: <><rect x="3" y="5" width="18" height="16" rx="2" /><path d="M16 3v4M8 3v4M3 10h18" /></>,
     bell: <><path d="M18 8a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9M10 21h4" /></>,
-    settings: <><circle cx="12" cy="12" r="3" /><path d="m19.4 15 .1.1 1.4 1.1-1.4 2.4-1.7-.7a8 8 0 0 1-1.5.9l-.3 1.8h-2.8l-.3-1.8a8 8 0 0 1-1.5-.9l-1.7.7-1.4-2.4 1.4-1.1a8 8 0 0 1 0-1.8l-1.4-1.1 1.4-2.4 1.7.7a8 8 0 0 1 1.5-.9l.3-1.8h2.8l.3 1.8a8 8 0 0 1 1.5.9l1.7-.7 1.4 2.4-1.4 1.1a8 8 0 0 1 0 1.8Z" /></>,
-    chevron: <path d="m9 18 6-6-6-6" />
+    updates: <path d="M22 12h-4l-3 9L9 3l-3 9H2" />,
+    manage: <><rect x="3" y="3" width="7" height="7" rx="1" /><rect x="14" y="3" width="7" height="7" rx="1" /><rect x="3" y="14" width="7" height="7" rx="1" /><rect x="14" y="14" width="7" height="7" rx="1" /></>,
+    canvas: <><circle cx="6" cy="6" r="2.5" /><circle cx="18" cy="6" r="2.5" /><circle cx="12" cy="18" r="2.5" /><path d="M8 7.5l2.5 8M16 7.5l-2.5 8M8.5 6h7" /></>
   }
   return (
     <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round">
@@ -46,24 +49,19 @@ function errorText(reason: unknown): string {
 export default function ShellApp(): React.JSX.Element {
   const router = useMemo(() => new ShellRouter(), [])
   const [route, setRoute] = useState(router.current)
-  const [collapsed, setCollapsed] = useState(false)
   const [profile, setProfile] = useState<LocalProfile>({ name: '', email: '' })
-  const [accountMenuOpen, setAccountMenuOpen] = useState(false)
+  const [profileMenuOpen, setProfileMenuOpen] = useState(false)
   const [settings, setSettings] = useState<{ tab?: string } | null>(null)
   const [notificationsOpen, setNotificationsOpen] = useState(false)
   const [notifications, setNotifications] = useState<AppNotification[]>([])
   const [dashboardError, setDashboardError] = useState('')
   const [threads, setThreads] = useState<ChatThread[]>([])
+  const [paletteOpen, setPaletteOpen] = useState(false)
   const [chatError, setChatError] = useState('')
   const [chatLoading, setChatLoading] = useState(true)
   const [run, setRun] = useState<ChatRunState | null>(null)
   const [runThreadId, setRunThreadId] = useState('')
   const [busy, setBusy] = useState(false)
-  const [chatSearch, setChatSearch] = useState('')
-  const [renamingId, setRenamingId] = useState('')
-  const [renameValue, setRenameValue] = useState('')
-  const [pendingDelete, setPendingDelete] = useState<ChatThread | null>(null)
-  const [pendingClear, setPendingClear] = useState(false)
   const [approvalError, setApprovalError] = useState('')
   const busyRef = useRef(false)
   const startingRunRef = useRef(false)
@@ -144,12 +142,12 @@ export default function ShellApp(): React.JSX.Element {
       if (event.key.toLowerCase() === 'n') {
         event.preventDefault()
         navigate('home')
-      } else if (event.key.toLowerCase() === 'b') {
-        event.preventDefault()
-        setCollapsed((value) => !value)
       } else if (event.key === ',') {
         event.preventDefault()
         window.app.openSettingsWindow()
+      } else if (event.key.toLowerCase() === 'k') {
+        event.preventDefault()
+        setPaletteOpen((open) => !open)
       }
     }
     window.addEventListener('keydown', onKeyDown)
@@ -195,14 +193,9 @@ export default function ShellApp(): React.JSX.Element {
 
   function navigate(view: string, params: Record<string, unknown> = {}): void {
     router.navigate(view, params)
-    setAccountMenuOpen(false)
     setChatError('')
     setNotificationsOpen(false)
-  }
-
-  function openThread(thread: ChatThread): void {
-    navigate('chat', { chatId: thread.id })
-    setPendingDelete(null)
+    setProfileMenuOpen(false)
   }
 
   const shellApi: ShellApi = {
@@ -211,10 +204,7 @@ export default function ShellApp(): React.JSX.Element {
     openSettings: (tab) => window.app.openSettingsWindow(tab),
     notify: (notification) => window.dispatchEvent(new CustomEvent('app:notification', { detail: notification }))
   }
-  const title = activeFeature?.title ?? (activeThread?.title ?? 'New chat')
   const initials = displayName(profile).split(/\s+/).slice(0, 2).map((part) => part[0]?.toUpperCase()).join('')
-  const visibleThreads = threads
-    .filter((thread) => thread.title.toLowerCase().includes(chatSearch.trim().toLowerCase()))
 
   async function sendMessage(text: string): Promise<boolean> {
     if (busyRef.current) return false
@@ -281,42 +271,6 @@ export default function ShellApp(): React.JSX.Element {
     }
   }
 
-  async function renameThread(thread: ChatThread): Promise<void> {
-    try {
-      const result = await window.app.chatRename(thread.id, renameValue)
-      if (!result.ok || !result.thread) throw new Error(result.error || 'Could not rename this chat.')
-      setThreads((current) => current.map((item) => item.id === thread.id ? result.thread! : item))
-      setRenamingId('')
-      setRenameValue('')
-    } catch (error) {
-      setChatError(errorText(error))
-    }
-  }
-
-  async function deleteThread(thread: ChatThread): Promise<void> {
-    try {
-      const result = await window.app.chatRemove(thread.id)
-      if (!result.ok) throw new Error(result.error || 'Could not delete this chat.')
-      setThreads((current) => current.filter((item) => item.id !== thread.id))
-      setPendingDelete(null)
-      if (activeChatId === thread.id) navigate('home')
-    } catch (error) {
-      setChatError(errorText(error))
-    }
-  }
-
-  async function clearChats(): Promise<void> {
-    try {
-      const result = await window.app.chatClear()
-      if (!result.ok) throw new Error(result.error || 'Could not clear chat history.')
-      setThreads([])
-      setPendingClear(false)
-      if (activeChatId) navigate('home')
-    } catch (error) {
-      setChatError(errorText(error))
-    }
-  }
-
   async function readNotification(notification: AppNotification): Promise<void> {
     if (!notification.read) {
       const response = await window.app.notificationRead(notification.id)
@@ -347,10 +301,34 @@ export default function ShellApp(): React.JSX.Element {
     setNotifications((current) => current.filter((item) => item.id !== id))
   }
 
+  const paletteItems: PaletteItem[] = useMemo(() => [
+    { id: 'cmd-new-chat', title: 'New chat', hint: '⌘N', run: () => navigate('home') },
+    { id: 'cmd-automations', title: 'Go to Automations', hint: 'Manage', run: () => navigate('automations') },
+    { id: 'cmd-settings', title: 'Open Settings', hint: '⌘,', run: () => window.app.openSettingsWindow() },
+    { id: 'cmd-connectors', title: 'Open Connectors settings', hint: 'Settings', run: () => window.app.openSettingsWindow('connectors') },
+    { id: 'cmd-agents', title: 'Open Agents settings', hint: 'Settings', run: () => window.app.openSettingsWindow('agents') },
+    ...threads.slice(0, 8).map((thread) => ({
+      id: `chat-${thread.id}`,
+      title: thread.title || 'Untitled chat',
+      hint: 'Chat',
+      run: () => navigate('chat', { chatId: thread.id })
+    }))
+  ], [router, threads])
+
   return (
-    <main className={`shell-frame${collapsed ? ' is-collapsed' : ''}`}>
+    <main className="shell-frame is-collapsed">
       <header className="shell-drag-strip" aria-label="Window title bar">
         <span className="shell-brand">Palette</span>
+        <button
+          type="button"
+          className="shell-palette-trigger"
+          aria-label="Open command palette"
+          title="Command palette (⌘K)"
+          onClick={() => setPaletteOpen(true)}
+        >
+          <span>Search or command…</span>
+          <kbd>⌘K</kbd>
+        </button>
       </header>
       <div className="shell-workspace">
         <aside className="shell-sidebar" aria-label="Main navigation">
@@ -361,7 +339,8 @@ export default function ShellApp(): React.JSX.Element {
                 type="button"
                 className={`shell-nav-item${route.view === item.view ? ' is-active' : ''}`}
                 aria-current={route.view === item.view ? 'page' : undefined}
-                title={collapsed ? item.label : undefined}
+                aria-label={item.label}
+                title={item.label}
                 onClick={() => navigate(item.view)}
               >
                 <Icon name={item.id === 'home' ? 'plus' : 'automation'} />
@@ -369,128 +348,59 @@ export default function ShellApp(): React.JSX.Element {
               </button>
             ))}
           </nav>
-          <div className="shell-sidebar-sections">
-            <section className="shell-sidebar-section shell-chats-section" aria-label={SIDEBAR_SECTIONS[0]}>
-              <div className="shell-chats-heading">
-                <h2>{SIDEBAR_SECTIONS[0]}</h2>
-              </div>
-              {threads.length > 3 && !collapsed && (
-                <input
-                  className="shell-chat-search"
-                  aria-label="Search chats"
-                  placeholder="Search chats"
-                  value={chatSearch}
-                  onChange={(event) => setChatSearch(event.currentTarget.value)}
-                />
-              )}
-              <div className="shell-chat-list">
-                {visibleThreads.map((thread) => (
-                  <div className={`shell-chat-entry${activeChatId === thread.id ? ' is-active' : ''}`} key={thread.id}>
-                    {renamingId === thread.id && !collapsed ? (
-                      <form className="shell-chat-rename" onSubmit={(event) => { event.preventDefault(); void renameThread(thread) }}>
-                        <input aria-label="Chat title" autoFocus maxLength={80} value={renameValue} onChange={(event) => setRenameValue(event.currentTarget.value)} />
-                        <button type="submit" disabled={!renameValue.trim()}>Save</button>
-                        <button type="button" onClick={() => setRenamingId('')}>Cancel</button>
-                      </form>
-                    ) : (
-                      <>
-                        <button
-                          type="button"
-                          className="shell-chat-link"
-                          title={thread.title}
-                          aria-current={activeChatId === thread.id ? 'page' : undefined}
-                          onClick={() => openThread(thread)}
-                        >
-                          <span>{thread.title}</span>
-                        </button>
-                        {!collapsed && (
-                          <div className="shell-chat-actions">
-                            <button type="button" aria-label={`Rename ${thread.title}`} title="Rename" onClick={() => { setRenamingId(thread.id); setRenameValue(thread.title) }}>···</button>
-                            <button type="button" aria-label={`Delete ${thread.title}`} title="Delete" onClick={() => setPendingDelete(thread)}>×</button>
-                          </div>
-                        )}
-                      </>
-                    )}
-                  </div>
-                ))}
-                {!chatLoading && threads.length === 0 && !collapsed && <p className="shell-chat-empty">Your recent chats will appear here.</p>}
-                {!collapsed && chatSearch.trim() && visibleThreads.length === 0 && threads.length > 0 && (
-                  <p className="shell-chat-empty">No chats match “{chatSearch.trim()}”.</p>
-                )}
-              </div>
-              {!collapsed && threads.length > 0 && (
-                <button type="button" className="shell-clear-chats" onClick={() => setPendingClear(true)}>Clear chat history</button>
-              )}
-              {pendingDelete && !collapsed && (
-                <div className="shell-confirm-card" role="alertdialog" aria-label="Confirm chat deletion">
-                  <p>Delete “{pendingDelete.title}” and its messages?</p>
-                  <button type="button" onClick={() => setPendingDelete(null)}>Cancel</button>
-                  <button type="button" onClick={() => void deleteThread(pendingDelete)}>Delete chat</button>
-                </div>
-              )}
-              {pendingClear && !collapsed && (
-                <div className="shell-confirm-card" role="alertdialog" aria-label="Confirm clear chat history">
-                  <p>Delete all {threads.length} saved chats?</p>
-                  <button type="button" onClick={() => setPendingClear(false)}>Cancel</button>
-                  <button type="button" onClick={() => void clearChats()}>Clear all</button>
-                </div>
-              )}
-            </section>
-          </div>
+          <nav className="shell-primary-nav shell-rail-center" aria-label="Automation views">
+            {AUTOMATION_TABS.map((tab) => {
+              const active = route.view === 'automations' && (parseAutomationTab(route.params['automationTab']) ?? 'manage') === tab.id
+              return (
+                <button
+                  key={tab.id}
+                  type="button"
+                  className={`shell-nav-item${active ? ' is-active' : ''}`}
+                  aria-current={active ? 'page' : undefined}
+                  aria-label={tab.label}
+                  title={tab.label}
+                  onClick={() => navigate('automations', { automationTab: tab.id })}
+                >
+                  <Icon name={tab.icon} />
+                  <span>{tab.label}</span>
+                </button>
+              )
+            })}
+          </nav>
           <footer className="shell-sidebar-footer">
+            <button
+              type="button"
+              className="shell-icon-button shell-notifications-button"
+              aria-label={`Notifications${unreadCount ? ` (${unreadCount} unread)` : ''}`}
+              aria-expanded={notificationsOpen}
+              title="Notifications"
+              onClick={() => setNotificationsOpen((open) => !open)}
+            >
+              <Icon name="bell" />
+              {unreadCount > 0 && <span className="shell-notification-badge">{unreadCount > 99 ? '99+' : unreadCount}</span>}
+            </button>
             <button
               type="button"
               className="shell-profile-button"
               aria-label={`Account menu for ${displayName(profile)}`}
-              aria-expanded={accountMenuOpen}
-              onClick={() => setAccountMenuOpen((open) => !open)}
+              aria-expanded={profileMenuOpen}
+              aria-haspopup="menu"
+              title="Profile"
+              onClick={() => {
+                setProfileMenuOpen((open) => !open)
+                setNotificationsOpen(false)
+              }}
             >
               <span className="shell-avatar">{initials || 'L'}</span>
-              <span className="shell-profile-name">{displayName(profile)}</span>
-              <Icon name="chevron" />
             </button>
-            {accountMenuOpen && (
-              <div className="shell-account-menu" role="menu">
-                <button type="button" role="menuitem" onClick={() => {
-                  window.app.openSettingsWindow('account')
-                  setAccountMenuOpen(false)
-                }}>
-                  Account settings
-                </button>
-              </div>
-            )}
-            <div className="shell-footer-actions">
-              <button
-                type="button"
-                className="shell-icon-button"
-                aria-label={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
-                title="Toggle sidebar (Ctrl/Cmd+B)"
-                aria-expanded={!collapsed}
-                onClick={() => setCollapsed((value) => !value)}
-              >
-                <Icon name="chevron" />
-              </button>
-              <button
-                type="button"
-                className="shell-icon-button shell-notifications-button"
-                aria-label={`Notifications${unreadCount ? ` (${unreadCount} unread)` : ''}`}
-                aria-expanded={notificationsOpen}
-                title="Notifications"
-                onClick={() => setNotificationsOpen((open) => !open)}
-              >
-                <Icon name="bell" />
-                {unreadCount > 0 && <span className="shell-notification-badge">{unreadCount > 99 ? '99+' : unreadCount}</span>}
-              </button>
-              <button
-                type="button"
-                className="shell-icon-button"
-                aria-label="Settings"
-                title="Settings (Ctrl/Cmd+,)"
-                onClick={() => window.app.openSettingsWindow()}
-              >
-                <Icon name="settings" />
-              </button>
-            </div>
+            <ProfileMenu
+              open={profileMenuOpen}
+              name={displayName(profile)}
+              email={profile.email.trim()}
+              initials={initials}
+              onClose={() => setProfileMenuOpen(false)}
+              onOpenSettings={(tab) => window.app.openSettingsWindow(tab)}
+            />
             {notificationsOpen && (
               <section className="shell-notifications-panel" aria-label="Notifications">
                 <header>
@@ -516,17 +426,13 @@ export default function ShellApp(): React.JSX.Element {
           </footer>
         </aside>
         <section className="shell-main-pane">
-          <header className="shell-pane-header">
-            <h1>{title}</h1>
-            {activeFeature && <FeatureHeaderActions feature={activeFeature} shell={shellApi} />}
-          </header>
           {(chatError || dashboardError) && (
             <div className="shell-chat-error" role="alert">
               {chatError || dashboardError}
               <button type="button" onClick={() => { setChatError(''); setDashboardError('') }}>Dismiss</button>
             </div>
           )}
-          <div className={`shell-content${route.view === 'chat' ? ' has-chat-view' : ''}`}>
+          <div className={`shell-content${route.view === 'chat' ? ' has-chat-view' : ''}${!activeFeature && !activeChatId ? ' is-home' : ''}`}>
             {activeFeature ? (
               <FeatureContent feature={activeFeature} shell={shellApi} params={route.params} />
             ) : activeChatId ? (
@@ -550,18 +456,12 @@ export default function ShellApp(): React.JSX.Element {
                 <p className="shell-empty-state">{chatLoading ? 'Loading chat history…' : 'This chat is no longer available.'}</p>
               )
             ) : (
-              <ChatComposer
-                busy={busy}
-                onSend={sendMessage}
-                onOpenSettings={() => window.app.openSettingsWindow('agents')}
-                onOpenConnections={() => window.app.openSettingsWindow('connectors')}
-                onOpenAutomations={() => navigate('automations')}
-                onSelectTemplate={(template: AutomationTemplate) => navigate('automations', { templateId: template.id })}
-              />
+              <HomeView shell={shellApi} />
             )}
           </div>
         </section>
       </div>
+      <CommandPalette open={paletteOpen} items={paletteItems} onClose={() => setPaletteOpen(false)} />
       {settings !== null && (
         <div
           className="shell-settings-overlay"

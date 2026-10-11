@@ -61,12 +61,14 @@ function SlidersIcon(): React.JSX.Element {
 }
 
 export default function Builder(props: BuilderProps): React.JSX.Element {
+  const [mode] = useState(props.initial.mode)
   const [triggers, setTriggers] = useState(props.initial.triggers)
   const [task, setTask] = useState(props.initial.task)
+  const [describe, setDescribe] = useState(props.initial.describe)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
 
-  const compiled = useMemo(() => draftToText({ mode: 'manual', title: props.initial.title, triggers, task, describe: '' }), [props.initial.title, triggers, task])
+  const compiled = useMemo(() => draftToText(mode === 'describe' ? { mode, title: '', triggers: [], task: '', describe } : { mode: 'manual', title: props.initial.title, triggers, task, describe: '' }), [mode, props.initial.title, triggers, task, describe])
 
   async function submit(event: React.FormEvent): Promise<void> {
     event.preventDefault()
@@ -85,10 +87,21 @@ export default function Builder(props: BuilderProps): React.JSX.Element {
     <div className="builder-overlay" role="dialog" aria-modal="true" aria-label="Create automation" onPointerDown={(e) => { if (e.target === e.currentTarget) props.onClose() }}>
       <form className="builder-card" onSubmit={(e) => void submit(e)}>
         <div className="builder-when-head">
-          <strong>When this happens</strong>
+          <strong>{mode === 'describe' ? 'Describe when Manus should act' : 'When this happens'}</strong>
           <button type="button" aria-label="Close builder" onClick={props.onClose}>×</button>
         </div>
 
+        {mode === 'describe' ? (
+          <textarea
+            className="builder-task"
+            rows={6}
+            autoFocus
+            value={describe}
+            onChange={(e) => setDescribe(e.currentTarget.value)}
+            placeholder="e.g. Every weekday at 6:30pm summarize the latest AI news @websearch and send me the highlights"
+          />
+        ) : (
+        <>
         {triggers.map((trigger, i) => (
           <div key={trigger.id} className="builder-trig">
             {trigger.kind === 'event' ? (
@@ -171,6 +184,8 @@ export default function Builder(props: BuilderProps): React.JSX.Element {
           onChange={(e) => setTask(e.currentTarget.value)}
           placeholder="Describe what Manus should do, e.g. summarize the latest AI news and send me the highlights"
         />
+        </>
+        )}
 
         {error && <p role="alert" className="automations-error">{error}</p>}
         <div className="builder-foot">

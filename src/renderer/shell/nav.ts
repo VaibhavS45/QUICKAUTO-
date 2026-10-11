@@ -14,6 +14,24 @@ export const PRIMARY_NAV: PrimaryNavItem[] = [
   { id: 'automations', label: 'Automations', view: 'automations' }
 ]
 
+export interface RailTab {
+  id: 'updates' | 'manage' | 'canvas'
+  label: string
+  icon: string
+}
+
+export const AUTOMATION_TABS: RailTab[] = [
+  { id: 'updates', label: 'Updates', icon: 'updates' },
+  { id: 'manage', label: 'Manage', icon: 'manage' },
+  { id: 'canvas', label: 'Canvas', icon: 'canvas' }
+]
+
+export type AutomationTabId = RailTab['id']
+
+export function parseAutomationTab(value: unknown): AutomationTabId | undefined {
+  return value === 'updates' || value === 'manage' || value === 'canvas' ? value : undefined
+}
+
 export const SIDEBAR_SECTIONS = ['Chats'] as const
 
 export const FORBIDDEN_LABELS = [

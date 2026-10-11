@@ -21,6 +21,8 @@ export interface FeatureProps {
   shell: ShellApi
   initialTemplate?: AutomationTemplate
   focusId?: string
+  initialStartKind?: string
+  initialAutomationTab?: string
 }
 
 export interface FeatureModule {

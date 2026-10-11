@@ -4,7 +4,7 @@ import { templateRequirementBadges, type RequirementBadge } from './template-req
 
 const TRIGGER_ICONS: Record<string, { glyph: string; className: string }> = {
   gmail: { glyph: 'M', className: 'is-gmail' },
-  sheets: { glyph: '31', className: 'is-cal' },
+  sheets: { glyph: '▦', className: 'is-cal' },
   github: { glyph: '❖', className: 'is-github' },
   websearch: { glyph: '✦', className: 'is-search' },
   files: { glyph: '▤', className: 'is-files' }
@@ -69,10 +69,7 @@ export function AutomationTemplateCards({ onSelect, onConnect }: AutomationTempl
   }, [])
 
   return (
-    <section className="shell-template-cards" aria-label="Automation templates">
-      <header>
-        <h2>Suggestions</h2>
-      </header>
+    <section className="shell-template-cards" aria-label="Suggestions">
       {statusError && <p className="shell-template-status-error" role="status">{statusError}</p>}
       <div className="shell-template-grid">
         {AUTOMATION_TEMPLATES.map((template) => {

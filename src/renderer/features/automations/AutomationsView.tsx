@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { FeatureProps } from '../../contracts/feature.js'
 import type { RunRecord, ScheduleItem } from '../../../shared/contracts/schedule.js'
-import { addDaysKey, dayLabel, localDayKey, monthGrid, monthLabel, routineOccursOn, routineTitle, timeLabel } from './dates.js'
+import { addDaysKey, dayLabel, localDayKey, monthGrid, monthLabel, pastDayLabel, routineOccursOn, routineTitle, timeLabel } from './dates.js'
 import {
   NODE_H,
   NODE_W,
@@ -19,8 +19,10 @@ import {
   type CanvasKind,
   type CanvasStep
 } from './canvas-steps.js'
-import { blankDraft, templateToDraft, type BuilderDraft } from './builder-compile.js'
+import { blankDraft, blankTrigger, templateToDraft, type BuilderDraft } from './builder-compile.js'
+import { parseAutomationTab } from '../../shell/nav.js'
 import Builder from './builder.js'
+import StartChoice, { type StartKind } from './start-choice.js'
 import './automations.css'
 
 interface Routine {
@@ -98,8 +100,48 @@ export function stepsForRoutine(routine: Routine | undefined): ZapStep[] {
   }))
 }
 
+export function UpdatesList({ runs, todayKey, onSelect }: {
+  runs: RunRecord[]
+  todayKey: string
+  onSelect(run: RunRecord): void
+}): React.JSX.Element {
+  if (runs.length === 0) return <p className="automations-empty">No outputs yet. Run an automation to see results here.</p>
+  const byDay = new Map<string, RunRecord[]>()
+  for (const run of runs) {
+    const key = localDayKey(new Date(run.endedAt ?? run.startedAt))
+    const list = byDay.get(key) ?? []
+    list.push(run)
+    byDay.set(key, list)
+  }
+  const days = [...byDay.entries()].sort((a, b) => b[0].localeCompare(a[0]))
+  return (
+    <>
+      {days.map(([key, dayRuns]) => (
+        <section key={key} className="updates-day" aria-label={pastDayLabel(key, todayKey)}>
+          <h3>{pastDayLabel(key, todayKey)} <span>({dayRuns.length})</span></h3>
+          {dayRuns.map((run) => (
+            <button
+              key={run.id}
+              type="button"
+              className="updates-row"
+              onClick={() => onSelect(run)}
+            >
+              <span className="updates-row-meta">
+                <span className="updates-row-icon" aria-hidden="true">⟁</span>
+                <strong>{routineTitle(run.title)}</strong>
+                <small>{timeLabel(run.endedAt ?? run.startedAt)}</small>
+              </span>
+              <span className="updates-row-body">{run.summary || 'No output recorded yet.'}</span>
+            </button>
+          ))}
+        </section>
+      ))}
+    </>
+  )
+}
+
 export default function AutomationsView(props: FeatureProps): React.JSX.Element {
-  const [tab, setTab] = useState<'updates' | 'manage' | 'canvas'>('manage')
+  const [tab, setTab] = useState<'updates' | 'manage' | 'canvas'>(() => parseAutomationTab(props.initialAutomationTab) ?? 'manage')
   const [view, setView] = useState<'list' | 'calendar'>('list')
   const [routines, setRoutines] = useState<Routine[]>([])
   const [runs, setRuns] = useState<RunRecord[]>([])
@@ -129,6 +171,7 @@ export default function AutomationsView(props: FeatureProps): React.JSX.Element 
   const [error, setError] = useState('')
   const [activeOnly, setActiveOnly] = useState(false)
   const [builderOpen, setBuilderOpen] = useState(false)
+  const [choiceOpen, setChoiceOpen] = useState(false)
   const [builderInitial, setBuilderInitial] = useState<BuilderDraft>(() => blankDraft())
   const [gmailConnected, setGmailConnected] = useState<boolean | undefined>(undefined)
 
@@ -188,12 +231,28 @@ export default function AutomationsView(props: FeatureProps): React.JSX.Element 
   }, [refresh])
 
   const openedTemplate = useRef<string>('')
+  const openedStartKind = useRef<string>('')
   useEffect(() => {
     if (!props.initialTemplate || openedTemplate.current === props.initialTemplate.id) return
     openedTemplate.current = props.initialTemplate.id
     setBuilderInitial(templateToDraft(props.initialTemplate))
     setBuilderOpen(true)
   }, [props.initialTemplate])
+
+  useEffect(() => {
+    if (!props.initialStartKind || openedStartKind.current === props.initialStartKind) return
+    openedStartKind.current = props.initialStartKind
+    if (props.initialStartKind === 'schedule') setBuilderInitial({ ...blankDraft(), mode: 'manual', triggers: [blankTrigger('schedule')] })
+    else if (props.initialStartKind === 'triggered') setBuilderInitial({ ...blankDraft(), mode: 'manual', triggers: [blankTrigger('event')] })
+    else if (props.initialStartKind === 'advanced') setBuilderInitial({ ...blankDraft(), mode: 'describe' })
+    else return
+    setBuilderOpen(true)
+  }, [props.initialStartKind])
+
+  useEffect(() => {
+    const next = parseAutomationTab(props.initialAutomationTab)
+    if (next) setTab(next)
+  }, [props.initialAutomationTab])
 
   useEffect(() => {
     if (!props.focusId || routines.length === 0) return
@@ -205,6 +264,19 @@ export default function AutomationsView(props: FeatureProps): React.JSX.Element 
       setSelection({ kind: 'schedule', item })
     }
   }, [props.focusId, routines.length, todayItems, tomorrowItems])
+
+  function pickStart(kind: StartKind): void {
+    setChoiceOpen(false)
+    if (kind === 'schedule') setBuilderInitial({ ...blankDraft(), mode: 'manual', triggers: [blankTrigger('schedule')] })
+    else if (kind === 'triggered') setBuilderInitial({ ...blankDraft(), mode: 'manual', triggers: [blankTrigger('event')] })
+    else setBuilderInitial({ ...blankDraft(), mode: 'describe' })
+    setBuilderOpen(true)
+  }
+
+  function closeCreate(): void {
+    setChoiceOpen(false)
+    setBuilderOpen(false)
+  }
 
   async function submitBuilder(text: string): Promise<string | null> {
     try {
@@ -503,14 +575,33 @@ export default function AutomationsView(props: FeatureProps): React.JSX.Element 
     </aside>
   )
 
+  const creating = choiceOpen || builderOpen
+
+  if (creating) {
+    return (
+      <section className="automations" aria-label="Create automation">
+        <div className="automations-create-top">
+          <button type="button" className="automations-back" onClick={closeCreate}>← Back</button>
+        </div>
+        {choiceOpen && !builderOpen && (
+          <StartChoice onPick={pickStart} onClose={closeCreate} />
+        )}
+        {builderOpen && (
+          <Builder
+            initial={builderInitial}
+            gmailConnected={gmailConnected}
+            onConnect={() => props.shell.openSettings('connectors')}
+            onClose={closeCreate}
+            onSubmit={submitBuilder}
+          />
+        )}
+      </section>
+    )
+  }
+
   return (
     <section className="automations" aria-label="Automations">
       <div className="automations-toolbar">
-        <nav aria-label="Automation sections" role="tablist">
-          <button type="button" role="tab" aria-selected={tab === 'updates'} onClick={() => setTab('updates')}>Updates</button>
-          <button type="button" role="tab" aria-selected={tab === 'manage'} onClick={() => setTab('manage')}>Manage</button>
-          <button type="button" role="tab" aria-selected={tab === 'canvas'} onClick={() => setTab('canvas')}>Canvas</button>
-        </nav>
         <div className="automations-actions">
           {tab !== 'canvas' && (
             <div className="automations-view-toggle" role="tablist" aria-label={tab === 'updates' ? 'Updates view' : 'Manage view'}>
@@ -532,19 +623,9 @@ export default function AutomationsView(props: FeatureProps): React.JSX.Element 
           >
             <FilterIcon />
           </button>
-          <button type="button" className="automations-create-btn" onClick={() => { setBuilderInitial(blankDraft()); setBuilderOpen(true) }}>+ Create</button>
+          <button type="button" className="automations-create-btn" onClick={() => setChoiceOpen(true)}>+ Create</button>
         </div>
       </div>
-
-      {builderOpen && (
-        <Builder
-          initial={builderInitial}
-          gmailConnected={gmailConnected}
-          onConnect={() => props.shell.openSettings('connectors')}
-          onClose={() => setBuilderOpen(false)}
-          onSubmit={submitBuilder}
-        />
-      )}
 
       {loading && <p className="automations-empty">Loading automations…</p>}
       {error && <p className="automations-error" role="alert">{error}</p>}
@@ -552,22 +633,7 @@ export default function AutomationsView(props: FeatureProps): React.JSX.Element 
       {!loading && !error && tab === 'updates' && view === 'list' && (
         <div className="automations-body">
           <div className="automations-main">
-            {runs.length === 0 && <p className="automations-empty">No outputs yet. Run an automation to see results here.</p>}
-            {runs.map((run) => (
-              <button
-                key={run.id}
-                type="button"
-                className="automations-output"
-                onClick={() => setSelection({ kind: 'run', run })}
-              >
-                <span className={`automations-dot is-${run.status}`} />
-                <span className="automations-output-text">
-                  <strong>{routineTitle(run.title)}</strong>
-                  <small>{new Date(run.endedAt ?? run.startedAt).toLocaleString()} · {run.status.replaceAll('_', ' ')}</small>
-                  {run.summary && <span>{run.summary.slice(0, 140)}{run.summary.length > 140 ? '…' : ''}</span>}
-                </span>
-              </button>
-            ))}
+            <UpdatesList runs={runs} todayKey={todayKey} onSelect={(run) => setSelection({ kind: 'run', run })} />
           </div>
           {detail}
         </div>

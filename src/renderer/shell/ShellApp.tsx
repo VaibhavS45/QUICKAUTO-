@@ -24,44 +24,46 @@ interface LocalProfile {
 
 function Icon({ name }: { name: string }): React.JSX.Element {
   const paths: Record<string, React.ReactNode> = {
-    // Top nav: Calendar / Routine trigger
+    // Top nav: Calendar / Routine trigger with 3 dots in the body (dyn-7789db6ae1e12c9089784fa0aa3df72d.png)
     automation: (
       <>
-        <rect x="3" y="4" width="18" height="17" rx="3" strokeWidth="1.6" />
-        <path d="M16 2v4M8 2v4M3 9.5h18" strokeWidth="1.6" />
-        <circle cx="8" cy="14" r="1" fill="currentColor" stroke="none" />
-        <circle cx="12" cy="14" r="1" fill="currentColor" stroke="none" />
-        <circle cx="16" cy="14" r="1" fill="currentColor" stroke="none" />
+        <rect x="4" y="5" width="16" height="15" rx="3.5" strokeWidth="1.6" />
+        <path d="M8 2.5v3.5M16 2.5v3.5" strokeWidth="1.6" strokeLinecap="round" />
+        <path d="M4 10h16" strokeWidth="1.3" />
+        <circle cx="8.5" cy="14.5" r="0.8" fill="currentColor" stroke="none" />
+        <circle cx="12" cy="14.5" r="0.8" fill="currentColor" stroke="none" />
+        <circle cx="15.5" cy="14.5" r="0.8" fill="currentColor" stroke="none" />
       </>
     ),
-    bell: (
-      <>
-        <path d="M18 8A6 6 0 0 0 6 8c0 7-3 8-3 9h18c0-1-3-2-3-9" strokeWidth="1.6" />
-        <path d="M10.3 21a1.9 1.9 0 0 0 3.4 0" strokeWidth="1.6" />
-      </>
-    ),
-    // Updates tab: Pulse / activity wave
+    // Updates: Clean ECG / heartbeat waveform (dyn-7789db6ae1e12c9089784fa0aa3df72d.png)
     updates: (
       <>
-        <path d="M3 12h3.5l3-7.5 4.5 15 3-7.5H21" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" />
+        <path d="M4 12.5h3.8l2.2-5.5 3.5 11 2.5-5.5H20" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
       </>
     ),
-    // Manage tab: 4 rounded squares (apps/dashboard grid)
+    // Manage: 4 pill-rounded rounded squares (dyn-7789db6ae1e12c9089784fa0aa3df72d.png)
     manage: (
       <>
-        <rect x="3.5" y="3.5" width="6.5" height="6.5" rx="2" strokeWidth="1.6" />
-        <rect x="14" y="3.5" width="6.5" height="6.5" rx="2" strokeWidth="1.6" />
-        <rect x="3.5" y="14" width="6.5" height="6.5" rx="2" strokeWidth="1.6" />
-        <rect x="14" y="14" width="6.5" height="6.5" rx="2" strokeWidth="1.6" />
+        <rect x="4.5" y="4.5" width="5.8" height="5.8" rx="2" strokeWidth="1.6" />
+        <rect x="13.7" y="4.5" width="5.8" height="5.8" rx="2" strokeWidth="1.6" />
+        <rect x="4.5" y="13.7" width="5.8" height="5.8" rx="2" strokeWidth="1.6" />
+        <rect x="13.7" y="13.7" width="5.8" height="5.8" rx="2" strokeWidth="1.6" />
       </>
     ),
-    // Canvas tab: Connected workflow nodes (network diagram)
+    // Canvas: Triangular branched node tree (dyn-7789db6ae1e12c9089784fa0aa3df72d.png)
     canvas: (
       <>
-        <circle cx="12" cy="5" r="2.5" strokeWidth="1.6" />
-        <circle cx="5" cy="18" r="2.5" strokeWidth="1.6" />
-        <circle cx="19" cy="18" r="2.5" strokeWidth="1.6" />
-        <path d="M10.5 7.2L6.5 15.8M13.5 7.2l4 8.6" strokeWidth="1.5" />
+        <circle cx="12" cy="5.5" r="2.2" strokeWidth="1.6" />
+        <circle cx="6" cy="18.5" r="2.2" strokeWidth="1.6" />
+        <circle cx="18" cy="18.5" r="2.2" strokeWidth="1.6" />
+        <path d="M10.8 7.3L7.2 16.5M13.2 7.3l3.6 9.2" strokeWidth="1.5" strokeLinecap="round" />
+      </>
+    ),
+    // Bell: Smooth curved bell with small bottom clapper
+    bell: (
+      <>
+        <path d="M18 8.5A6 6 0 0 0 6 8.5c0 6.5-2.8 7.8-2.8 8.5h17.6c0-.7-2.8-2-2.8-8.5" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
+        <path d="M10.2 20.5a1.8 1.8 0 0 0 3.6 0" strokeWidth="1.6" strokeLinecap="round" />
       </>
     )
   }

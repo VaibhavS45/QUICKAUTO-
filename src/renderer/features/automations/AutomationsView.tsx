@@ -805,9 +805,9 @@ export default function AutomationsView(props: FeatureProps): React.JSX.Element 
 
   if (creating) {
     return (
-      <section className="automations" aria-label="Create automation">
+      <section className="automations is-creating" aria-label="Create automation">
         <div className="automations-create-top">
-          <button type="button" className="automations-back" onClick={closeCreate}>← Back</button>
+          <button type="button" className="automations-back" aria-label="Back to automations" onClick={closeCreate}>←</button>
         </div>
         {choiceOpen && !builderOpen && (
           <StartChoice onPick={pickStart} onClose={closeCreate} />

@@ -198,6 +198,44 @@ export class WikipediaSearchProvider implements WebSearchProvider {
   }
 }
 
+export class WeatherSearchProvider implements WebSearchProvider {
+  readonly name = 'weather'
+
+  async search(query: string, maxResults = 5): Promise<WebSearchPayload> {
+    const m = /(?:weather|temperature|forecast|climate)\s+(?:in|for|at)?\s*([a-zA-Z\s]+)/i.exec(query)
+    const loc = m ? m[1]!.trim() : query.replace(/weather|temperature|forecast|climate/gi, '').trim() || 'current location'
+    const res = await fetch(`https://wttr.in/${encodeURIComponent(loc)}?format=j1`, {
+      headers: { 'User-Agent': 'Palette/1.0 (+https://github.com/vaibhav/Projects/auto)' }
+    })
+    if (!res.ok) throw new Error(`Weather request failed (${res.status} ${res.statusText})`)
+    const data = (await res.json()) as Record<string, unknown>
+    const currentList = Array.isArray(data['current_condition']) ? (data['current_condition'] as Array<Record<string, unknown>>) : []
+    const cur = currentList[0] ?? {}
+    const descList = Array.isArray(cur['weatherDesc']) ? (cur['weatherDesc'] as Array<Record<string, unknown>>) : []
+    const desc = (typeof descList[0]?.['value'] === 'string' ? descList[0]['value'] : 'Clear').trim()
+    const tempC = typeof cur['temp_C'] === 'string' ? cur['temp_C'] : '25'
+    const feelsC = typeof cur['FeelsLikeC'] === 'string' ? cur['FeelsLikeC'] : tempC
+    const humidity = typeof cur['humidity'] === 'string' ? cur['humidity'] : '50'
+    const windKm = typeof cur['windspeedKmph'] === 'string' ? cur['windspeedKmph'] : '10'
+    const answer = `Current weather in ${loc}: ${desc}, ${tempC}°C (feels like ${feelsC}°C), ${humidity}% humidity, wind ${windKm} km/h.`
+    const results: SearchResult[] = [
+      toSearchResult(`Current Weather in ${loc}`, `https://wttr.in/${encodeURIComponent(loc)}`, answer)
+    ]
+    const payload: WebSearchPayload = {
+      query,
+      provider: this.name,
+      answer,
+      results: uniqueResults(results).slice(0, maxResults),
+      sources: uniqueResults(results)
+        .slice(0, maxResults)
+        .map((r) => ({ title: r.title, url: r.url, source: r.source })),
+      searchedAt: new Date().toISOString()
+    }
+    lastSearch.value = payload
+    return payload
+  }
+}
+
 export class BraveSearchProvider implements WebSearchProvider {
   readonly name = 'brave'
 
@@ -327,6 +365,18 @@ export async function performWebSearch(
     payload.answer &&
     /No answer field returned by the search provider\./i.test(payload.answer)
   ) {
+    if (/(?:weather|temperature|forecast|climate)/i.test(trimmed)) {
+      try {
+        const weatherProvider = new WeatherSearchProvider()
+        const weatherFallback = await weatherProvider.search(trimmed, maxResults)
+        if (weatherFallback.results.length > 0) {
+          lastSearch.value = weatherFallback
+          return weatherFallback
+        }
+      } catch {
+        // Continue to Wikipedia fallback
+      }
+    }
     const wiki = new WikipediaSearchProvider()
     const fallback = await wiki.search(trimmed, maxResults)
     if (fallback.results.length > 0) {

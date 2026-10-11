@@ -8,6 +8,12 @@
   min-height: 100%;
 }
 
+.automations.is-creating {
+  justify-content: center;
+  align-items: center;
+  padding: 20px 0 40px;
+}
+
 .automations-toolbar {
   display: flex;
   align-items: center;
@@ -2433,14 +2439,15 @@
   align-items: center;
   gap: 6px;
   height: 32px;
-  padding: 0 12px;
-  background: #222226;
-  border: 1px solid #323238;
+  padding: 0 13px;
+  background: #1e1e24;
+  border: 1px solid #2d2d36;
   border-radius: 16px;
   color: #d1d1d6;
   font-size: 12.5px;
   font-weight: 500;
   user-select: none;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.15);
 }
 
 .builder-pill-sliders {
@@ -2448,17 +2455,18 @@
   place-items: center;
   width: 32px;
   height: 32px;
-  background: #222226;
-  border: 1px solid #323238;
+  background: #1e1e24;
+  border: 1px solid #2d2d36;
   border-radius: 50%;
-  color: #d1d1d6;
+  color: #a1a1aa;
   font-size: 13px;
   cursor: pointer;
-  transition: all 120ms ease;
+  transition: all 140ms ease;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.15);
 }
 
 .builder-pill-sliders:hover {
-  background: #2a2a30;
-  border-color: #4a4a52;
+  background: #272730;
+  border-color: #3f3f4c;
   color: #ffffff;
 }

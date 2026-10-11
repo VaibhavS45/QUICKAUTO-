@@ -105,16 +105,27 @@ export default function McpPanel(): React.JSX.Element {
 
   return (
     <div className="space-y-4">
+      <div className="settings-page-intro">
+        <h2>MCP servers</h2>
+        <p>Configure local tools or streamable HTTP servers. Calls made through MCP always require your approval.</p>
+      </div>
       <Card>
-        <CardTitle>MCP servers ({servers.length})</CardTitle>
-        <CardSub>Configure local stdio or HTTPS/localhost streamable HTTP servers. Started server tools are available through @mcp; every call requires your approval.</CardSub>
-        {servers.length === 0 ? <p className="pt-3 text-xs text-neutral-500">No MCP servers configured.</p> : (
+        <CardTitle>Configured servers <span className="settings-count">{servers.length}</span></CardTitle>
+        <CardSub>Started server tools are available through @mcp.</CardSub>
+        {servers.length === 0 ? (
+          <div className="set-empty-state">
+            <span className="set-empty-icon" aria-hidden>⌘</span>
+            <h4>No servers configured</h4>
+            <p>Add a local process or streamable HTTP server below to make its tools available.</p>
+          </div>
+        ) : (
           <div className="space-y-2 pt-3">
             {servers.map((server) => (
-              <div key={server.id} className="rounded-lg border border-neutral-800 bg-neutral-950 p-3">
+              <div key={server.id} className="mcp-server-card">
                 <div className="flex flex-wrap items-center gap-2">
+                  <span className={`mcp-server-mark${server.status === 'running' ? ' is-running' : ''}`} aria-hidden>⌘</span>
                   <span className="font-medium text-sm text-neutral-100">{server.name}</span>
-                  <span className="rounded-md bg-neutral-800 px-2 py-0.5 text-[10px] uppercase text-neutral-300">{server.status}</span>
+                  <span className={`mcp-status${server.status === 'running' ? ' is-running' : ''}`}>{server.status}</span>
                   {server.status === 'running' && <span className="text-xs text-neutral-500">{server.toolCount} tools</span>}
                   <span className="flex-1" />
                   <Button variant="secondary" size="sm" onClick={() => edit(server)}>Edit</Button>
@@ -138,6 +149,7 @@ export default function McpPanel(): React.JSX.Element {
       </Card>
       <Card>
         <CardTitle>{id ? `Edit ${name || 'MCP server'}` : 'Add MCP server'}</CardTitle>
+        <CardSub>{transport === 'stdio' ? 'Run a local executable and pass its arguments.' : 'Connect to an HTTP server on a trusted remote host or localhost.'}</CardSub>
         <form className="space-y-3 pt-3" onSubmit={(event) => void save(event)}>
           <div className="grid gap-3 sm:grid-cols-2">
             <Input value={id} onChange={(event) => setId(event.target.value)} placeholder="server-id" aria-label="Server ID" />

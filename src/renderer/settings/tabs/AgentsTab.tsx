@@ -161,23 +161,25 @@ export default function AgentsTab(): React.JSX.Element {
 
   return (
     <div className="set-stack">
-      <div>
+      <div className="settings-page-intro">
         <div className="flex items-center justify-between">
-          <h3 className="text-lg font-semibold text-neutral-100">Engines and accounts</h3>
+          <div>
+            <h2>Agents</h2>
+            <p>Choose an engine, configure its model, and manage the agents you can run.</p>
+          </div>
           <Button variant="secondary" size="sm" onClick={() => void refresh()} disabled={checking}>
             {checking ? 'Checking…' : '⟳ Check again'}
           </Button>
         </div>
-        <p className="pt-1 text-sm text-neutral-500">Connect the AI tools that power your bots. Accounts, setup, and updates — all in one place.</p>
         {engineMsg && <p className="set-msg">{engineMsg}</p>}
       </div>
       <div>
         <div className="flex items-center justify-between pb-2">
-          <span className="text-sm text-neutral-400">Ready</span>
+          <span className="set-subhead-inline">Ready to use</span>
           <span className="text-xs text-neutral-600">{ready.length} engine{ready.length === 1 ? '' : 's'}</span>
         </div>
-        {ready.length === 0 && <p className="pb-2 text-sm text-neutral-600">Nothing ready yet — set up a model key or install a harness below.</p>}
-        <div className="grid gap-3 md:grid-cols-2">
+        {ready.length === 0 && <p className="set-empty-note">Nothing is ready yet. Add a model key or install an engine below to get started.</p>}
+        <div className="grid gap-3 md:grid-cols-2 settings-engine-grid">
           {ready.map((e) => (
             <EngineCard key={e.id} engine={e} active={e.id === active} onUse={() => void useEngine(e.id)} />
           ))}
@@ -186,10 +188,10 @@ export default function AgentsTab(): React.JSX.Element {
       {needsSetup.length > 0 && (
         <div>
           <div className="flex items-center justify-between pb-2">
-            <span className="text-sm text-neutral-400">Needs setup</span>
+            <span className="set-subhead-inline">Needs setup</span>
             <span className="text-xs text-neutral-600">{needsSetup.length} engine{needsSetup.length === 1 ? '' : 's'}</span>
           </div>
-          <div className="grid gap-3 md:grid-cols-2">
+          <div className="grid gap-3 md:grid-cols-2 settings-engine-grid">
             {needsSetup.map((e) => (
               <EngineCard key={e.id} engine={e} active={false} />
             ))}
@@ -256,7 +258,7 @@ export default function AgentsTab(): React.JSX.Element {
         </Hint>
       </Card>
       <div>
-        <h3 className="pb-2 text-sm text-neutral-400">Custom agents</h3>
+        <h3 className="set-subhead">Custom agents</h3>
         <AgentsPanel />
       </div>
     </div>

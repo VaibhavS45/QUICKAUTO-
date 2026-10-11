@@ -28,11 +28,9 @@ interface BudgetState {
   periodKey: string
 }
 
-function GeneralPanel(): React.JSX.Element {
+function AccountPanel(): React.JSX.Element {
   const [profile, setProfile] = useState<Profile>({ name: '', email: '', about: '', language: 'system' })
   const [status, setStatus] = useState('Loading…')
-  const [keepBackground, setKeepBackground] = useState(true)
-  const [behaviorStatus, setBehaviorStatus] = useState('')
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null)
   const first = useRef(true)
 
@@ -42,19 +40,16 @@ function GeneralPanel(): React.JSX.Element {
       .getProfile()
       .then((r) => {
         const res = r as unknown as Partial<Profile>
+        first.current = false
         if (live && typeof res.name === 'string') {
           setProfile({ name: res.name ?? '', email: res.email ?? '', about: res.about ?? '', language: res.language ?? 'system' })
           setStatus('Saved as you go.')
         }
       })
-      .catch(() => live && setStatus('Could not load profile.'))
-    window.app
-      .getAppBehavior()
-      .then((r) => {
-        const res = r as unknown as { ok: boolean; keepBackground?: boolean }
-        if (live && res.ok && typeof res.keepBackground === 'boolean') setKeepBackground(res.keepBackground)
+      .catch(() => {
+        first.current = false
+        if (live) setStatus('Could not load profile.')
       })
-      .catch(() => {})
     return () => {
       live = false
       if (timer.current) clearTimeout(timer.current)
@@ -80,27 +75,15 @@ function GeneralPanel(): React.JSX.Element {
     }, 500)
   }
 
-  // Mark hydration done once the profile arrives.
-  useEffect(() => {
-    if (profile.name || profile.email || profile.about) first.current = false
-  }, [profile.name, profile.email, profile.about])
-
-  function toggleBackground(next: boolean): void {
-    setKeepBackground(next)
-    window.app
-      .setAppBehavior({ keepBackground: next })
-      .then((r) => {
-        const res = r as unknown as { ok: boolean; error?: string }
-        setBehaviorStatus(res.ok ? 'Saved.' : (res.error ?? 'Save failed.'))
-      })
-      .catch(() => setBehaviorStatus('Save failed.'))
-  }
-
   return (
     <div className="set-stack">
+      <div className="settings-page-intro">
+        <h2>Account</h2>
+        <p>Manage the profile details and context shared with the assistant.</p>
+      </div>
       <Card>
         <CardTitle>Profile</CardTitle>
-        <CardSub>Your details and shared context. {status}</CardSub>
+        <CardSub>Your name and shared context for the assistant. Changes save automatically. {status}</CardSub>
         <div className="set-list">
           <Input
             value={profile.name}
@@ -131,6 +114,69 @@ function GeneralPanel(): React.JSX.Element {
           </div>
         </div>
       </Card>
+    </div>
+  )
+}
+
+function GeneralPanel(): React.JSX.Element {
+  const [language, setLanguage] = useState('system')
+  const [languageStatus, setLanguageStatus] = useState('')
+  const [keepBackground, setKeepBackground] = useState(true)
+  const [behaviorStatus, setBehaviorStatus] = useState('')
+
+  useEffect(() => {
+    let live = true
+    window.app.getProfile()
+      .then((result) => {
+        const profile = result as unknown as Partial<Profile>
+        if (live && typeof profile.language === 'string') setLanguage(profile.language)
+      })
+      .catch(() => {})
+    window.app.getAppBehavior()
+      .then((result) => {
+        const behavior = result as unknown as { ok: boolean; keepBackground?: boolean }
+        if (live && behavior.ok && typeof behavior.keepBackground === 'boolean') setKeepBackground(behavior.keepBackground)
+      })
+      .catch(() => {})
+    return () => { live = false }
+  }, [])
+
+  async function saveLanguage(next: string): Promise<void> {
+    setLanguage(next)
+    setLanguageStatus('Saving…')
+    try {
+      const result = await window.app.getProfile()
+      const profile = result as unknown as Partial<Profile>
+      const saved = await window.app.setProfile({
+          name: profile.name ?? '',
+          email: profile.email ?? '',
+          about: profile.about ?? '',
+          language: next
+        })
+      const response = saved as { ok: boolean; error?: string }
+      setLanguageStatus(response.ok ? 'Saved.' : (response.error ?? 'Save failed.'))
+    } catch {
+      setLanguageStatus('Save failed.')
+    }
+  }
+
+  function toggleBackground(next: boolean): void {
+    setKeepBackground(next)
+    window.app
+      .setAppBehavior({ keepBackground: next })
+      .then((r) => {
+        const res = r as unknown as { ok: boolean; error?: string }
+        setBehaviorStatus(res.ok ? 'Saved.' : (res.error ?? 'Save failed.'))
+      })
+      .catch(() => setBehaviorStatus('Save failed.'))
+  }
+
+  return (
+    <div className="set-stack">
+      <div className="settings-page-intro">
+        <h2>General</h2>
+        <p>Set app-wide preferences and what happens when you close the window.</p>
+      </div>
       <section className="set-split">
         <div className="set-split-text">
           <h3>Language</h3>
@@ -138,10 +184,11 @@ function GeneralPanel(): React.JSX.Element {
             The app follows your system language unless you pick one here. Only part of the interface is translated
             so far — untranslated text stays in English.
           </p>
+          {languageStatus && <span className="set-save-status">{languageStatus}</span>}
         </div>
         <select
-          value={profile.language}
-          onChange={(e) => patch({ language: e.target.value })}
+          value={language}
+          onChange={(e) => saveLanguage(e.target.value)}
           aria-label="Language"
           className="set-select-native"
         >
@@ -174,55 +221,109 @@ function AppearancePanel({
   const [status, setStatus] = useState('')
 
   return (
-    <section className="set-split">
-      <div className="set-split-text">
-        <h3>Animated background</h3>
-        <p>
-          Slow-moving colour wash behind the app interface. Turn off for a flat, static background and
-          less GPU use on battery. {status}
-        </p>
+    <div className="set-stack">
+      <div className="settings-page-intro">
+        <h2>Appearance</h2>
+        <p>Choose whether the app uses a subtle animated color wash or a calm, static background.</p>
       </div>
-      <Switch
-        checked={shader}
-        label="Animated background"
-        onCheckedChange={(next) => {
-          onShader(next)
-          window.app
-            .setAppBehavior({ shader: next })
-            .then((r) => {
-              const res = r as unknown as { ok: boolean; error?: string }
-              setStatus(res.ok ? 'Saved.' : (res.error ?? 'Save failed.'))
-            })
-            .catch(() => setStatus('Save failed.'))
-        }}
-      />
-    </section>
+      <Card className="appearance-card">
+        <div className={`appearance-preview${shader ? '' : ' is-static'}`} aria-hidden>
+          <ShaderBackdrop enabled={shader} />
+          <span>{shader ? 'Animated color wash' : 'Static background'}</span>
+        </div>
+        <div className="appearance-setting">
+          <div>
+            <CardTitle>Animated background</CardTitle>
+            <CardSub>Slow-moving color behind the app. Turn it off for a flat look and lower GPU use on battery.</CardSub>
+            {status && <p className="set-save-status">{status}</p>}
+          </div>
+          <Switch
+            checked={shader}
+            label="Animated background"
+            onCheckedChange={(next) => {
+              onShader(next)
+              window.app
+                .setAppBehavior({ shader: next })
+                .then((r) => {
+                  const res = r as unknown as { ok: boolean; error?: string }
+                  setStatus(res.ok ? 'Saved.' : (res.error ?? 'Save failed.'))
+                })
+                .catch(() => setStatus('Save failed.'))
+            }}
+          />
+        </div>
+      </Card>
+    </div>
   )
 }
 
 function UsagePanel(): React.JSX.Element {
   const [budget, setBudget] = useState<BudgetState | null>(null)
+  const [error, setError] = useState('')
   useEffect(() => {
-    window.app.getBudget().then((v) => setBudget(v as BudgetState)).catch(() => {})
+    window.app.getBudget()
+      .then((value) => setBudget(value as BudgetState))
+      .catch(() => setError('Could not load usage data.'))
   }, [])
   return (
-    <Card>
-      <CardTitle>Usage</CardTitle>
-      <p className="set-body-text">
-        {budget ? (
-          <>
-            Used {budget.used} / {budget.budget} this period ({budget.periodKey}); scheduled share {budget.scheduledUsed} / {budget.scheduledBudget}.{' '}
-            {budget.warning !== 'none' && <span className="set-warn">Warning: {budget.warning}.</span>} Source of truth:{' '}
+    <div className="set-stack">
+      <div className="settings-page-intro">
+        <h2>Usage</h2>
+        <p>See how much of your Composio request budget has been used this period.</p>
+      </div>
+      {budget ? (
+        <>
+          <Card className="usage-card">
+            <div className="usage-summary">
+              <div>
+                <p className="usage-eyebrow">Requests used</p>
+                <p className="usage-number">{budget.used.toLocaleString()}<span> / {budget.budget.toLocaleString()}</span></p>
+              </div>
+              <span className="usage-period">{budget.periodKey}</span>
+            </div>
+            <div
+              className="usage-track"
+              role="progressbar"
+              aria-label="Overall request budget used"
+              aria-valuemin={0}
+              aria-valuemax={budget.budget}
+              aria-valuenow={Math.min(budget.used, budget.budget)}
+            >
+              <span style={{ width: `${budget.budget > 0 ? Math.min(100, (budget.used / budget.budget) * 100) : 0}%` }} />
+            </div>
+            <div className="usage-breakdown">
+              <div>
+                <span className="usage-dot usage-dot-total" />
+                <span>All requests</span>
+                <strong>{budget.used.toLocaleString()} / {budget.budget.toLocaleString()}</strong>
+              </div>
+              <div>
+                <span className="usage-dot usage-dot-scheduled" />
+                <span>Scheduled runs</span>
+                <strong>{budget.scheduledUsed.toLocaleString()} / {budget.scheduledBudget.toLocaleString()}</strong>
+                <div
+                  className="usage-inline-track"
+                  role="progressbar"
+                  aria-label="Scheduled request budget used"
+                  aria-valuemin={0}
+                  aria-valuemax={budget.scheduledBudget}
+                  aria-valuenow={Math.min(budget.scheduledUsed, budget.scheduledBudget)}
+                >
+                  <span style={{ width: `${budget.scheduledBudget > 0 ? Math.min(100, (budget.scheduledUsed / budget.scheduledBudget) * 100) : 0}%` }} />
+                </div>
+              </div>
+            </div>
+            {budget.warning !== 'none' && <p className="set-warn usage-warning">Budget warning: {budget.warning}.</p>}
+          </Card>
+          <p className="usage-footnote">
+            Usage is tracked for this period.{' '}
             <a href="https://dashboard.composio.dev" target="_blank" rel="noreferrer" className="set-link">
-              Composio dashboard usage page
+              View Composio dashboard
             </a>
-            .
-          </>
-        ) : (
-          'Loading…'
-        )}
-      </p>
-    </Card>
+          </p>
+        </>
+      ) : <Card><p className="set-body-text">{error || 'Loading usage…'}</p></Card>}
+    </div>
   )
 }
 
@@ -364,7 +465,8 @@ export default function SettingsApp({ initialTab }: { initialTab?: string }): Re
         </div>
         <div className="settings-body">
           <div className="settings-body-inner">
-            {(tab === 'general' || tab === 'account') && <GeneralPanel />}
+            {tab === 'general' && <GeneralPanel />}
+            {tab === 'account' && <AccountPanel />}
             {tab === 'appearance' && <AppearancePanel shader={shader} onShader={setShader} />}
             {tab === 'connectors' && <ConnectorsTab />}
             {tab === 'usage' && <UsagePanel />}

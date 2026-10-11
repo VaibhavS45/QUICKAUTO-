@@ -21,7 +21,7 @@ interface GhStatus {
 function ConnectorAvatar({ row }: { row: ConnectorRow }): React.JSX.Element {
   return (
     <span
-      className="flex h-10 w-10 shrink-0 items-center justify-center rounded-md text-lg font-semibold"
+      className="connector-avatar flex h-10 w-10 shrink-0 items-center justify-center rounded-xl text-lg font-semibold"
       style={{ backgroundColor: '#1c1c1e', color: row.color, border: '1px solid #2c2c2e' }}
       aria-hidden
     >
@@ -115,6 +115,10 @@ export default function ConnectorsTab(): React.JSX.Element {
 
   return (
     <div className="set-stack">
+      <div className="settings-page-intro">
+        <h2>Connectors</h2>
+        <p>Connect services the assistant can use. Each connection shows its current status and setup requirements.</p>
+      </div>
       {state && !state.configured && (
         <Card>
           <CardTitle>Composio project key</CardTitle>
@@ -128,17 +132,19 @@ export default function ConnectorsTab(): React.JSX.Element {
           {msg && <p className="set-msg">{msg}</p>}
         </Card>
       )}
-      <div className="grid gap-x-8 md:grid-cols-2">
+      <section>
+        <h3 className="set-section-title">Available services</h3>
+        <div className="grid gap-3 md:grid-cols-2 settings-connector-grid">
         {rows.map((row) => (
-          <div key={row.id} className="flex items-center gap-3 border-b border-neutral-800/60 py-4">
+          <div key={row.id} className="connector-card flex items-center gap-3">
             <ConnectorAvatar row={row} />
             <div className="min-w-0 flex-1">
               <p className="text-sm font-medium text-neutral-100">{row.name}</p>
-              <p className="truncate text-xs text-neutral-500" title={row.detail ?? row.blurb}>{row.detail ?? row.blurb}</p>
+              <p className="connector-detail" title={row.detail ?? row.blurb}>{row.detail ?? row.blurb}</p>
               {row.id === 'gmail' && g.message && <p className="set-msg">{g.message}</p>}
             </div>
             {row.status === 'connected' ? (
-              <span className="rounded-md bg-neutral-800 px-3 py-1.5 text-xs text-neutral-400">Connected ✓</span>
+              <span className="connector-status is-connected">Connected</span>
             ) : row.action === 'connect-gmail' ? (
               <Button variant="secondary" size="sm" onClick={() => void g.connect()} disabled={g.connecting}>
                 {g.connecting ? 'Waiting…' : 'Connect'}
@@ -152,11 +158,12 @@ export default function ConnectorsTab(): React.JSX.Element {
             )}
           </div>
         ))}
-      </div>
-      {rows.length === 0 && <p className="text-sm text-neutral-500">Loading…</p>}
+        </div>
+        {rows.length === 0 && <p className="set-empty-note">{state ? 'No connector services are available.' : 'Checking connector status…'}</p>}
+      </section>
       <Card>
         <CardTitle>GitHub repos</CardTitle>
-        <CardSub>Only these repos are accessible to @github. Terminal fix: `gh auth login`, then Refresh.</CardSub>
+        <CardSub>Limit @github access to these local repositories. Run `gh auth login` in a terminal if GitHub is not connected.</CardSub>
         <div className="set-list">
           {repos.length === 0 && <p className="set-list-empty">No repos yet.</p>}
           {repos.map((r) => (

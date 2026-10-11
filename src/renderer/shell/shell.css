@@ -1,7 +1,10 @@
 .shell-frame {
+  box-sizing: border-box;
   height: 100vh;
+  width: 100%;
   overflow: hidden;
-  border-radius: 12px;
+  border: 1px solid rgb(255 255 255 / 12%);
+  border-radius: 14px;
   color: #e5e5e5;
   background: #111113;
   font-size: 13px;

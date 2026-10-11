@@ -7,6 +7,7 @@ function setup(options?: {
   redirectUrl?: string
   connected?: boolean
   responseOk?: boolean
+  createClientError?: Error
 }): {
   marketplace: ComposioMarketplace
   fetch: ReturnType<typeof vi.fn>
@@ -31,7 +32,9 @@ function setup(options?: {
   const dependencies: ComposioMarketplaceDependencies = {
     getApiKey: async () => options?.key === undefined ? 'ak_test_key' : options.key,
     fetch,
-    createClient: () => ({
+    createClient: () => {
+      if (options?.createClientError) throw options.createClientError
+      return {
       sessions: {
         create: async () => ({
           authorize,
@@ -44,7 +47,8 @@ function setup(options?: {
           })
         })
       }
-    })
+      }
+    }
   }
   return { marketplace: new ComposioMarketplace(dependencies), fetch, authorize }
 }
@@ -77,6 +81,16 @@ describe('ComposioMarketplace', () => {
 
     const invalid = setup({ response: { items: [{ slug: 'oops' }] } })
     await expect(invalid.marketplace.list('')).rejects.toThrow(/invalid app catalog/)
+  })
+
+  it('validates keys before storing and explains missing session permissions', async () => {
+    const permissions = setup({ createClientError: new Error('403: not allowed to create sessions') })
+    await expect(permissions.marketplace.validateApiKey('ak_test_key')).rejects.toThrow(
+      /Session management and Session tool execution/
+    )
+    const revoked = setup({ createClientError: new Error('401 unauthorized: API key revoked') })
+    await expect(revoked.marketplace.validateApiKey('ak_test_key')).rejects.toThrow(/revoked or expired/)
+    await expect(revoked.marketplace.validateApiKey('not-a-key')).rejects.toThrow(/must start with "ak_"/)
   })
 
   it('fails explicitly when the catalog request is unsuccessful', async () => {

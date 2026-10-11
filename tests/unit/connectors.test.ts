@@ -92,7 +92,7 @@ describe('ComposioProvider', () => {
         })
       }
     }))
-    const tools = await provider.getTools(['composio']) as Record<
+    const tools = await provider.getTools(['composio']) as unknown as Record<
       string,
       { execute: (args: unknown) => Promise<unknown> }
     >

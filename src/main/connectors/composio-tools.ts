@@ -8,6 +8,7 @@ import { type WebSearchProvider, performWebSearch } from './websearch.js'
 import type { BudgetGuard } from './budget-guard.js'
 import { currentOrFallbackContext } from '../agent/run-context.js'
 import { COMPOSIO_USER_ID } from './composio.js'
+import { describeComposioError } from './composio-marketplace.js'
 
 /**
  * Composio tool integration. The project key stays in the main process;
@@ -100,8 +101,14 @@ export class ComposioProvider implements ConnectorProvider {
     const key = await this.getKey()
     if (!key) throw new Error(NOT_CONNECTED)
     const client = this.makeClient(key)
-    const session = await client.sessions.create(COMPOSIO_USER_ID, { manageConnections: false })
-    const connectedResult = await session.toolkits({ limit: 100, isConnected: true })
+    let session: RouterSession
+    let connectedResult: Awaited<ReturnType<RouterSession['toolkits']>>
+    try {
+      session = await client.sessions.create(COMPOSIO_USER_ID, { manageConnections: false })
+      connectedResult = await session.toolkits({ limit: 100, isConnected: true })
+    } catch (error) {
+      throw new Error(describeComposioError(error))
+    }
     const connected = connectedResult.items.map((item) => item.slug)
     const scoped = new Set<string>()
     if (toolIds.includes('composio')) connected.forEach((slug) => scoped.add(slug))
@@ -123,13 +130,17 @@ export class ComposioProvider implements ConnectorProvider {
           label: 'composio_search',
           cacheKey: `composio-search:${[...scoped].sort().join(',')}:${query.toLowerCase()}`,
           fn: async () => {
-            const response = await session.search({ query, toolkits: [...scoped] })
-            if (typeof response === 'object' && response !== null && 'results' in response) {
-              for (const item of (response as { results?: Array<{ primaryToolSlugs?: string[]; relatedToolSlugs?: string[] }> }).results ?? []) {
-                for (const slug of [...(item.primaryToolSlugs ?? []), ...(item.relatedToolSlugs ?? [])]) discovered.add(slug)
+            try {
+              const response = await session.search({ query, toolkits: [...scoped] })
+              if (typeof response === 'object' && response !== null && 'results' in response) {
+                for (const item of (response as { results?: Array<{ primaryToolSlugs?: string[]; relatedToolSlugs?: string[] }> }).results ?? []) {
+                  for (const slug of [...(item.primaryToolSlugs ?? []), ...(item.relatedToolSlugs ?? [])]) discovered.add(slug)
+                }
               }
+              return response
+            } catch (error) {
+              throw new Error(describeComposioError(error))
             }
-            return response
           }
         })
         return result
@@ -152,9 +163,13 @@ export class ComposioProvider implements ConnectorProvider {
           dedupeKey: `composio_execute:${toolSlug}:${JSON.stringify(args)}`,
           isRetryableNetworkError: () => false,
           fn: async () => {
-            const response = await session.execute(toolSlug, args)
-            if (response.error) throw new Error(response.error)
-            return response.data ?? {}
+            try {
+              const response = await session.execute(toolSlug, args)
+              if (response.error) throw new Error(response.error)
+              return response.data ?? {}
+            } catch (error) {
+              throw new Error(describeComposioError(error))
+            }
           }
         })
         return result

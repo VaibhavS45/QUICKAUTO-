@@ -298,8 +298,8 @@ function applyStrictCsp(): void {
   session.defaultSession.webRequest.onHeadersReceived((details, callback) => {
     const dev = !!process.env['ELECTRON_RENDERER_URL']
     const csp = dev
-      ? `default-src 'self' 'unsafe-inline' 'unsafe-eval' data: http://localhost:* ws://localhost:*; script-src 'self' 'unsafe-inline' 'unsafe-eval' http://localhost:*; style-src 'self' 'unsafe-inline' http://localhost:*; img-src 'self' data: blob:; font-src 'self' data:;`
-      : `default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self' data:;`
+      ? `default-src 'self' 'unsafe-inline' 'unsafe-eval' data: http://localhost:* ws://localhost:*; script-src 'self' 'unsafe-inline' 'unsafe-eval' http://localhost:*; style-src 'self' 'unsafe-inline' http://localhost:*; img-src 'self' data: blob: https:; font-src 'self' data:;`
+      : `default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https:; font-src 'self' data:;`
     callback({
       responseHeaders: {
         ...details.responseHeaders,
@@ -611,6 +611,7 @@ function wireIpc(): void {
     const parsed = ConnectorKeySchema.safeParse(payload)
     if (!parsed.success) return { ok: false as const, error: 'Invalid key.' }
     try {
+      await composioMarketplace.validateApiKey(parsed.data.key)
       await connectorSettings.setKey(parsed.data.key)
       return { ok: true as const }
     } catch (err) {

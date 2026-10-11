@@ -8,6 +8,7 @@ import { buildConnectorRows, type ConnectorRow } from '../connectors.js'
 
 interface ConnectorState {
   configured: boolean
+  encryptionAvailable: boolean
   services: Array<{ id: string; connected: boolean; detail?: string }>
 }
 
@@ -54,6 +55,7 @@ export default function ConnectorsTab(): React.JSX.Element {
   const [catalogLoading, setCatalogLoading] = useState(false)
   const [connecting, setConnecting] = useState<string | null>(null)
   const [connectMessage, setConnectMessage] = useState<string | null>(null)
+  const [confirmClearKey, setConfirmClearKey] = useState(false)
 
   async function refresh(): Promise<void> {
     try {
@@ -93,8 +95,25 @@ export default function ConnectorsTab(): React.JSX.Element {
       return
     }
     setKey('')
-    setMsg('Saved.')
+    setMsg('Key verified and saved securely.')
     await refresh()
+  }
+
+  async function clearKey(): Promise<void> {
+    setMsg(null)
+    try {
+      const result = (await window.app.clearConnectorKey()) as { ok: boolean; error?: string }
+      if (!result.ok) {
+        setMsg(result.error ?? 'Could not remove the saved key.')
+        return
+      }
+      setConfirmClearKey(false)
+      setToolkits([])
+      setMsg('Saved key removed from this app. Revoke it in the Composio dashboard too if it is still active.')
+      await refresh()
+    } catch (error) {
+      setMsg(error instanceof Error ? error.message : 'Could not remove the saved key.')
+    }
   }
 
   async function searchToolkits(search: string): Promise<void> {
@@ -185,17 +204,33 @@ export default function ConnectorsTab(): React.JSX.Element {
         <h2>Connectors</h2>
         <p>Connect services the assistant can use. Each connection shows its current status and setup requirements.</p>
       </div>
-      {state && !state.configured && (
+      {state && (
         <Card>
-          <CardTitle>Composio project key</CardTitle>
-          <CardSub>Add your Composio project key to browse and connect apps such as Gmail, GitHub, Google Sheets, Google Meet and Notion. It is encrypted by the app and never sent to the renderer.</CardSub>
+          <CardTitle>{state.configured ? 'Composio project key' : 'Connect Composio'}</CardTitle>
+          <CardSub>
+            {state.configured
+              ? 'A key is stored securely on this device. Enter a new key to replace it; the saved key is never shown here.'
+              : 'Add a Composio project key to browse and connect apps such as Gmail, GitHub, Google Sheets, Google Meet and Notion. It is encrypted by the app and never sent to the renderer.'}
+            {' '}The key needs both Session management and Session tool execution permissions in your Composio project.
+            {!state.encryptionAvailable && ' Secure credential storage is currently unavailable, so a key cannot be saved.'}
+          </CardSub>
           <div className="set-row">
             <div className="set-grow">
-              <Input monospace type="password" value={key} onChange={(e) => setKey(e.target.value)} placeholder="ak_…" aria-label="Composio project key" />
+              <Input monospace type="password" value={key} onChange={(e) => setKey(e.target.value)} placeholder="Paste a new ak_ project key" aria-label="Composio project key" autoComplete="new-password" />
             </div>
-            <Button onClick={() => void saveKey()}>Save</Button>
+            <Button onClick={() => void saveKey()} disabled={!key.trim() || !state.encryptionAvailable}>{state.configured ? 'Replace key' : 'Save key'}</Button>
+            {state.configured && <Button variant="destructive" onClick={() => setConfirmClearKey(true)}>Remove key</Button>}
           </div>
           {msg && <p className="set-msg">{msg}</p>}
+          {confirmClearKey && (
+            <div className="composio-key-confirm" role="alertdialog" aria-label="Confirm saved key removal">
+              <p>Remove the key stored in this app? This does not revoke it in Composio; revoke the old key from the Composio dashboard separately.</p>
+              <div className="set-row">
+                <Button variant="secondary" size="sm" onClick={() => setConfirmClearKey(false)}>Keep key</Button>
+                <Button variant="destructive" size="sm" onClick={() => void clearKey()}>Remove saved key</Button>
+              </div>
+            </div>
+          )}
         </Card>
       )}
       {state?.configured && (

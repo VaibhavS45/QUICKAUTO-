@@ -55,6 +55,17 @@ export interface ComposioMarketplaceDependencies {
   createClient?: (apiKey: string) => ComposioClientLike
 }
 
+export function describeComposioError(error: unknown): string {
+  const message = error instanceof Error ? error.message : String(error)
+  if (/invalid api.?key|revoked|unauthori[sz]ed|\b401\b/i.test(message)) {
+    return 'Composio rejected this key. It may be revoked or expired. Enter a new project key from the Composio dashboard.'
+  }
+  if (/permission|scope|session management|not allowed|\b403\b|forbidden/i.test(message)) {
+    return 'This Composio key is missing permissions. In the Composio dashboard, enable Session management and Session tool execution for the project key, or create a full-access project key, then enter it again.'
+  }
+  return message
+}
+
 function createClient(apiKey: string): ComposioClientLike {
   return new Composio({ apiKey, provider: new VercelProvider() }) as unknown as ComposioClientLike
 }
@@ -87,6 +98,19 @@ export class ComposioMarketplace {
     return (this.deps.createClient ?? createClient)(key)
   }
 
+  async validateApiKey(apiKey: string): Promise<void> {
+    const key = apiKey.trim()
+    if (!key.startsWith('ak_') || key.length < 10 || key.length > 10000) {
+      throw new Error('Composio project key must start with "ak_" and be at least 10 characters long.')
+    }
+    try {
+      await (this.deps.createClient ?? createClient)(key)
+        .sessions.create(COMPOSIO_USER_ID, { manageConnections: false })
+    } catch (error) {
+      throw new Error(describeComposioError(error))
+    }
+  }
+
   async list(search: string): Promise<ComposioToolkit[]> {
     const key = await this.apiKey()
     const url = new URL('https://backend.composio.dev/api/v3.1/toolkits')
@@ -95,19 +119,24 @@ export class ComposioMarketplace {
     if (search.trim()) url.searchParams.set('search', search.trim().slice(0, 100))
 
     const response = await this.fetchImpl(url, { headers: { 'x-api-key': key } })
-    if (!response.ok) {
-      throw new Error(`Composio app catalog request failed (${response.status}). Check your project key and try again.`)
-    }
+    if (!response.ok) throw new Error(describeComposioError(
+      new Error(`Composio app catalog request failed (${response.status}). Check your project key and try again.`)
+    ))
     const parsed = ToolkitResponseSchema.safeParse(await response.json())
     if (!parsed.success) throw new Error('Composio returned an invalid app catalog response.')
 
     const items = parsed.data.items
-    const session = await (this.deps.createClient ?? createClient)(key)
-      .sessions.create(COMPOSIO_USER_ID, { toolkits: items.map((item) => item.slug), manageConnections: false })
-    const connectionState = await session.toolkits({
-      toolkits: items.map((item) => item.slug),
-      limit: 50
-    })
+    let connectionState: Awaited<ReturnType<ComposioSessionLike['toolkits']>>
+    try {
+      const session = await (this.deps.createClient ?? createClient)(key)
+        .sessions.create(COMPOSIO_USER_ID, { toolkits: items.map((item) => item.slug), manageConnections: false })
+      connectionState = await session.toolkits({
+        toolkits: items.map((item) => item.slug),
+        limit: 50
+      })
+    } catch (error) {
+      throw new Error(describeComposioError(error))
+    }
     const connected = new Set(connectionState.items.filter((item) => item.connection?.isActive).map((item) => item.slug))
 
     return items.map((item) => ({
@@ -125,11 +154,16 @@ export class ComposioMarketplace {
   }
 
   async connect(toolkit: string): Promise<string> {
-    const session = await (await this.client()).sessions.create(COMPOSIO_USER_ID, {
-      toolkits: [toolkit],
-      manageConnections: false
-    })
-    const request = await session.authorize(toolkit)
+    let request: { redirectUrl?: string }
+    try {
+      const session = await (await this.client()).sessions.create(COMPOSIO_USER_ID, {
+        toolkits: [toolkit],
+        manageConnections: false
+      })
+      request = await session.authorize(toolkit)
+    } catch (error) {
+      throw new Error(describeComposioError(error))
+    }
     const redirectUrl = secureUrl(request.redirectUrl)
     if (!redirectUrl) throw new Error('Composio did not return a secure connection link.')
     return redirectUrl

@@ -440,7 +440,7 @@
 .settings [class~='outline-none'] { outline: none; }
 .settings [class~='block'] { display: block; }
 .settings [class~='p-4'] { padding: 1rem; }
-.settings [class~='rounded-xl'] { border-radius: 0.75rem; }
+.settings [class~='rounded-xl'] { border-radius: 0.375rem; }
 .settings [class~='rounded'] { border-radius: 0.25rem; }
 .settings [class~='border-neutral-700'] { border-color: #3a3f47; }
 .settings [class~='bg-neutral-800'] { background-color: #1c1f24; }
@@ -487,3 +487,13 @@
 .settings [class~='hover:text-neutral-100']:hover { color: #f5f7fa; }
 .settings [class~='hover:text-neutral-200']:hover { color: #d7dbe2; }
 .settings [class~='disabled:opacity-50']:disabled { opacity: 0.5; }
+
+/* Premium finish: hairline top light + soft depth. Geometry stays sharp 6px. */
+.set-list-item,
+.settings-nav-item.is-active,
+.settings-search input,
+.set-select-native,
+.set-reset {
+  border-color: rgb(255 255 255 / 9%);
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / 5%);
+}

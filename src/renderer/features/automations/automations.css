@@ -91,7 +91,7 @@
   gap: 2px;
   padding: 2px;
   border: 1px solid #35353a;
-  border-radius: 9px;
+  border-radius: 8px;
   background: #161618;
 }
 
@@ -243,7 +243,7 @@
   height: 520px;
   overflow: hidden;
   border: 1px solid #333338;
-  border-radius: 12px;
+  border-radius: 8px;
   background-color: #141416;
   background-image: radial-gradient(#2e2e33 1px, transparent 1px);
   background-size: 22px 22px;
@@ -275,7 +275,7 @@
   min-height: 92px;
   padding: 10px 12px 8px;
   border: 1.5px solid #4a4a51;
-  border-radius: 10px;
+  border-radius: 8px;
   background: #1e1e22;
   box-shadow: 0 8px 24px #0008;
   cursor: grab;
@@ -446,7 +446,7 @@
   min-height: 26px;
   padding: 0 8px;
   border: 0;
-  border-radius: 5px;
+  border-radius: 6px;
   color: #d1d1d6;
   background: transparent;
   font: inherit;
@@ -511,7 +511,7 @@
   min-height: 32px;
   padding: 0 14px;
   border: 1.5px dashed #4a4a51;
-  border-radius: 9px;
+  border-radius: 8px;
   color: #8c8c93;
   background: transparent;
   font: inherit;
@@ -549,7 +549,7 @@
   position: relative;
   padding: 14px;
   border: 1px solid #333338;
-  border-radius: 12px;
+  border-radius: 8px;
   background: #1b1b1e;
 }
 
@@ -565,7 +565,7 @@
   width: 28px;
   height: 28px;
   border: 1px solid #35353a;
-  border-radius: 7px;
+  border-radius: 6px;
 }
 
 .automations-status {
@@ -597,7 +597,7 @@
 .automations-menu button {
   padding: 7px 10px;
   border: 0;
-  border-radius: 5px;
+  border-radius: 6px;
   color: #e5e5e5;
   background: transparent;
   text-align: left;
@@ -704,7 +704,7 @@
 .automations-days section {
   padding: 12px;
   border: 1px solid #333338;
-  border-radius: 10px;
+  border-radius: 8px;
   background: #161618;
 }
 
@@ -761,7 +761,7 @@
   overflow: auto;
   padding: 16px;
   border: 1px solid #39393f;
-  border-radius: 12px;
+  border-radius: 8px;
   background: #222225;
   box-shadow: 0 12px 36px #0009;
 }
@@ -771,7 +771,7 @@
   width: 28px;
   height: 28px;
   border: 0;
-  border-radius: 5px;
+  border-radius: 6px;
   color: #8c8c93;
   background: transparent;
   font-size: 16px;
@@ -913,7 +913,7 @@
   margin-top: 10px;
   padding: 16px;
   border: 1px solid #333338;
-  border-radius: 14px;
+  border-radius: 8px;
   background: #1c1c1f;
 }
 
@@ -942,7 +942,7 @@
 .builder-pill {
   padding: 7px 12px;
   border: 1px solid #3a3a40;
-  border-radius: 9px;
+  border-radius: 8px;
   color: #77777f;
   background: #26262b;
   font-size: 13px;
@@ -953,7 +953,7 @@
   width: 190px;
   padding: 7px 12px;
   border: 1px solid #3a3a40;
-  border-radius: 9px;
+  border-radius: 8px;
   color: #e5e5e5;
   background: #26262b;
   font: inherit;
@@ -968,7 +968,7 @@
 .builder-trig input[type="time"] {
   padding: 7px 10px;
   border: 1px solid #3a3a40;
-  border-radius: 9px;
+  border-radius: 8px;
   color: #e5e5e5;
   background: #26262b;
   font: inherit;
@@ -984,7 +984,7 @@
   min-height: 32px;
   padding: 0 16px;
   border: 0;
-  border-radius: 9px;
+  border-radius: 8px;
   color: #111113;
   background: #f0f0f2;
   font: inherit;
@@ -1034,7 +1034,7 @@
   min-height: 44px;
   margin-top: 10px;
   border: 1px solid #333338;
-  border-radius: 12px;
+  border-radius: 8px;
   color: #e7e7e9;
   background: transparent;
   font: inherit;
@@ -1061,7 +1061,7 @@
   min-height: 110px;
   padding: 14px;
   border: 1px solid #333338;
-  border-radius: 12px;
+  border-radius: 8px;
   color: #e5e5e5;
   background: #222226;
   font: inherit;
@@ -1109,7 +1109,7 @@
   min-height: 34px;
   padding: 0 14px;
   border: 1px solid #333338;
-  border-radius: 20px;
+  border-radius: 8px;
   color: #c8c8ce;
   background: transparent;
   font: inherit;
@@ -1128,7 +1128,7 @@
   min-height: 36px;
   padding: 0 22px;
   border: 0;
-  border-radius: 20px;
+  border-radius: 8px;
   color: #111113;
   background: #8e8e96;
   font: inherit;
@@ -1166,7 +1166,7 @@
   gap: 1px;
   padding: 7px 10px;
   border: 0;
-  border-radius: 5px;
+  border-radius: 6px;
   color: #e5e5e5;
   background: transparent;
   text-align: left;
@@ -1225,7 +1225,7 @@
   margin-top: 12px;
   padding: 12px;
   border: 1px solid #333338;
-  border-radius: 10px;
+  border-radius: 8px;
   background: #19191c;
 }
 
@@ -1287,7 +1287,7 @@
   min-height: 30px;
   padding: 0 16px;
   border: 0;
-  border-radius: 7px;
+  border-radius: 6px;
   color: #111113;
   background: #e5e5e8;
   font: inherit;
@@ -1312,4 +1312,33 @@
 .n8n-inspector .canvas-editor {
   margin-top: 0;
   box-shadow: 0 12px 36px #000a;
+}
+
+/* Premium finish: hairline top light + soft depth. Geometry stays sharp 6/8px. */
+.automations-card,
+.automations-detail,
+.automations-days section,
+.builder-card,
+.builder-trig,
+.canvas-editor,
+.n8n-node,
+.n8n-toolbar,
+.n8n-status,
+.n8n-menu,
+.automations-menu,
+.automations-output,
+.automations-history,
+.start-opt {
+  border-color: rgb(255 255 255 / 9%);
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / 5%), 0 12px 32px rgb(0 0 0 / 35%);
+}
+.automations-create-btn,
+.builder-connect,
+.n8n-create:not(:disabled),
+.canvas-editor-row button[type="submit"] {
+  border-color: rgb(255 255 255 / 12%);
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / 14%), 0 2px 10px rgb(0 0 0 / 30%);
+}
+.n8n-node.is-selected {
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / 6%), 0 0 0 2px rgb(124 134 245 / 35%), 0 8px 24px rgb(0 0 0 / 50%);
 }

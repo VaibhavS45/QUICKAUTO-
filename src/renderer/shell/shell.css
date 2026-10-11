@@ -67,7 +67,7 @@
   height: 38px;
   gap: 11px;
   padding: 0 10px;
-  border-radius: 7px;
+  border-radius: 6px;
   text-align: left;
 }
 
@@ -198,7 +198,7 @@
   max-height: min(450px, 60vh);
   overflow: hidden;
   border: 1px solid #39393f;
-  border-radius: 10px;
+  border-radius: 8px;
   background: #222225;
   box-shadow: 0 12px 36px #0009;
 }
@@ -266,7 +266,7 @@
   height: 30px;
   margin: 5px;
   border: 0;
-  border-radius: 5px;
+  border-radius: 6px;
   color: #8c8c93;
   background: transparent;
   font-size: 16px;
@@ -370,6 +370,7 @@
   min-height: 0;
   place-items: center;
   padding: 28px;
+  overflow-y: auto;
 }
 
 .shell-home {
@@ -477,14 +478,14 @@
   max-height: calc(100vh - 64px);
   overflow: hidden;
   border: 1px solid rgb(255 255 255 / 10%);
-  border-radius: 12px;
+  border-radius: 8px;
   background: #0c0c0e;
   box-shadow: 0 24px 64px rgb(0 0 0 / 55%);
 }
 
 .shell-settings-card .settings {
   height: 100%;
-  border-radius: 12px;
+  border-radius: 8px;
 }
 
 .shell-chats-section {
@@ -526,7 +527,7 @@
   margin: 8px 10px 0;
   padding: 0 8px;
   border: 1px solid #39393f;
-  border-radius: 5px;
+  border-radius: 6px;
   outline: none;
   color: #e5e5e5;
   background: #202023;
@@ -539,7 +540,7 @@
   margin-top: 8px;
   padding: 0 8px;
   border: 1px solid #39393f;
-  border-radius: 5px;
+  border-radius: 6px;
   outline: none;
   color: #e5e5e5;
   background: #202023;
@@ -608,7 +609,7 @@
 .shell-chat-actions button {
   width: 21px;
   height: 24px;
-  border-radius: 4px;
+  border-radius: 6px;
   font-size: 14px;
 }
 
@@ -668,7 +669,7 @@
   margin: 7px 10px 0;
   padding: 9px;
   border: 1px solid #48484f;
-  border-radius: 7px;
+  border-radius: 6px;
   background: #242427;
   box-shadow: 0 5px 16px #0007;
 }
@@ -685,7 +686,7 @@
   margin-right: 5px;
   padding: 0 7px;
   border: 1px solid #4b4b52;
-  border-radius: 4px;
+  border-radius: 6px;
   color: #dedee2;
   background: #333338;
   font-size: 10px;
@@ -756,7 +757,7 @@
   position: relative;
   padding: 15px 16px 10px;
   border: 1px solid #343439;
-  border-radius: 14px;
+  border-radius: 8px;
   background: #1b1b1e;
   box-shadow: 0 12px 35px #0002;
 }
@@ -847,7 +848,7 @@
   box-sizing: border-box;
   margin-bottom: 4px;
   border: 1px solid #34343b;
-  border-radius: 5px;
+  border-radius: 6px;
   padding: 7px 8px;
   color: #e4e4e7;
   background: #24242a;
@@ -862,7 +863,7 @@
   align-items: flex-start;
   gap: 2px;
   border: 0;
-  border-radius: 5px;
+  border-radius: 6px;
   padding: 7px 8px;
   color: #d4d4d8;
   background: transparent;
@@ -896,7 +897,7 @@
 .chat-tool-chip {
   padding: 4px 7px;
   border: 1px solid #393941;
-  border-radius: 12px;
+  border-radius: 6px;
   color: #bcbcc3;
   background: #26262a;
   font-size: 10px;
@@ -908,7 +909,7 @@
   height: 30px;
   padding: 0 11px;
   border: 0;
-  border-radius: 7px;
+  border-radius: 6px;
   color: #111113;
   background: #e5e5e8;
   font-size: 11px;
@@ -935,7 +936,7 @@
 .chat-template-row button,
 .chat-settings-link {
   border: 1px solid #39393f;
-  border-radius: 7px;
+  border-radius: 6px;
   padding: 7px 9px;
   color: #c8c8ce;
   background: #1c1c1f;
@@ -961,8 +962,8 @@
 
 .shell-template-cards > header h2 {
   margin: 0;
-  color: #d8d8dc;
-  font-size: 12px;
+  color: #f0f0f2;
+  font-size: 17px;
   font-weight: 600;
 }
 
@@ -974,21 +975,22 @@
 .shell-template-grid {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 8px;
+  gap: 12px;
 }
 
+/* Suggestion flow card (reference: trigger step → arrow → action step, title strip). */
 .shell-template-card {
   min-width: 0;
-  padding: 10px;
-  border: 1px solid #333338;
-  border-radius: 9px;
-  background: #19191c;
+  overflow: hidden;
+  border: 1px solid rgb(255 255 255 / 9%);
+  border-radius: 14px;
+  background: #232327;
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / 5%), 0 12px 32px rgb(0 0 0 / 35%);
 }
 
 .shell-template-select {
-  display: grid;
+  display: block;
   width: 100%;
-  gap: 6px;
   padding: 0;
   border: 0;
   color: inherit;
@@ -997,19 +999,101 @@
   cursor: pointer;
 }
 
-.shell-template-select strong {
-  color: #e1e1e4;
-  font-size: 11px;
+.shell-template-flow {
+  display: grid;
+  justify-items: center;
+  padding: 16px 16px 18px;
 }
 
-.shell-template-select > span {
-  color: #929299;
-  font-size: 10px;
-  line-height: 1.4;
+.shell-flow-step {
+  display: flex;
+  width: 100%;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 12px 14px;
+  border: 1px solid rgb(255 255 255 / 6%);
+  border-radius: 10px;
+  color: #c9c9cf;
+  background: #101013;
+  font-size: 13px;
+  line-height: 1.45;
 }
 
-.shell-template-select:hover strong {
+.shell-flow-step > span:last-child {
+  display: -webkit-box;
+  min-width: 0;
+  overflow: hidden;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+
+.shell-flow-icon {
+  display: grid;
+  flex: 0 0 auto;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.shell-flow-icon.is-gmail {
+  background: linear-gradient(90deg, #ea4335, #fbbc05, #34a853, #4285f4);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+
+.shell-flow-icon.is-cal {
+  border-radius: 4px;
   color: #fff;
+  background: #3b82f6;
+  font-size: 10px;
+}
+
+.shell-flow-icon.is-action {
+  color: #e8e8ea;
+  font-weight: 400;
+}
+
+.shell-flow-icon.is-github,
+.shell-flow-icon.is-search,
+.shell-flow-icon.is-files {
+  color: #a8a8b0;
+}
+
+.shell-flow-arrow {
+  z-index: 1;
+  display: grid;
+  place-items: center;
+  width: 30px;
+  height: 30px;
+  margin: -15px 0;
+  border: 1px solid rgb(255 255 255 / 10%);
+  border-radius: 50%;
+  color: #b9b9c0;
+  background: #2c2c31;
+  font-size: 14px;
+}
+
+.shell-template-title {
+  display: block;
+  padding: 14px 16px;
+  border-top: 1px solid rgb(255 255 255 / 7%);
+  color: #f0f0f2;
+  background: #141416;
+  font-size: 14px;
+  font-weight: 500;
+}
+
+.shell-template-select:hover .shell-template-title {
+  color: #fff;
+}
+
+.shell-template-card .shell-template-requirements {
+  margin-top: 0;
+  padding: 0 16px 12px;
+  background: #141416;
 }
 
 .shell-template-requirements {
@@ -1026,7 +1110,7 @@
   gap: 4px;
   padding: 2px 6px;
   border: 1px solid #3b3b41;
-  border-radius: 11px;
+  border-radius: 6px;
   color: #b4c4ad;
   background: #20231f;
   font-size: 9px;
@@ -1078,7 +1162,7 @@
   overflow: auto;
   padding: 5px;
   border: 1px solid #3b3b41;
-  border-radius: 9px;
+  border-radius: 8px;
   background: #242427;
   box-shadow: 0 8px 24px #0008;
 }
@@ -1088,7 +1172,7 @@
   gap: 3px;
   padding: 8px;
   border: 0;
-  border-radius: 5px;
+  border-radius: 6px;
   color: #e5e5e7;
   background: transparent;
   text-align: left;
@@ -1163,7 +1247,7 @@
   margin-right: max(0px, calc((100% - 760px) / 2));
   margin-left: auto;
   padding: 11px 14px;
-  border-radius: 13px;
+  border-radius: 8px;
   color: #e8e8ea;
   background: #252528;
 }
@@ -1232,7 +1316,7 @@
   margin: 0 auto 16px;
   padding: 13px;
   border: 1px solid #645537;
-  border-radius: 9px;
+  border-radius: 8px;
   background: #28251e;
 }
 
@@ -1251,7 +1335,7 @@
   max-height: 190px;
   overflow: auto;
   padding: 9px;
-  border-radius: 5px;
+  border-radius: 6px;
   color: #d7d5cc;
   background: #191817;
   font-size: 10px;
@@ -1270,7 +1354,7 @@
   min-height: 29px;
   padding: 0 10px;
   border: 1px solid #5d5b52;
-  border-radius: 5px;
+  border-radius: 6px;
   color: #e5e2d7;
   background: #3b3931;
   cursor: pointer;
@@ -1375,4 +1459,29 @@
     padding-right: 14px;
     padding-left: 14px;
   }
+}
+
+/* Premium finish: hairline top light + soft depth. Geometry stays sharp 6/8px. */
+.home-start-card,
+.chat-composer-card,
+.shell-template-card,
+.shell-notifications-panel,
+.shell-account-menu,
+.shell-confirm-card,
+.chat-approval-card,
+.chat-mention-menu,
+.chat-model-menu,
+.chat-message.is-user {
+  border-color: rgb(255 255 255 / 9%);
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / 5%), 0 12px 32px rgb(0 0 0 / 35%);
+}
+.chat-send-button:not(:disabled),
+.shell-feature-header-actions button {
+  border-color: rgb(255 255 255 / 12%);
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / 12%), 0 2px 10px rgb(0 0 0 / 30%);
+}
+.shell-nav-item.is-active,
+.shell-chat-entry.is-active {
+  border: 1px solid rgb(255 255 255 / 8%);
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / 5%);
 }

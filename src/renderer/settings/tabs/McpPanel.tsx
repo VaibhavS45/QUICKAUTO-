@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react'
-import type { McpServerConfig, McpServerPublic } from '../../../main/shell/mcp-registry.js'
+import { parseMcpArgs, type McpServerConfig, type McpServerPublic } from '../../../main/shell/mcp-registry.js'
 import { Button } from '../../components/ui/button.js'
 import { Card, CardSub, CardTitle } from '../../components/ui/card.js'
 import { Input, Select } from '../../components/ui/input.js'
@@ -44,7 +44,7 @@ export default function McpPanel(): React.JSX.Element {
     setName(server.name)
     setTransport(server.transport)
     setCommand(server.transport === 'stdio' ? server.command : '')
-    setArgs(server.transport === 'stdio' ? server.args.join(' ') : '')
+    setArgs(server.transport === 'stdio' ? server.args.map((arg) => JSON.stringify(arg)).join(' ') : '')
     setUrl(server.transport === 'http' ? server.url : '')
     const keys = server.transport === 'stdio' ? server.envKeys : server.headerKeys
     setSecretText(keys.map((key) => `${key}=`).join('\n'))
@@ -65,10 +65,10 @@ export default function McpPanel(): React.JSX.Element {
     const lines = keyValueLines(secretText)
     const secrets = Object.fromEntries(lines.filter(([, value]) => value.length > 0))
     const secretKeys = secretKeyNames(secretText)
-    const config: McpServerConfig = transport === 'stdio'
-      ? { id, name, transport, command, args: args.trim() ? args.trim().split(/\s+/) : [], envKeys: secretKeys }
-      : { id, name, transport, url, headerKeys: secretKeys }
     try {
+      const config: McpServerConfig = transport === 'stdio'
+        ? { id, name, transport, command, args: parseMcpArgs(args), envKeys: secretKeys }
+        : { id, name, transport, url, headerKeys: secretKeys }
       const result = await window.app.mcpUpsert(config, secrets)
       if (!result.ok) throw new Error(result.error || 'Could not save MCP server.')
       resetForm()
@@ -162,7 +162,7 @@ export default function McpPanel(): React.JSX.Element {
           {transport === 'stdio' ? (
             <>
               <Input value={command} onChange={(event) => setCommand(event.target.value)} placeholder="Executable, e.g. npx" aria-label="Command" />
-              <Input value={args} onChange={(event) => setArgs(event.target.value)} placeholder="Arguments separated by spaces" aria-label="Arguments" />
+              <Input value={args} onChange={(event) => setArgs(event.target.value)} placeholder={'Arguments, e.g. -y @modelcontextprotocol/server-filesystem "/home/you/My Files"'} aria-label="Arguments" />
             </>
           ) : (
             <Input value={url} onChange={(event) => setUrl(event.target.value)} placeholder="https:// or http://localhost URL" aria-label="Server URL" />
@@ -174,7 +174,7 @@ export default function McpPanel(): React.JSX.Element {
             placeholder={transport === 'stdio' ? 'Environment secrets: KEY=value; KEY2=value' : 'Request headers: KEY=value; KEY2=value'}
             aria-label="MCP server credentials"
           />
-          <p className="text-[11px] text-neutral-500">Credential values are encrypted with Electron safeStorage and never returned to the UI. Put credentials only here—not in the command, arguments, or URL. Leave an existing value blank to keep it unchanged.</p>
+          <p className="text-[11px] text-neutral-500">Credential values are encrypted with Electron safeStorage and never returned to the UI. Put credentials only here—not in the command, arguments, or URL. Quote arguments that contain spaces. After saving, select Start; running tools then appear when you mention @mcp.</p>
           <div className="flex gap-2">
             <Button type="submit">{id && servers.some((server) => server.id === id) ? 'Save server' : 'Add server'}</Button>
             {id && <Button type="button" variant="secondary" onClick={resetForm}>Cancel</Button>}

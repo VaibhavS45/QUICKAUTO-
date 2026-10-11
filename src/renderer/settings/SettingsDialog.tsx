@@ -131,17 +131,22 @@ function GeneralPanel(): React.JSX.Element {
         const profile = result as unknown as Partial<Profile>
         if (live && typeof profile.language === 'string') setLanguage(profile.language)
       })
-      .catch(() => {})
+      .catch(() => {
+        if (live) setLanguageStatus('Could not load language preference.')
+      })
     window.app.getAppBehavior()
       .then((result) => {
         const behavior = result as unknown as { ok: boolean; keepBackground?: boolean }
         if (live && behavior.ok && typeof behavior.keepBackground === 'boolean') setKeepBackground(behavior.keepBackground)
       })
-      .catch(() => {})
+      .catch(() => {
+        if (live) setBehaviorStatus('Could not load app preferences.')
+      })
     return () => { live = false }
   }, [])
 
   async function saveLanguage(next: string): Promise<void> {
+    const previous = language
     setLanguage(next)
     setLanguageStatus('Saving…')
     try {
@@ -154,21 +159,28 @@ function GeneralPanel(): React.JSX.Element {
           language: next
         })
       const response = saved as { ok: boolean; error?: string }
+      if (!response.ok) setLanguage(previous)
       setLanguageStatus(response.ok ? 'Saved.' : (response.error ?? 'Save failed.'))
     } catch {
+      setLanguage(previous)
       setLanguageStatus('Save failed.')
     }
   }
 
   function toggleBackground(next: boolean): void {
+    const previous = keepBackground
     setKeepBackground(next)
     window.app
       .setAppBehavior({ keepBackground: next })
       .then((r) => {
         const res = r as unknown as { ok: boolean; error?: string }
+        if (!res.ok) setKeepBackground(previous)
         setBehaviorStatus(res.ok ? 'Saved.' : (res.error ?? 'Save failed.'))
       })
-      .catch(() => setBehaviorStatus('Save failed.'))
+      .catch(() => {
+        setKeepBackground(previous)
+        setBehaviorStatus('Save failed.')
+      })
   }
 
   return (
@@ -241,14 +253,20 @@ function AppearancePanel({
             checked={shader}
             label="Animated background"
             onCheckedChange={(next) => {
+              const previous = shader
               onShader(next)
+              setStatus('Saving…')
               window.app
                 .setAppBehavior({ shader: next })
                 .then((r) => {
                   const res = r as unknown as { ok: boolean; error?: string }
+                  if (!res.ok) onShader(previous)
                   setStatus(res.ok ? 'Saved.' : (res.error ?? 'Save failed.'))
                 })
-                .catch(() => setStatus('Save failed.'))
+                .catch(() => {
+                  onShader(previous)
+                  setStatus('Save failed.')
+                })
             }}
           />
         </div>

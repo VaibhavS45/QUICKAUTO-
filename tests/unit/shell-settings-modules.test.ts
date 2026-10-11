@@ -5,6 +5,7 @@ import { isSafeMcpHttpUrl } from '../../src/main/shell/mcp-client.js'
 import { McpConnectorProvider } from '../../src/main/shell/mcp-provider.js'
 import {
   McpRegistry,
+  parseMcpArgs,
   type McpConnection,
   type McpConnector,
   type McpRegistryStorage,
@@ -97,6 +98,20 @@ describe('AgentStore', () => {
 })
 
 describe('McpRegistry and approval provider', () => {
+  it('parses quoted stdio arguments without breaking paths containing spaces', () => {
+    expect(parseMcpArgs('-y @modelcontextprotocol/server-filesystem "/home/user/My Files"')).toEqual([
+      '-y',
+      '@modelcontextprotocol/server-filesystem',
+      '/home/user/My Files'
+    ])
+    expect(parseMcpArgs(`--label 'local server' escaped\\ value`)).toEqual([
+      '--label',
+      'local server',
+      'escaped value'
+    ])
+    expect(() => parseMcpArgs('--name "unfinished')).toThrow(/Finish the quoted/)
+  })
+
   it('stores declared secrets out of public state, manages servers, and approval-gates tools', async () => {
     const store = memory()
     const secrets = vault()
@@ -183,6 +198,7 @@ describe('McpRegistry and approval provider', () => {
     expect(isSafeMcpHttpUrl('http://localhost:3000/mcp')).toBe(true)
     expect(isSafeMcpHttpUrl('http://127.0.0.1:3000/mcp')).toBe(true)
     expect(isSafeMcpHttpUrl('http://mcp.example.com/server')).toBe(false)
+    expect(isSafeMcpHttpUrl('not a url')).toBe(false)
   })
 })
 

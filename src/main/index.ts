@@ -17,7 +17,9 @@ import {
   ModelSettingsSchema,
   ProfileSettingsSchema,
   SettingsTabRequestSchema,
-  ConnectionToolSchema
+  ConnectionToolSchema,
+  ComposioToolkitSearchSchema,
+  ComposioToolkitConnectSchema
 } from './ipc.js'
 import { TOOL_IDS, type ToolId } from '../shared/types.js'
 import type { AgentEvent } from '../shared/agent.js'
@@ -36,9 +38,10 @@ import {
 } from './agent/nested-approval.js'
 import { BudgetGuard, type BudgetStore, type BudgetUsageState } from './connectors/budget-guard.js'
 import { ConnectorSettingsService, type ConnectorStore } from './settings/connector-settings.js'
-import { ComposioProvider } from './connectors/composio-tools.js'
+import { ComposioProvider, isComposioBudgetGuardedTool } from './connectors/composio-tools.js'
 import { GitHubCliProvider, isZeroCostTool, validateRepoEntry } from './connectors/github-cli.js'
 import { ComposioConnectorProvider, isBudgetGuardedTool } from './connectors/composio.js'
+import { ComposioMarketplace } from './connectors/composio-marketplace.js'
 import { registerConnectorProvider, getToolsForMentions } from './agent/registry.js'
 import {
   Scheduler,
@@ -143,7 +146,8 @@ const connectorSettings = new ConnectorSettingsService(new ElectronConnectorStor
   decryptStringAsync: (b: Buffer) => safeStorage.decryptStringAsync(b)
 })
 
-registerConnectorProvider(new ComposioProvider(() => connectorSettings.getKey()))
+registerConnectorProvider(new ComposioProvider(() => connectorSettings.getKey(), () => getGuard()))
+const composioMarketplace = new ComposioMarketplace({ getApiKey: () => connectorSettings.getKey() })
 
 // Read-only @github via the local `gh` CLI + git (zero Composio cost).
 // Reads repos from model settings (validated allowlist); the gh token is
@@ -294,8 +298,8 @@ function applyStrictCsp(): void {
   session.defaultSession.webRequest.onHeadersReceived((details, callback) => {
     const dev = !!process.env['ELECTRON_RENDERER_URL']
     const csp = dev
-      ? `default-src 'self' 'unsafe-inline' 'unsafe-eval' data: http://localhost:* ws://localhost:*; script-src 'self' 'unsafe-inline' 'unsafe-eval' http://localhost:*; style-src 'self' 'unsafe-inline' http://localhost:*; img-src 'self' data: blob:; font-src 'self' data:;`
-      : `default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self' data:;`
+      ? `default-src 'self' 'unsafe-inline' 'unsafe-eval' data: http://localhost:* ws://localhost:*; script-src 'self' 'unsafe-inline' 'unsafe-eval' http://localhost:*; style-src 'self' 'unsafe-inline' http://localhost:*; img-src 'self' data: blob: https:; font-src 'self' data:;`
+      : `default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https:; font-src 'self' data:;`
     callback({
       responseHeaders: {
         ...details.responseHeaders,
@@ -501,7 +505,7 @@ function wireIpc(): void {
           for (const [name, t] of Object.entries(set)) {
             if (name === 'echo' || name === 'echo_write' || name.startsWith('mcp_')) continue
             if (name.startsWith('github_') || isZeroCostTool(t)) continue
-            if (isBudgetGuardedTool(t)) continue
+            if (isBudgetGuardedTool(t) || isComposioBudgetGuardedTool(t)) continue
             const orig = (t as { execute?: unknown }).execute
             if (typeof orig !== 'function') continue
             const fn = orig as (args: never, opts: never) => Promise<unknown>
@@ -590,7 +594,7 @@ function wireIpc(): void {
     const ids = ['notion', 'sheets', 'websearch'] as const
     const services: Array<{ id: string; connected: boolean; detail?: string }> = await Promise.all(
       ids.map(async (id) => {
-        const s = await new ComposioProvider(() => connectorSettings.getKey()).status(id)
+        const s = await new ComposioProvider(() => connectorSettings.getKey(), getGuard).status(id)
         return { id, ...s }
       })
     )
@@ -607,6 +611,7 @@ function wireIpc(): void {
     const parsed = ConnectorKeySchema.safeParse(payload)
     if (!parsed.success) return { ok: false as const, error: 'Invalid key.' }
     try {
+      await composioMarketplace.validateApiKey(parsed.data.key)
       await connectorSettings.setKey(parsed.data.key)
       return { ok: true as const }
     } catch (err) {
@@ -617,6 +622,28 @@ function wireIpc(): void {
   ipcMain.handle(IpcChannels.clearConnectorKey, async () => {
     await connectorSettings.clearKey()
     return { ok: true as const }
+  })
+
+  ipcMain.handle(IpcChannels.composioToolkits, async (_event, payload: unknown) => {
+    const parsed = ComposioToolkitSearchSchema.safeParse(payload)
+    if (!parsed.success) return { ok: false as const, error: 'Invalid app search.' }
+    try {
+      return { ok: true as const, toolkits: await composioMarketplace.list(parsed.data.query) }
+    } catch (err) {
+      return { ok: false as const, error: err instanceof Error ? err.message : String(err) }
+    }
+  })
+
+  ipcMain.handle(IpcChannels.composioConnect, async (_event, payload: unknown) => {
+    const parsed = ComposioToolkitConnectSchema.safeParse(payload)
+    if (!parsed.success) return { ok: false as const, error: 'Invalid app connection request.' }
+    try {
+      const url = await composioMarketplace.connect(parsed.data.toolkit)
+      await shell.openExternal(url)
+      return { ok: true as const }
+    } catch (err) {
+      return { ok: false as const, error: err instanceof Error ? err.message : String(err) }
+    }
   })
 
   // @github status (local gh CLI; no payload, nothing secret crosses IPC).

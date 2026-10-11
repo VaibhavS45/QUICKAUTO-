@@ -14,6 +14,42 @@ const McpArgsSchema = z.array(z.string().max(1000)).max(64).refine((args) =>
   !args.some((arg) => /^--?(?:api[_-]?key|access[_-]?token|token|secret|password|authorization)$/i.test(arg))
 , 'Do not put credentials in MCP arguments; use encrypted environment secrets.')
 
+export function parseMcpArgs(value: string): string[] {
+  const args: string[] = []
+  let current = ''
+  let quote: "'" | '"' | null = null
+  let escaped = false
+  let started = false
+
+  for (const char of value) {
+    if (escaped) {
+      current += char
+      escaped = false
+      started = true
+    } else if (char === '\\' && quote !== "'") {
+      escaped = true
+      started = true
+    } else if (quote) {
+      if (char === quote) quote = null
+      else current += char
+      started = true
+    } else if (char === "'" || char === '"') {
+      quote = char
+      started = true
+    } else if (/\s/.test(char)) {
+      if (started) args.push(current)
+      current = ''
+      started = false
+    } else {
+      current += char
+      started = true
+    }
+  }
+  if (escaped || quote) throw new Error('Finish the quoted or escaped MCP argument before saving.')
+  if (started) args.push(current)
+  return args
+}
+
 export const McpServerConfigSchema = z.discriminatedUnion('transport', [
   z.object({
     id: ServerIdSchema,

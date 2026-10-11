@@ -854,6 +854,12 @@
   box-shadow: inset 0 0 20px rgb(255 255 255 / 3%);
 }
 
+.connector-brand-icon {
+  width: 23px;
+  height: 23px;
+  object-fit: contain;
+}
+
 .connector-detail,
 .plugin-description {
   overflow: hidden;
@@ -892,6 +898,83 @@
   color: #dce0e9;
   font-size: 13px;
   font-weight: 600;
+}
+
+.composio-marketplace {
+  min-width: 0;
+}
+
+.composio-marketplace-heading,
+.composio-search,
+.composio-app-title {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.composio-marketplace-copy {
+  margin: -5px 0 12px;
+  color: #8992a1;
+  font-size: 11px;
+  line-height: 1.5;
+}
+
+.composio-search {
+  justify-content: flex-start;
+  margin-bottom: 12px;
+}
+
+.composio-search input {
+  min-width: 0;
+  flex: 1;
+}
+
+.composio-app-card {
+  display: flex;
+  min-height: 78px;
+  align-items: center;
+  gap: 11px;
+}
+
+.composio-app-brand {
+  display: grid;
+  width: 40px;
+  height: 40px;
+  flex: 0 0 40px;
+  place-items: center;
+  overflow: hidden;
+  border: 1px solid #30343d;
+  border-radius: 11px;
+  background: #fff;
+}
+
+.composio-app-logo {
+  width: 27px;
+  height: 27px;
+  object-fit: contain;
+}
+
+.composio-app-monogram {
+  color: #16181c;
+  font-size: 17px;
+  font-weight: 700;
+}
+
+.composio-app-title {
+  justify-content: flex-start;
+  gap: 8px;
+}
+
+.composio-app-title .connector-status {
+  padding: 3px 7px;
+}
+
+.settings .composio-app-card .connector-detail {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  white-space: normal;
 }
 
 .settings .set-list-item {

@@ -1,7 +1,10 @@
 .shell-frame {
+  box-sizing: border-box;
   height: 100vh;
+  width: 100%;
   overflow: hidden;
-  border-radius: 12px;
+  border: 1px solid rgb(255 255 255 / 12%);
+  border-radius: 14px;
   color: #e5e5e5;
   background: #111113;
   font-size: 13px;
@@ -9,10 +12,12 @@
 
 .shell-drag-strip {
   position: relative;
-  height: 38px;
+  height: 48px;
+  box-sizing: border-box;
   display: flex;
   align-items: center;
-  padding-left: 82px;
+  gap: 12px;
+  padding: 0 16px 0 80px;
   color: #85858b;
   background: #0c0c0e;
   border-bottom: 1px solid rgb(255 255 255 / 6%);
@@ -21,18 +26,23 @@
 }
 
 .shell-brand {
+  flex: 1;
   font-size: 12px;
   font-weight: 600;
   letter-spacing: 0.02em;
   color: #f0f0f2;
 }
 
+.shell-drag-spacer {
+  flex: 1;
+}
+
 .shell-workspace {
   display: flex;
   box-sizing: border-box;
-  height: calc(100vh - 38px);
+  height: calc(100vh - 48px);
   min-height: 0;
-  padding: 8px 8px 8px 0;
+  padding: 12px 12px 12px 0;
 }
 
 .shell-sidebar {
@@ -1550,22 +1560,21 @@
 }
 /* Command palette: top trigger pill + dropdown panel. */
 .shell-palette-trigger {
-  position: absolute;
-  left: 50%;
   display: flex;
   align-items: center;
-  gap: 10px;
-  min-width: 240px;
+  gap: 8px;
+  flex: 0 1 420px;
+  min-width: 200px;
   max-width: 420px;
-  height: 30px;
-  padding: 0 6px 0 12px;
+  height: 32px;
+  margin: 0 auto;
+  padding: 0 6px 0 14px;
   border: 1px solid rgb(255 255 255 / 12%);
-  border-radius: 6px;
+  border-radius: 8px;
   color: #a8a8b0;
   background: #222226;
   font: inherit;
   font-size: 12px;
-  transform: translateX(-50%);
   cursor: pointer;
   -webkit-app-region: no-drag;
 }
@@ -1579,7 +1588,8 @@
 }
 
 .shell-palette-trigger kbd {
-  padding: 2px 6px;
+  flex: none;
+  padding: 3px 7px;
   border: 0;
   border-radius: 4px;
   color: #8f8f97;
@@ -1605,15 +1615,15 @@
   display: flex;
   justify-content: center;
   align-items: flex-start;
-  padding-top: 52px;
+  padding: 96px 16px 16px;
   background: rgb(0 0 0 / 45%);
 }
 
 .shell-palette {
-  width: min(560px, calc(100vw - 64px));
+  width: min(560px, 100%);
   overflow: hidden;
   border: 1px solid rgb(255 255 255 / 10%);
-  border-radius: 8px;
+  border-radius: 12px;
   background: #141416;
   box-shadow: inset 0 1px 0 rgb(255 255 255 / 5%), 0 24px 64px rgb(0 0 0 / 55%);
 }
@@ -1621,11 +1631,11 @@
 .shell-palette input {
   width: 100%;
   box-sizing: border-box;
-  height: 44px;
+  height: 48px;
   border: 0;
   border-bottom: 1px solid rgb(255 255 255 / 7%);
   outline: none;
-  padding: 0 14px;
+  padding: 0 16px;
   color: #f0f0f2;
   background: transparent;
   font: inherit;
@@ -1639,19 +1649,20 @@
 .shell-palette-list {
   max-height: 320px;
   overflow-y: auto;
-  padding: 6px;
+  padding: 8px;
 }
 
 .shell-palette-item {
   display: flex;
   width: 100%;
+  box-sizing: border-box;
   align-items: center;
   justify-content: space-between;
   gap: 12px;
-  min-height: 34px;
-  padding: 0 10px;
+  min-height: 38px;
+  padding: 7px 12px;
   border: 0;
-  border-radius: 6px;
+  border-radius: 8px;
   color: #d1d1d6;
   background: transparent;
   font: inherit;
@@ -1660,7 +1671,15 @@
   cursor: pointer;
 }
 
+.shell-palette-item span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .shell-palette-item small {
+  flex: none;
   color: #77777f;
   font-size: 11px;
 }

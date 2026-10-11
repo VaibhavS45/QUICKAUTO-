@@ -1433,6 +1433,8 @@
 .when-card {
   display: flex;
   align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
 }
 
 .when-clock {
@@ -1443,6 +1445,7 @@
 
 .pill-select {
   appearance: auto;
+  min-height: 36px;
   padding: 8px 14px;
   border: 1px solid #3a3a40;
   border-radius: 10px;
@@ -1645,7 +1648,33 @@
   color: #929299;
   background: transparent;
   font-size: 18px;
-  cursor: default;
+  cursor: pointer;
+}
+
+.builder-addwrap {
+  position: relative;
+  flex: 0 0 auto;
+}
+
+.builder-addmenu {
+  position: absolute;
+  z-index: 6;
+  bottom: calc(100% + 8px);
+  left: 0;
+  width: max-content;
+  max-width: min(420px, 70vw);
+  max-height: 260px;
+  overflow: auto;
+  margin-top: 0;
+}
+
+.builder-pill-x {
+  margin-left: 6px;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font-size: 14px;
+  cursor: pointer;
 }
 
 .builder-chip {

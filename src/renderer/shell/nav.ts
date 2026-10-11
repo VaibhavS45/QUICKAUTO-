@@ -10,8 +10,7 @@ export interface ShellRoute {
 }
 
 export const PRIMARY_NAV: PrimaryNavItem[] = [
-  { id: 'home', label: 'New chat', view: 'home' },
-  { id: 'automations', label: 'Automations', view: 'automations' }
+  { id: 'home', label: 'Automate', view: 'home' }
 ]
 
 export interface RailTab {
@@ -60,6 +59,7 @@ export class ShellRouter {
   navigate(view: string, params: Record<string, unknown> = {}): ShellRoute {
     const knownView =
       view === 'home' ||
+      view === 'automations' ||
       PRIMARY_NAV.some((item) => item.view === view) ||
       (view === 'chat' && typeof params['chatId'] === 'string')
     this.route = knownView ? { view, params } : { view: 'home', params: {} }

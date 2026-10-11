@@ -155,9 +155,14 @@
 @source inline("flex grid h-screen bg-black text-neutral-200");
 
 html,
-body {
+body,
+#root {
   background: transparent;
   margin: 0;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  border-radius: 14px;
   font-family:
     -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
 }

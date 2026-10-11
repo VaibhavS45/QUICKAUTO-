@@ -24,7 +24,6 @@ interface LocalProfile {
 
 function Icon({ name }: { name: string }): React.JSX.Element {
   const paths: Record<string, React.ReactNode> = {
-    plus: <path d="M12 5v14M5 12h14" />,
     automation: <><rect x="3" y="5" width="18" height="16" rx="2" /><path d="M16 3v4M8 3v4M3 10h18" /></>,
     bell: <><path d="M18 8a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9M10 21h4" /></>,
     updates: <path d="M22 12h-4l-3 9L9 3l-3 9H2" />,
@@ -329,6 +328,7 @@ export default function ShellApp(): React.JSX.Element {
           <span>Search or command…</span>
           <kbd>⌘K</kbd>
         </button>
+        <span className="shell-drag-spacer" aria-hidden="true" />
       </header>
       <div className="shell-workspace">
         <aside className="shell-sidebar" aria-label="Main navigation">
@@ -343,7 +343,7 @@ export default function ShellApp(): React.JSX.Element {
                 title={item.label}
                 onClick={() => navigate(item.view)}
               >
-                <Icon name={item.id === 'home' ? 'plus' : 'automation'} />
+                <Icon name="automation" />
                 <span>{item.label}</span>
               </button>
             ))}

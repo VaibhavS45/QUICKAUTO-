@@ -8,7 +8,7 @@ interface StartChoiceProps {
 export const START_OPTIONS: { kind: StartKind; title: string; subtitle: string; icon: string; badge?: string }[] = [
   { kind: 'schedule', title: 'Schedule', subtitle: 'Run at a time you choose', icon: '◷' },
   { kind: 'triggered', title: 'Triggered task', subtitle: 'Start from activity in your apps', icon: '⧉' },
-  { kind: 'advanced', title: 'Advanced automation', subtitle: 'Describe when Manus should act', icon: '⟁', badge: 'Beta' }
+  { kind: 'advanced', title: 'Advanced automation', subtitle: 'Describe when the automation should run', icon: '⟁', badge: 'Beta' }
 ]
 
 export default function StartChoice(props: StartChoiceProps): React.JSX.Element {

@@ -25,7 +25,7 @@ describe('start choice', () => {
         onSubmit: async () => null
       })
     )
-    expect(html).toContain('Describe when Manus should act')
+    expect(html).toContain('Describe when the automation should run')
   })
 
   it('renders the event trigger form for triggered tasks', () => {
@@ -69,7 +69,7 @@ describe('start choice', () => {
     expect(empty).toContain('Add Trigger')
   })
 
-  it('shows a plain chat box below the triggers', () => {
+  it('shows a single task box with a working add menu', () => {
     const html = renderToStaticMarkup(
       createElement(Builder, {
         initial: blankDraft(),
@@ -79,8 +79,9 @@ describe('start choice', () => {
         onSubmit: async () => null
       })
     )
-    expect(html).toContain('Describe the automation to the agent')
-    expect(html).toContain('Just chat')
-    expect(html).toContain('Send')
+    expect(html).toContain('What should it do')
+    expect(html).not.toContain('Describe the automation to the agent')
+    expect(html).not.toContain('Manus')
+    expect(html).toContain('Add connector or tool')
   })
 })

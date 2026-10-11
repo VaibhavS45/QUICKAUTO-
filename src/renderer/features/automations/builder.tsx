@@ -1,4 +1,5 @@
 import { useMemo, useState } from 'react'
+import { TOOL_IDS, TOOL_META, type ActiveToolId } from '../../../shared/types.js'
 import { GMAIL_EVENTS } from './trigger-events.js'
 import { draftToText, makeTriggerId, type BuilderDraft, type BuilderRepeat, type BuilderTrigger } from './builder-compile.js'
 import './automations.css'
@@ -60,43 +61,8 @@ function ClockIcon(): React.JSX.Element {
   )
 }
 
-function LaptopIcon(): React.JSX.Element {
-  return (
-    <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.4" aria-hidden="true">
-      <rect x="2.5" y="3" width="9" height="6.5" rx="1" />
-      <path d="M1.5 12h11l-1.2-2H3.7L2.5 12Z" strokeLinejoin="round" />
-    </svg>
-  )
-}
-
-function AutomationsIcon(): React.JSX.Element {
-  return (
-    <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.4" aria-hidden="true">
-      <rect x="1.5" y="1.5" width="5" height="5" rx="1.2" />
-      <rect x="9.5" y="9.5" width="5" height="5" rx="1.2" />
-      <path d="M6.5 4H11a1 1 0 0 1 1 1v4.5M9.5 12H5a1 1 0 0 1-1-1V6.5" />
-    </svg>
-  )
-}
-
-function SlidersIcon(): React.JSX.Element {
-  return (
-    <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.4" aria-hidden="true">
-      <path d="M2 5h12M2 11h12" strokeLinecap="round" />
-      <circle cx="6" cy="5" r="1.8" fill="#1b1b1e" />
-      <circle cx="10.5" cy="11" r="1.8" fill="#1b1b1e" />
-    </svg>
-  )
-}
-
 function patchTrigger(setTriggers: React.Dispatch<React.SetStateAction<BuilderTrigger[]>>, id: string, patch: Partial<BuilderTrigger>): void {
   setTriggers((cur) => cur.map((t) => (t.id === id ? { ...t, ...patch } : t)))
-}
-
-interface ChatMessage {
-  id: string
-  from: 'user' | 'agent'
-  text: string
 }
 
 export default function Builder(props: BuilderProps): React.JSX.Element {
@@ -104,10 +70,9 @@ export default function Builder(props: BuilderProps): React.JSX.Element {
   const [triggers, setTriggers] = useState(props.initial.triggers)
   const [task, setTask] = useState(props.initial.task)
   const [describe, setDescribe] = useState(props.initial.describe)
-  const [tools] = useState(props.initial.tools)
+  const [tools, setTools] = useState<string[]>(props.initial.tools)
   const [pickerOpen, setPickerOpen] = useState(false)
-  const [chatMessages, setChatMessages] = useState<ChatMessage[]>([])
-  const [chatInput, setChatInput] = useState('')
+  const [addOpen, setAddOpen] = useState(false)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
 
@@ -131,17 +96,8 @@ export default function Builder(props: BuilderProps): React.JSX.Element {
     }
   }
 
-  function sendChat(event: React.FormEvent): void {
-    event.preventDefault()
-    const text = chatInput.trim()
-    if (!text) return
-    setChatMessages((cur) => [
-      ...cur,
-      { id: `m${cur.length}-u`, from: 'user', text },
-      { id: `m${cur.length}-a`, from: 'agent', text: 'Noted — added to your automation task below.' }
-    ])
-    setTask((cur) => (cur ? `${cur} ${text}` : text))
-    setChatInput('')
+  function toggleTool(id: ActiveToolId): void {
+    setTools((cur) => (cur.includes(id) ? cur.filter((t) => t !== id) : [...cur, id]))
   }
   function addEventTrigger(phrase: string): void {
     setTriggers((cur) => [...cur, { id: makeTriggerId(), kind: 'event', repeat: 'daily', time: '09:00', app: 'gmail', event: phrase }])
@@ -149,7 +105,7 @@ export default function Builder(props: BuilderProps): React.JSX.Element {
   }
 
   const hasEvent = triggers.some((t) => t.kind === 'event')
-  const heading = mode === 'describe' ? 'Describe when Manus should act' : hasEvent || triggers.length === 0 ? 'When this happens' : 'When'
+  const heading = mode === 'describe' ? 'Describe when the automation should run' : hasEvent || triggers.length === 0 ? 'When this happens' : 'When'
 
   const picker = pickerOpen && (
     <div className="picker-panel" role="menu" aria-label="Choose a trigger">
@@ -267,33 +223,13 @@ export default function Builder(props: BuilderProps): React.JSX.Element {
           </button>
         )}
 
-        <div className="chat-card">
-          <p className="chat-title">Describe the automation to the agent</p>
-          {chatMessages.length > 0 && (
-            <div className="chat-msgs" aria-live="polite">
-              {chatMessages.map((msg) => (
-                <p key={msg.id} className={`chat-msg is-${msg.from}`}>{msg.text}</p>
-              ))}
-            </div>
-          )}
-          <form className="chat-form" onSubmit={sendChat}>
-            <input
-              aria-label="Describe the automation to the agent"
-              value={chatInput}
-              onChange={(e) => setChatInput(e.currentTarget.value)}
-              placeholder="Just chat… e.g. also remind me on Fridays"
-            />
-            <button type="submit" disabled={!chatInput.trim()}>Send</button>
-          </form>
-        </div>
-
-        <p className="builder-will">Manus will</p>
+        <p className="builder-will">What should it do</p>
         <textarea
           className="builder-task"
           rows={4}
           value={task}
           onChange={(e) => setTask(e.currentTarget.value)}
-          placeholder="Describe what Manus should do, e.g. summarize the latest AI news and send me the highlights"
+          placeholder="Describe what the automation should do, e.g. summarize the latest AI news and send me the highlights"
         />
         </>
         )}
@@ -301,11 +237,24 @@ export default function Builder(props: BuilderProps): React.JSX.Element {
         {error && <p role="alert" className="automations-error">{error}</p>}
         <div className="builder-foot">
           <div className="builder-chips">
-            {/* ponytail: static chips until the run-target picker lands */}
-            <button type="button" className="builder-circle" title="More options (later)">+</button>
-            <button type="button" className="builder-chip" title="Run target (later)"><LaptopIcon /> Manus Desktop</button>
-            <button type="button" className="builder-chip is-on" title="Run target (later)"><AutomationsIcon /> Automations</button>
-            <button type="button" className="builder-circle" title="Run options (later)"><SlidersIcon /></button>
+            <div className="builder-addwrap">
+              <button type="button" className="builder-circle" aria-label="Add connector or tool" aria-expanded={addOpen} onClick={() => setAddOpen((v) => !v)}>+</button>
+              {addOpen && (
+                <div className="picker-panel builder-addmenu" role="menu" aria-label="Add connector or tool">
+                  {TOOL_IDS.map((id: ActiveToolId) => (
+                    <button key={id} type="button" role="menuitemcheckbox" aria-checked={tools.includes(id)} className="picker-item" onClick={() => toggleTool(id)}>
+                      {tools.includes(id) ? '✓ ' : ''}{TOOL_META[id].label} — {TOOL_META[id].hint}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+            {tools.map((id) => (
+              <span key={id} className="builder-pill">
+                @{id}
+                <button type="button" aria-label={`Remove @${id}`} className="builder-pill-x" onClick={() => setTools((cur) => cur.filter((t) => t !== id))}>×</button>
+              </span>
+            ))}
           </div>
           <button type="submit" className="builder-create" disabled={!compiled.valid || busy} title={compiled.valid ? 'Create automation' : compiled.error}>
             {busy ? 'Creating…' : 'Create'}

@@ -17,8 +17,8 @@ describe('sidebar rail', () => {
   it('is always a thin icon rail with settings on the avatar', () => {
     const html = renderToStaticMarkup(createElement(ShellApp))
     expect(html).toContain('shell-frame is-collapsed')
-    expect(html).toContain('title="New chat"')
-    expect(html).toContain('title="Automations"')
+    expect(html).toContain('title="Automate"')
+    expect(html).not.toContain('title="New chat"')
     expect(html).toContain('Account menu for Local profile')
     expect(html).not.toContain('Expand sidebar')
     expect(html).not.toContain('Collapse sidebar')

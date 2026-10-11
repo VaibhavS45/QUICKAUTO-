@@ -351,6 +351,10 @@ export default function ShellApp(): React.JSX.Element {
     }))
   ], [router, threads])
 
+  const isCanvasView =
+    route.view === 'automations' &&
+    (parseAutomationTab(route.params['automationTab']) ?? 'manage') === 'canvas'
+
   return (
     <main className="shell-frame is-collapsed">
       <header className="shell-drag-strip" aria-label="Window title bar">
@@ -470,7 +474,7 @@ export default function ShellApp(): React.JSX.Element {
               <button type="button" onClick={() => { setChatError(''); setDashboardError('') }}>Dismiss</button>
             </div>
           )}
-          <div className={`shell-content${route.view === 'chat' ? ' has-chat-view' : ''}${!activeFeature && !activeChatId ? ' is-home' : ''}`}>
+          <div className={`shell-content${route.view === 'chat' ? ' has-chat-view' : ''}${!activeFeature && !activeChatId ? ' is-home' : ''}${activeFeature ? ' has-feature' : ''}${isCanvasView ? ' is-canvas-view' : ''}`}>
             {activeFeature ? (
               <FeatureContent feature={activeFeature} shell={shellApi} params={route.params} />
             ) : activeChatId ? (

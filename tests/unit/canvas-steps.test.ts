@@ -5,6 +5,7 @@ import {
   blankStep,
   canvasStepsForRoutine,
   canvasToPrompt,
+  compileCanvasToSchedulerText,
   defaultCanvasSteps,
   describeRoutine,
   edgePath,
@@ -23,7 +24,6 @@ describe('canvas steps', () => {
     expect(steps.map((s) => s.title)).toEqual(['Trigger', 'Action', 'Gmail', 'Action'])
     expect(steps[2]?.filled).toBe(true)
   })
-
   it('derives steps from a routine with tool apps', () => {
     const steps = canvasStepsForRoutine({ prompt: 'Email report', tools: ['gmail', 'sheets'], runAt: Date.now(), repeat: 'daily' })
     expect(steps[0]?.kind).toBe('trigger')
@@ -90,5 +90,13 @@ describe('canvas steps', () => {
     expect(describeRoutine({ prompt: 'x', tools: ['gmail', 'sheets'], runAt: Date.now(), repeat: 'daily' })).toMatch(/^Advanced/)
     expect(describeRoutine({ prompt: 'x', tools: ['gmail'], runAt: Date.now(), repeat: 'once' })).toMatch(/^Simple/)
     expect(blankStep('delay').title).toBe('Delay')
+  })
+
+  it('compiles canvas steps into scheduler-compatible routine text', () => {
+    const steps = defaultCanvasSteps()
+    const text = compileCanvasToSchedulerText(steps, 'Morning Briefing')
+    expect(text).toContain('Morning Briefing')
+    expect(text).toContain('at 9:00am')
+    expect(text).toContain('@gmail')
   })
 })

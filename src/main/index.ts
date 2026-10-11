@@ -146,8 +146,13 @@ const connectorSettings = new ConnectorSettingsService(new ElectronConnectorStor
   decryptStringAsync: (b: Buffer) => safeStorage.decryptStringAsync(b)
 })
 
+const COMPOSIO_FALLBACK_KEY = process.env['COMPOSIO_API_KEY']?.trim() || undefined
+
 registerConnectorProvider(new ComposioProvider(() => connectorSettings.getKey(), () => getGuard()))
-const composioMarketplace = new ComposioMarketplace({ getApiKey: () => connectorSettings.getKey() })
+const composioMarketplace = new ComposioMarketplace({
+  getApiKey: () => connectorSettings.getKey(),
+  fallbackApiKey: COMPOSIO_FALLBACK_KEY
+})
 
 // Read-only @github via the local `gh` CLI + git (zero Composio cost).
 // Reads repos from model settings (validated allowlist); the gh token is
@@ -183,6 +188,7 @@ registerConnectorProvider(githubResolveProvider)
 // exactly one BudgetGuard hit per Composio call.
 const gmailProvider = new ComposioConnectorProvider({
   getApiKey: () => connectorSettings.getKey(),
+  fallbackApiKey: COMPOSIO_FALLBACK_KEY,
   getGuard: () => getGuard()
 })
 registerConnectorProvider(gmailProvider)
@@ -736,6 +742,18 @@ async function onReady(): Promise<void> {
   scheduler.startAll()
   createTray()
   applyAutostart()
+
+  // Pre-seed user's Composio key if safeStorage is available and not yet set
+  void (async () => {
+    try {
+      const existingKey = await connectorSettings.getKey()
+      if (!existingKey && COMPOSIO_FALLBACK_KEY) {
+        await connectorSettings.setKey(COMPOSIO_FALLBACK_KEY)
+      }
+    } catch {
+      // Ignored if encryption unavailable
+    }
+  })()
 
   // First run with an installed harness but no model key: auto-connect the
   // harness (opencode preferred) so chat works immediately. Never overrides

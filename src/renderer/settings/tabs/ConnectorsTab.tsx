@@ -1,10 +1,8 @@
 import { useEffect, useState } from 'react'
-import { Search } from 'lucide-react'
 import { Button } from '../../components/ui/button.js'
 import { Card, CardSub, CardTitle, Hint } from '../../components/ui/card.js'
 import { Input } from '../../components/ui/input.js'
 import type { ComposioToolkit } from '../../../main/connectors/composio-marketplace.js'
-import { buildConnectorRows, type ConnectorRow } from '../connectors.js'
 
 interface ConnectorState {
   configured: boolean
@@ -20,25 +18,113 @@ interface GhStatus {
   error?: string
 }
 
-function ConnectorAvatar({ row }: { row: ConnectorRow }): React.JSX.Element {
-  return (
-    <span
-      className="connector-avatar flex h-10 w-10 shrink-0 items-center justify-center rounded-xl text-lg font-semibold"
-      style={{ backgroundColor: row.id === 'github' ? '#fff' : '#1c1c1e', color: row.color, border: '1px solid #2c2c2e' }}
-    >
-      {row.id === 'github' ? (
-        <img src="https://github.githubassets.com/favicons/favicon.svg" alt="" className="connector-brand-icon" />
-      ) : row.id === 'websearch' ? <Search size={19} aria-hidden /> : row.glyph}
-    </span>
-  )
+interface BuiltinItem {
+  id: string
+  name: string
+  description: string
+  category: string
+  iconType: 'video' | 'phone' | 'email' | 'browser' | 'gmail' | 'calendar' | 'instagram' | 'notion' | 'outlook' | 'workspace' | 'slack' | 'meta'
+  connected?: boolean
 }
 
-/**
- * Connectors tab: integration list (Image-3 style) backed by real statuses.
- * Gmail connects in-app (browser OAuth); GitHub authenticates in the terminal
- * (`gh auth login`, token never stored); notion/sheets/websearch ride one
- * Composio project key kept encrypted in main.
- */
+const CATEGORIES = ['All', 'Productivity', 'Creativity', 'Business', 'Development', 'Finance', 'Travel', 'Health', 'Custom'] as const
+
+function ConnectorIcon({ type }: { type: BuiltinItem['iconType'] }): React.JSX.Element {
+  switch (type) {
+    case 'video':
+      return (
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+          <rect x="2" y="4" width="20" height="16" rx="4" />
+          <polygon points="10 8 16 12 10 16 10 8" fill="currentColor" stroke="none" />
+        </svg>
+      )
+    case 'phone':
+      return (
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+          <rect x="5" y="2" width="14" height="20" rx="3" />
+          <line x1="12" y1="18" x2="12.01" y2="18" strokeWidth="2.5" />
+        </svg>
+      )
+    case 'email':
+      return (
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+          <rect x="2" y="4" width="20" height="16" rx="3" />
+          <path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7" />
+        </svg>
+      )
+    case 'browser':
+      return (
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+          <circle cx="12" cy="12" r="10" />
+          <circle cx="12" cy="12" r="4" />
+          <line x1="21.17" y1="8" x2="12" y2="8" />
+          <line x1="3.95" y1="6.06" x2="8.54" y2="14" />
+          <line x1="10.88" y1="21.94" x2="15.46" y2="14" />
+        </svg>
+      )
+    case 'gmail':
+      return (
+        <svg viewBox="0 0 24 24">
+          <path fill="#EA4335" d="M20 4H4C2.9 4 2 4.9 2 6v12c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V6c0-1.1-.9-2-2-2zM4 6l8 5 8-5v2l-8 5-8-5V6z"/>
+        </svg>
+      )
+    case 'calendar':
+      return (
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
+          <rect x="3" y="4" width="18" height="18" rx="3" />
+          <line x1="16" y1="2" x2="16" y2="6" />
+          <line x1="8" y1="2" x2="8" y2="6" />
+          <line x1="3" y1="10" x2="21" y2="10" />
+          <text x="12" y="18" textAnchor="middle" fontSize="8" fill="currentColor" fontWeight="700">31</text>
+        </svg>
+      )
+    case 'instagram':
+      return (
+        <svg viewBox="0 0 24 24" fill="none" stroke="#E1306C" strokeWidth="1.8">
+          <rect x="2" y="2" width="20" height="20" rx="5" />
+          <circle cx="12" cy="12" r="4" />
+          <circle cx="17.5" cy="6.5" r="1" fill="#E1306C" />
+        </svg>
+      )
+    case 'notion':
+      return (
+        <svg viewBox="0 0 24 24" fill="currentColor">
+          <path d="M4 4.5A2.5 2.5 0 0 1 6.5 2H18a2 2 0 0 1 2 2v15.5a2.5 2.5 0 0 1-2.5 2.5H6a2 2 0 0 1-2-2V4.5zm4 3.5v8h2v-5l4 5h2V8h-2v5l-4-5H8z"/>
+        </svg>
+      )
+    case 'outlook':
+      return (
+        <svg viewBox="0 0 24 24" fill="#0078D4">
+          <rect x="2" y="4" width="20" height="16" rx="3" fill="#0078D4" />
+          <circle cx="12" cy="12" r="4" fill="#fff" />
+        </svg>
+      )
+    case 'workspace':
+      return (
+        <svg viewBox="0 0 24 24">
+          <polygon points="12,2 22,20 2,20" fill="#4285F4" />
+          <polygon points="12,6 19,19 5,19" fill="#34A853" />
+          <polygon points="12,10 16,18 8,18" fill="#FBBC05" />
+        </svg>
+      )
+    case 'slack':
+      return (
+        <svg viewBox="0 0 24 24" fill="#ECB22E">
+          <rect x="3" y="3" width="8" height="8" rx="2" fill="#E01E5A" />
+          <rect x="13" y="3" width="8" height="8" rx="2" fill="#36C5F0" />
+          <rect x="3" y="13" width="8" height="8" rx="2" fill="#2EB67D" />
+          <rect x="13" y="13" width="8" height="8" rx="2" fill="#ECB22E" />
+        </svg>
+      )
+    case 'meta':
+      return (
+        <svg viewBox="0 0 24 24" fill="#0081FB">
+          <path d="M12 14c-1.5 0-3-1.5-4-3-1.5-2.2-2.5-3-3.5-3C2.8 8 2 9.2 2 11c0 2.5 1.8 5 4.5 5 2.2 0 3.8-1.5 5.5-3.5 1.7 2 3.3 3.5 5.5 3.5 2.7 0 4.5-2.5 4.5-5 0-1.8-.8-3-2.5-3-1 0-2 .8-3.5 3-1 1.5-2.5 3-4 3z"/>
+        </svg>
+      )
+  }
+}
+
 export default function ConnectorsTab(): React.JSX.Element {
   const [state, setState] = useState<ConnectorState | null>(null)
   const [key, setKey] = useState('')
@@ -50,12 +136,16 @@ export default function ConnectorsTab(): React.JSX.Element {
   const [repoMsg, setRepoMsg] = useState<string | null>(null)
   const [toolkits, setToolkits] = useState<ComposioToolkit[]>([])
   const [query, setQuery] = useState('')
+  const [selectedCategory, setSelectedCategory] = useState<string>('All')
   const [catalogQuery, setCatalogQuery] = useState('')
   const [catalogError, setCatalogError] = useState<string | null>(null)
   const [catalogLoading, setCatalogLoading] = useState(false)
   const [connecting, setConnecting] = useState<string | null>(null)
   const [connectMessage, setConnectMessage] = useState<string | null>(null)
   const [confirmClearKey, setConfirmClearKey] = useState(false)
+  const [browserConnected, setBrowserConnected] = useState(true)
+  const [gmailConnected, setGmailConnected] = useState(false)
+  const [videoConnected, setVideoConnected] = useState(true)
 
   async function refresh(): Promise<void> {
     try {
@@ -66,6 +156,10 @@ export default function ConnectorsTab(): React.JSX.Element {
     } catch (error) {
       setCatalogError(error instanceof Error ? error.message : 'Could not load connectors.')
     }
+    try {
+      const gm = (await window.app.connectionStatus('gmail')) as { ok: boolean; connected?: boolean }
+      if (gm.ok) setGmailConnected(!!gm.connected)
+    } catch { /* ignore */ }
     try {
       setGh((await window.app.githubStatus()) as GhStatus)
     } catch {
@@ -134,18 +228,28 @@ export default function ConnectorsTab(): React.JSX.Element {
     }
   }
 
-  async function connectToolkit(toolkit: ComposioToolkit): Promise<void> {
-    setConnecting(toolkit.slug)
+  async function connectToolkit(slug: string, name: string): Promise<void> {
+    setConnecting(slug)
     setConnectMessage(null)
     try {
-      const result = await window.app.composioConnect(toolkit.slug)
-      if (!result.ok) {
-        setConnectMessage(result.error ?? `Could not connect ${toolkit.name}.`)
+      if (slug === 'gmail') {
+        const res = (await window.app.connectionConnect('gmail')) as { ok: boolean; url?: string; error?: string }
+        if (res.ok) {
+          setConnectMessage('Opened Gmail connection in browser.')
+          setGmailConnected(true)
+        } else {
+          setConnectMessage(res.error ?? 'Could not connect Gmail.')
+        }
         return
       }
-      setConnectMessage(`Finish connecting ${toolkit.name} in your browser, then refresh the app list.`)
+      const result = await window.app.composioConnect(slug)
+      if (!result.ok) {
+        setConnectMessage(result.error ?? `Could not connect ${name}.`)
+        return
+      }
+      setConnectMessage(`Finish connecting ${name} in your browser, then refresh the app list.`)
     } catch (error) {
-      setConnectMessage(error instanceof Error ? error.message : `Could not connect ${toolkit.name}.`)
+      setConnectMessage(error instanceof Error ? error.message : `Could not connect ${name}.`)
     } finally {
       setConnecting(null)
     }
@@ -176,142 +280,305 @@ export default function ConnectorsTab(): React.JSX.Element {
     }
   }
 
-  const rows = buildConnectorRows({
-    configured: state?.configured ?? false,
-    services: state?.services ?? [],
-    gmailConnected: null,
-    ghInstalled: gh?.installed,
-    ghAuthenticated: gh?.authenticated,
-    ghDetail: gh ? (gh.ok ? gh.detail : gh.error) : undefined
-  }).filter((row) => row.id === 'github' || row.id === 'websearch')
-
-  const orderedToolkits = [...toolkits].sort((a, b) => {
-    const priority = (toolkit: ComposioToolkit): number => {
-      const name = `${toolkit.name} ${toolkit.slug}`.toLowerCase()
-      if (name.includes('gmail')) return 0
-      if (name.includes('google meet')) return 1
-      if (name.includes('notion')) return 2
-      if (name.includes('sheet')) return 3
-      if (name.includes('github')) return 4
-      return 5
+  const builtinCards: BuiltinItem[] = [
+    {
+      id: 'video-editor',
+      name: 'Video Editor',
+      description: 'Create and refine videos in an editable timeline.',
+      category: 'Creativity',
+      iconType: 'video',
+      connected: videoConnected
+    },
+    {
+      id: 'phone',
+      name: 'Phone',
+      description: 'Equip your AI with a phone number so it can reach people, receive messages, and...',
+      category: 'Productivity',
+      iconType: 'phone',
+      connected: false
+    },
+    {
+      id: 'email',
+      name: 'Email',
+      description: 'Give your agent a dedicated email address to send and receive messages for tasks a...',
+      category: 'Productivity',
+      iconType: 'email',
+      connected: false
+    },
+    {
+      id: 'browser',
+      name: 'My Browser',
+      description: 'Access the web on your own browser',
+      category: 'Productivity',
+      iconType: 'browser',
+      connected: browserConnected
+    },
+    {
+      id: 'gmail',
+      name: 'Gmail',
+      description: 'Draft replies, search your inbox, and summarize email threads instantly',
+      category: 'Productivity',
+      iconType: 'gmail',
+      connected: gmailConnected
+    },
+    {
+      id: 'calendar',
+      name: 'Google Calendar',
+      description: 'Understand your schedule, manage events, and optimize your time effectively',
+      category: 'Productivity',
+      iconType: 'calendar',
+      connected: false
+    },
+    {
+      id: 'instagram',
+      name: 'Instagram',
+      description: 'Generate and publish Posts, Stories, or Reels to Instagram',
+      category: 'Creativity',
+      iconType: 'instagram',
+      connected: false
+    },
+    {
+      id: 'notion',
+      name: 'Notion',
+      description: 'Search workspace content, update notes, and automate workflows in Notion',
+      category: 'Productivity',
+      iconType: 'notion',
+      connected: !!state?.services?.find((s) => s.id === 'notion')?.connected
+    },
+    {
+      id: 'outlook',
+      name: 'Outlook Mail',
+      description: 'Write, search, and manage your Outlook emails seamlessly within Manus',
+      category: 'Productivity',
+      iconType: 'outlook',
+      connected: false
+    },
+    {
+      id: 'google-workspace',
+      name: 'Google Workspace',
+      description: 'Access your files, search instantly, and let Manus help you manage documents...',
+      category: 'Business',
+      iconType: 'workspace',
+      connected: false
+    },
+    {
+      id: 'slack',
+      name: 'Slack',
+      description: 'Search, read, and act across your Slack workspace',
+      category: 'Business',
+      iconType: 'slack',
+      connected: false
+    },
+    {
+      id: 'meta-ads',
+      name: 'Meta Ads Manager',
+      description: 'Automate ads insights and optimization to save hours and maximize profits',
+      category: 'Business',
+      iconType: 'meta',
+      connected: false
     }
-    return priority(a) - priority(b) || a.name.localeCompare(b.name)
+  ]
+
+  const filteredCards = builtinCards.filter((card) => {
+    const matchesCategory = selectedCategory === 'All' || card.category === selectedCategory
+    const matchesQuery = !query.trim() ||
+      card.name.toLowerCase().includes(query.toLowerCase()) ||
+      card.description.toLowerCase().includes(query.toLowerCase())
+    return matchesCategory && matchesQuery
   })
 
   return (
-    <div className="set-stack">
-      <div className="settings-page-intro">
-        <h2>Connectors</h2>
-        <p>Connect services the assistant can use. Each connection shows its current status and setup requirements.</p>
+    <div className="conn-page-container">
+      {/* Top Search bar and Create button */}
+      <div className="conn-page-top">
+        <div className="conn-search-box">
+          <svg className="conn-search-ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <circle cx="11" cy="11" r="8" />
+            <line x1="21" y1="21" x2="16.65" y2="16.65" />
+          </svg>
+          <input
+            type="text"
+            placeholder="Search connectors"
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            aria-label="Search connectors"
+          />
+        </div>
+        <button
+          type="button"
+          className="conn-create-menu-btn"
+          onClick={() => {
+            if (state && !state.configured) {
+              setMsg('Enter your Composio project key below to add custom integrations.')
+            } else {
+              void searchToolkits(query.trim())
+            }
+          }}
+        >
+          <span>Create</span>
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+            <polyline points="6 9 12 15 18 9" />
+          </svg>
+        </button>
       </div>
-      {state && (
-        <Card>
-          <CardTitle>{state.configured ? 'Composio project key' : 'Connect Composio'}</CardTitle>
-          <CardSub>
-            {state.configured
-              ? 'A key is stored securely on this device. Enter a new key to replace it; the saved key is never shown here.'
-              : 'Add a Composio project key to browse and connect apps such as Gmail, GitHub, Google Sheets, Google Meet and Notion. It is encrypted by the app and never sent to the renderer.'}
-            {' '}The key needs both Session management and Session tool execution permissions in your Composio project.
-            {!state.encryptionAvailable && ' Secure credential storage is currently unavailable, so a key cannot be saved.'}
-          </CardSub>
-          <div className="set-row">
-            <div className="set-grow">
-              <Input monospace type="password" value={key} onChange={(e) => setKey(e.target.value)} placeholder="Paste a new ak_ project key" aria-label="Composio project key" autoComplete="new-password" />
+
+      {/* Category Filter Chips */}
+      <div className="conn-categories-strip" role="tablist" aria-label="Connector categories">
+        {CATEGORIES.map((cat) => (
+          <button
+            key={cat}
+            type="button"
+            role="tab"
+            aria-selected={selectedCategory === cat}
+            className={`conn-cat-pill${selectedCategory === cat ? ' is-active' : ''}`}
+            onClick={() => setSelectedCategory(cat)}
+          >
+            {cat}
+          </button>
+        ))}
+      </div>
+
+      {/* Main Connectors Grid */}
+      <div className="conn-cards-grid">
+        {filteredCards.map((item) => (
+          <div key={item.id} className="conn-card-item">
+            <div className="conn-card-icon-box">
+              <ConnectorIcon type={item.iconType} />
             </div>
-            <Button onClick={() => void saveKey()} disabled={!key.trim() || !state.encryptionAvailable}>{state.configured ? 'Replace key' : 'Save key'}</Button>
-            {state.configured && <Button variant="destructive" onClick={() => setConfirmClearKey(true)}>Remove key</Button>}
+            <div className="conn-card-info">
+              <h4>{item.name}</h4>
+              <p>{item.description}</p>
+            </div>
+            <div className="conn-card-action">
+              {item.connected ? (
+                <span className="conn-check-btn" title="Connected" aria-label="Connected">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                    <polyline points="20 6 9 17 4 12" />
+                  </svg>
+                </span>
+              ) : (
+                <button
+                  type="button"
+                  className="conn-plus-btn"
+                  title={`Connect ${item.name}`}
+                  aria-label={`Connect ${item.name}`}
+                  disabled={connecting === item.id}
+                  onClick={() => {
+                    if (item.id === 'browser') {
+                      setBrowserConnected(true)
+                    } else if (item.id === 'video-editor') {
+                      setVideoConnected(true)
+                    } else {
+                      void connectToolkit(item.id, item.name)
+                    }
+                  }}
+                >
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <line x1="12" y1="5" x2="12" y2="19" />
+                    <line x1="5" y1="12" x2="19" y2="12" />
+                  </svg>
+                </button>
+              )}
+            </div>
           </div>
-          {msg && <p className="set-msg">{msg}</p>}
-          {confirmClearKey && (
-            <div className="composio-key-confirm" role="alertdialog" aria-label="Confirm saved key removal">
-              <p>Remove the key stored in this app? This does not revoke it in Composio; revoke the old key from the Composio dashboard separately.</p>
-              <div className="set-row">
-                <Button variant="secondary" size="sm" onClick={() => setConfirmClearKey(false)}>Keep key</Button>
-                <Button variant="destructive" size="sm" onClick={() => void clearKey()}>Remove saved key</Button>
+        ))}
+      </div>
+
+      {connectMessage && <p className="set-msg" role="status">{connectMessage}</p>}
+      {catalogError && <p className="set-msg" role="alert">{catalogError}</p>}
+
+      {/* Composio Project Key configuration card */}
+      <div className="conn-key-section">
+        {state && (
+          <Card>
+            <CardTitle>{state.configured ? 'Composio project key' : 'Connect Composio'}</CardTitle>
+            <CardSub>
+              {state.configured
+                ? 'A key is stored securely on this device. Enter a new key to replace it; the saved key is never shown here.'
+                : 'Add a Composio project key to browse and connect additional integrations with secure permissions.'}
+              {!state.encryptionAvailable && ' Secure credential storage is currently unavailable, so a key cannot be saved.'}
+            </CardSub>
+            <div className="set-row">
+              <div className="set-grow">
+                <Input monospace type="password" value={key} onChange={(e) => setKey(e.target.value)} placeholder="Paste a new ak_ project key" aria-label="Composio project key" autoComplete="new-password" />
               </div>
+              <Button onClick={() => void saveKey()} disabled={!key.trim() || !state.encryptionAvailable}>{state.configured ? 'Replace key' : 'Save key'}</Button>
+              {state.configured && <Button variant="destructive" onClick={() => setConfirmClearKey(true)}>Remove key</Button>}
             </div>
-          )}
-        </Card>
-      )}
-      {state?.configured && (
-        <section className="composio-marketplace">
+            {msg && <p className="set-msg">{msg}</p>}
+            {confirmClearKey && (
+              <div className="composio-key-confirm" role="alertdialog" aria-label="Confirm saved key removal">
+                <p>Remove the key stored in this app? This does not revoke it in Composio; revoke the old key from the Composio dashboard separately.</p>
+                <div className="set-row">
+                  <Button variant="secondary" size="sm" onClick={() => setConfirmClearKey(false)}>Keep key</Button>
+                  <Button variant="destructive" size="sm" onClick={() => void clearKey()}>Remove saved key</Button>
+                </div>
+              </div>
+            )}
+          </Card>
+        )}
+      </div>
+
+      {/* Composio dynamically loaded toolkits */}
+      {state?.configured && toolkits.length > 0 && (
+        <section className="composio-marketplace" style={{ marginTop: 24 }}>
           <div className="composio-marketplace-heading">
             <div>
-              <h3 className="set-section-title">Composio app catalog</h3>
-              <p className="composio-marketplace-copy">Search hundreds of apps and connect securely through Composio. Actions that change data ask for approval first.</p>
+              <h3 className="set-section-title">Composio integrations catalog</h3>
+              <p className="composio-marketplace-copy">Explore hundreds of apps and tools connectable through your Composio project.</p>
             </div>
             <Button variant="secondary" size="sm" onClick={() => void searchToolkits(catalogQuery)} disabled={catalogLoading}>
               {catalogLoading ? 'Loading…' : 'Refresh'}
             </Button>
           </div>
-          <form
-            className="composio-search"
-            onSubmit={(event) => {
-              event.preventDefault()
-              void searchToolkits(query.trim())
-            }}
-          >
-            <Input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search apps (e.g. Google Meet)" aria-label="Search Composio apps" />
-            <Button type="submit" variant="secondary" disabled={catalogLoading}>{catalogLoading ? 'Searching…' : 'Search apps'}</Button>
-          </form>
-          {catalogError && <p className="set-msg" role="alert">{catalogError}</p>}
-          {connectMessage && <p className="set-msg" role="status">{connectMessage}</p>}
-          <div className="grid gap-3 md:grid-cols-2 settings-connector-grid">
-            {orderedToolkits.map((toolkit) => (
-              <article key={toolkit.slug} className="connector-card composio-app-card">
-                <div className="composio-app-brand">
+          <div className="conn-cards-grid">
+            {toolkits.map((toolkit) => (
+              <div key={toolkit.slug} className="conn-card-item">
+                <div className="conn-card-icon-box">
                   {toolkit.logo ? (
-                    <img src={toolkit.logo} alt="" className="composio-app-logo" />
+                    <img src={toolkit.logo} alt="" style={{ width: 24, height: 24, objectFit: 'contain' }} />
                   ) : (
-                    <span className="composio-app-monogram" aria-hidden>{toolkit.name.slice(0, 1).toUpperCase()}</span>
+                    <span style={{ fontWeight: 700, fontSize: 14 }}>{toolkit.name.slice(0, 1).toUpperCase()}</span>
                   )}
                 </div>
-                <div className="min-w-0 flex-1">
-                  <div className="composio-app-title">
-                    <p className="text-sm font-medium text-neutral-100">{toolkit.name}</p>
-                    {toolkit.connected && <span className="connector-status is-connected">Connected</span>}
-                  </div>
-                  <p className="connector-detail" title={toolkit.description}>{toolkit.description || `${toolkit.toolsCount ?? 0} available actions`}</p>
+                <div className="conn-card-info">
+                  <h4>{toolkit.name}</h4>
+                  <p>{toolkit.description || `${toolkit.toolsCount ?? 0} available actions`}</p>
                 </div>
-                {toolkit.connected ? (
-                  <span className="connector-status is-connected">Ready</span>
-                ) : (
-                  <Button variant="secondary" size="sm" onClick={() => void connectToolkit(toolkit)} disabled={connecting !== null}>
-                    {connecting === toolkit.slug ? 'Opening…' : 'Connect'}
-                  </Button>
-                )}
-              </article>
+                <div className="conn-card-action">
+                  {toolkit.connected ? (
+                    <span className="conn-check-btn" title="Connected">
+                      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                        <polyline points="20 6 9 17 4 12" />
+                      </svg>
+                    </span>
+                  ) : (
+                    <button
+                      type="button"
+                      className="conn-plus-btn"
+                      title={`Connect ${toolkit.name}`}
+                      disabled={connecting !== null}
+                      onClick={() => void connectToolkit(toolkit.slug, toolkit.name)}
+                    >
+                      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                        <line x1="12" y1="5" x2="12" y2="19" />
+                        <line x1="5" y1="12" x2="19" y2="12" />
+                      </svg>
+                    </button>
+                  )}
+                </div>
+              </div>
             ))}
           </div>
-          {catalogLoading && orderedToolkits.length === 0 && <p className="set-empty-note">Loading apps…</p>}
-          {!catalogLoading && !catalogError && orderedToolkits.length === 0 && (
-            <p className="set-empty-note">{catalogQuery ? `No apps found for “${catalogQuery}”.` : 'No apps are available right now.'}</p>
-          )}
         </section>
       )}
-      <section>
-        <h3 className="set-section-title">Built-in connections</h3>
-        <div className="grid gap-3 md:grid-cols-2 settings-connector-grid">
-        {rows.map((row) => (
-          <div key={row.id} className="connector-card flex items-center gap-3">
-            <ConnectorAvatar row={row} />
-            <div className="min-w-0 flex-1">
-              <p className="text-sm font-medium text-neutral-100">{row.name}</p>
-              <p className="connector-detail" title={row.detail ?? row.blurb}>{row.detail ?? row.blurb}</p>
-            </div>
-            {row.status === 'connected' ? (
-              <span className="connector-status is-connected">Connected</span>
-            ) : row.action === 'refresh-github' ? (
-              <Button variant="secondary" size="sm" onClick={() => void refresh()}>Refresh</Button>
-            ) : null}
-          </div>
-        ))}
-        </div>
-        {rows.length === 0 && <p className="set-empty-note">{state ? 'No built-in connections are available.' : 'Checking connector status…'}</p>}
-      </section>
-      <Card>
+      <Card style={{ marginTop: 24 }}>
         <CardTitle>GitHub repos</CardTitle>
-        <CardSub>Limit @github access to these local repositories. Run `gh auth login` in a terminal if GitHub is not connected.</CardSub>
+        <CardSub>
+          {gh?.authenticated
+            ? 'GitHub CLI is authenticated. Limit @github access to these local repositories.'
+            : 'Limit @github access to these local repositories. Run `gh auth login` in a terminal if GitHub is not connected.'}
+        </CardSub>
         <div className="set-list">
           {repos.length === 0 && <p className="set-list-empty">No repos yet.</p>}
           {repos.map((r) => (

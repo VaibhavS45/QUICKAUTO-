@@ -24,14 +24,49 @@ interface LocalProfile {
 
 function Icon({ name }: { name: string }): React.JSX.Element {
   const paths: Record<string, React.ReactNode> = {
-    automation: <><rect x="3" y="5" width="18" height="16" rx="2" /><path d="M16 3v4M8 3v4M3 10h18" /></>,
-    bell: <><path d="M18 8a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9M10 21h4" /></>,
-    updates: <path d="M22 12h-4l-3 9L9 3l-3 9H2" />,
-    manage: <><rect x="3" y="3" width="7" height="7" rx="1" /><rect x="14" y="3" width="7" height="7" rx="1" /><rect x="3" y="14" width="7" height="7" rx="1" /><rect x="14" y="14" width="7" height="7" rx="1" /></>,
-    canvas: <><circle cx="6" cy="6" r="2.5" /><circle cx="18" cy="6" r="2.5" /><circle cx="12" cy="18" r="2.5" /><path d="M8 7.5l2.5 8M16 7.5l-2.5 8M8.5 6h7" /></>
+    // Top nav: Calendar / Routine trigger
+    automation: (
+      <>
+        <rect x="3" y="4" width="18" height="17" rx="3" strokeWidth="1.6" />
+        <path d="M16 2v4M8 2v4M3 9.5h18" strokeWidth="1.6" />
+        <circle cx="8" cy="14" r="1" fill="currentColor" stroke="none" />
+        <circle cx="12" cy="14" r="1" fill="currentColor" stroke="none" />
+        <circle cx="16" cy="14" r="1" fill="currentColor" stroke="none" />
+      </>
+    ),
+    bell: (
+      <>
+        <path d="M18 8A6 6 0 0 0 6 8c0 7-3 8-3 9h18c0-1-3-2-3-9" strokeWidth="1.6" />
+        <path d="M10.3 21a1.9 1.9 0 0 0 3.4 0" strokeWidth="1.6" />
+      </>
+    ),
+    // Updates tab: Pulse / activity wave
+    updates: (
+      <>
+        <path d="M3 12h3.5l3-7.5 4.5 15 3-7.5H21" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" />
+      </>
+    ),
+    // Manage tab: 4 rounded squares (apps/dashboard grid)
+    manage: (
+      <>
+        <rect x="3.5" y="3.5" width="6.5" height="6.5" rx="2" strokeWidth="1.6" />
+        <rect x="14" y="3.5" width="6.5" height="6.5" rx="2" strokeWidth="1.6" />
+        <rect x="3.5" y="14" width="6.5" height="6.5" rx="2" strokeWidth="1.6" />
+        <rect x="14" y="14" width="6.5" height="6.5" rx="2" strokeWidth="1.6" />
+      </>
+    ),
+    // Canvas tab: Connected workflow nodes (network diagram)
+    canvas: (
+      <>
+        <circle cx="12" cy="5" r="2.5" strokeWidth="1.6" />
+        <circle cx="5" cy="18" r="2.5" strokeWidth="1.6" />
+        <circle cx="19" cy="18" r="2.5" strokeWidth="1.6" />
+        <path d="M10.5 7.2L6.5 15.8M13.5 7.2l4 8.6" strokeWidth="1.5" />
+      </>
+    )
   }
   return (
-    <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round">
+    <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
       {paths[name] ?? <circle cx="12" cy="12" r="8" />}
     </svg>
   )
@@ -359,6 +394,7 @@ export default function ShellApp(): React.JSX.Element {
                   aria-current={active ? 'page' : undefined}
                   aria-label={tab.label}
                   title={tab.label}
+                  data-tooltip={tab.label}
                   onClick={() => navigate('automations', { automationTab: tab.id })}
                 >
                   <Icon name={tab.icon} />

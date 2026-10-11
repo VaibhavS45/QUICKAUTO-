@@ -119,6 +119,7 @@ export const GMAIL_WRITE_PROMPT = [
 
 export interface ComposioDeps {
   getApiKey: () => Promise<string | null>
+  fallbackApiKey?: string
   getGuard: () => BudgetGuard
   /** Injected in tests; production builds the real SDK client. */
   createClient?: (apiKey: string) => ComposioClientLike
@@ -228,7 +229,7 @@ export class ComposioConnectorProvider implements ConnectorProvider {
   constructor(private readonly deps: ComposioDeps) {}
 
   private async client(): Promise<ComposioClientLike | null> {
-    const key = await this.deps.getApiKey()
+    const key = (await this.deps.getApiKey()) || this.deps.fallbackApiKey || null
     if (!key) return null
     try {
       return this.deps.createClient ? this.deps.createClient(key) : realClient(key)

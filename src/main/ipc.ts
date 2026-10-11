@@ -44,6 +44,7 @@ export const IpcChannels = {
   routineCreate: 'routine:create',
   routineRemove: 'routine:remove',
   routineToggle: 'routine:toggle',
+  routineUpdate: 'routine:update',
   getProfile: 'settings:get-profile',
   setProfile: 'settings:set-profile',
   getAppBehavior: 'app:get-behavior',
@@ -112,6 +113,15 @@ export const RoutineIdSchema = z.object({
 export const RoutineToggleSchema = z.object({
   id: z.string().min(1).max(128),
   enabled: z.boolean()
+})
+
+export const RoutineUpdateSchema = z.object({
+  id: z.string().min(1).max(128),
+  prompt: z.string().min(1).max(20000).optional(),
+  repeat: z.enum(['once', 'daily', 'weekdays']).optional(),
+  runAt: z.number().int().positive().optional(),
+  tools: z.array(z.string()).max(16).optional(),
+  enabled: z.boolean().optional()
 })
 
 export {

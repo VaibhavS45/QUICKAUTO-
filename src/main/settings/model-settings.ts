@@ -15,6 +15,7 @@ export const ModelProviderSchema = z.enum([
   "anthropic",
   "openai",
   "openai-compatible",
+  "google",
 ]);
 export type ModelProvider = z.infer<typeof ModelProviderSchema>;
 

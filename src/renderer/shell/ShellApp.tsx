@@ -172,6 +172,30 @@ export default function ShellApp(): React.JSX.Element {
   }, [])
 
   useEffect(() => {
+    if (!profileMenuOpen && !notificationsOpen) return
+    const onPointerDown = (event: PointerEvent): void => {
+      const target = event.target as HTMLElement | null
+      if (!target) return
+      if (target.closest('.shell-profile-menu, .shell-profile-button, .shell-notifications-panel, .shell-notifications-button')) {
+        return
+      }
+      setProfileMenuOpen(false)
+      setNotificationsOpen(false)
+    }
+    const onKeyDown = (event: KeyboardEvent): void => {
+      if (event.key !== 'Escape') return
+      setProfileMenuOpen(false)
+      setNotificationsOpen(false)
+    }
+    window.addEventListener('pointerdown', onPointerDown)
+    window.addEventListener('keydown', onKeyDown)
+    return () => {
+      window.removeEventListener('pointerdown', onPointerDown)
+      window.removeEventListener('keydown', onKeyDown)
+    }
+  }, [profileMenuOpen, notificationsOpen])
+
+  useEffect(() => {
     const unsubscribe = router.subscribe(setRoute)
     const onKeyDown = (event: KeyboardEvent): void => {
       if (!event.metaKey && !event.ctrlKey) return

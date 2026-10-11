@@ -95,6 +95,18 @@ describe('Scheduler store', () => {
     expect(s.list()).toHaveLength(1)
   })
 
+  it('creates from "When: every day at 10:00am. weather in bangalore. @websearch"', () => {
+    const s = new Scheduler(new MemoryRoutineStore(), { fire: () => {} })
+    const r = s.create('When: every day at 10:00am. weather in bangalore. @websearch', BASE)
+    expect(r.repeat).toBe('daily')
+    expect(r.tools).toContain('websearch')
+    expect(r.prompt).toBe('weather in bangalore. @websearch')
+    const fireDate = new Date(r.runAt)
+    expect(fireDate.getHours()).toBe(10)
+    expect(fireDate.getMinutes()).toBe(0)
+    expect(s.list()).toHaveLength(1)
+  })
+
   it('throws when no time or no task', () => {
     const s = new Scheduler(new MemoryRoutineStore(), { fire: () => {} })
     expect(() => s.create('@notion just do stuff', BASE)).toThrow(/No time/)

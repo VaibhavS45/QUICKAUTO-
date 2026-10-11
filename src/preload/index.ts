@@ -134,6 +134,8 @@ const api = {
   routineCreate: (text: string) => ipcRenderer.invoke('routine:create', { text }),
   routineRemove: (id: string) => ipcRenderer.invoke('routine:remove', { id }),
   routineToggle: (id: string, enabled: boolean) => ipcRenderer.invoke('routine:toggle', { id, enabled }),
+  routineUpdate: (id: string, patch: { prompt?: string; repeat?: string; runAt?: number; tools?: string[]; enabled?: boolean }) =>
+    ipcRenderer.invoke('routine:update', { id, ...patch }),
   getProfile: (): Promise<{ name: string; email: string; about: string; language: string }> =>
     ipcRenderer.invoke('settings:get-profile'),
   setProfile: (p: { name: string; email: string; about: string; language: string }) =>

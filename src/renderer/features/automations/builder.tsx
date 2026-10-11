@@ -2,7 +2,6 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { TOOL_IDS, TOOL_META, type ActiveToolId } from '../../../shared/types.js'
 import { GMAIL_EVENTS } from './trigger-events.js'
 import { draftToText, makeTriggerId, type BuilderDraft, type BuilderRepeat, type BuilderTrigger } from './builder-compile.js'
-import type { AgentEvent } from '../../../shared/agent.js'
 import type { RunRecord } from '../../../shared/contracts/schedule.js'
 import BuilderConnectorPopover from './BuilderConnectorPopover.js'
 import './automations.css'
@@ -97,17 +96,39 @@ export default function Builder(props: BuilderProps): React.JSX.Element {
   const [openRepeatId, setOpenRepeatId] = useState<string | null>(null)
   const [openTimeId, setOpenTimeId] = useState<string | null>(null)
   const [connectorMenuOpen, setConnectorMenuOpen] = useState(false)
+  const [agentMenuOpen, setAgentMenuOpen] = useState(false)
+  const [activeProvider, setActiveProvider] = useState<string>('builtin')
+  const [activeModel, setActiveModel] = useState<string>('')
+  const [keySet, setKeySet] = useState<boolean>(false)
+  const [availableHarnesses, setAvailableHarnesses] = useState<Array<{ id: string; installed: boolean }>>([])
 
-  // OpenCode ACP Execution State
-  const [working, setWorking] = useState(false)
-  const [currentRunId, setCurrentRunId] = useState('')
-  const [streamedResponse, setStreamedResponse] = useState('')
-  const [activeToolEvents, setActiveToolEvents] = useState<string[]>([])
-  const [runDone, setRunDone] = useState(false)
-  const [copied, setCopied] = useState(false)
+  useEffect(() => {
+    let active = true
+    async function loadAgentInfo(): Promise<void> {
+      try {
+        const [p, m, h] = await Promise.all([
+          window.app.getAgentProvider() as Promise<{ ok: boolean; provider?: string }>,
+          window.app.getModelSettings() as Promise<{ provider: string; model: string; keySet: boolean }>,
+          window.app.detectHarnesses() as Promise<{ ok: boolean; harnesses?: Array<{ id: string; installed: boolean }> }>
+        ])
+        if (!active) return
+        if (p.ok && p.provider) setActiveProvider(p.provider)
+        if (m) {
+          setActiveModel(m.model || '')
+          setKeySet(Boolean(m.keySet))
+        }
+        if (h.ok && h.harnesses) {
+          setAvailableHarnesses(h.harnesses)
+        }
+      } catch {
+        // Fallback gracefully
+      }
+    }
+    void loadAgentInfo()
+    return () => { active = false }
+  }, [])
 
   const fileInputRef = useRef<HTMLInputElement>(null)
-  const unsubRef = useRef<(() => void) | null>(null)
 
   const compiled = useMemo(
     () => draftToText(mode === 'describe'
@@ -116,66 +137,14 @@ export default function Builder(props: BuilderProps): React.JSX.Element {
     [mode, props.initial.title, triggers, task, describe, tools]
   )
 
-  useEffect(() => {
-    return () => {
-      if (unsubRef.current) unsubRef.current()
-    }
-  }, [])
-
-  // Listen for agent events during run
-  useEffect(() => {
-    if (!working || !currentRunId) return
-
-    const unsub = window.app.onAgentEvent((event: AgentEvent) => {
-      if (event.runId !== currentRunId) return
-
-      if (event.type === 'text-delta') {
-        setStreamedResponse((prev) => prev + event.delta)
-      } else if (event.type === 'tool-call') {
-        setActiveToolEvents((prev) => [...prev, event.toolName])
-      } else if (event.type === 'done') {
-        setWorking(false)
-        setRunDone(true)
-        if (event.text) {
-          setStreamedResponse(event.text)
-        }
-        // Save routine to scheduler
-        void props.onSubmit(compiled.text)
-      } else if (event.type === 'error') {
-        setWorking(false)
-        setError(event.message || 'OpenCode execution error occurred.')
-      } else if (event.type === 'aborted') {
-        setWorking(false)
-        setError('OpenCode execution was cancelled.')
-      }
-    })
-
-    unsubRef.current = unsub
-    return () => {
-      unsub()
-    }
-  }, [working, currentRunId, compiled.text, props])
-
   async function submit(event: React.FormEvent): Promise<void> {
     event.preventDefault()
-    if (!compiled.valid || busy || working) return
+    if (!compiled.valid || busy) return
 
     setBusy(true)
     setError('')
-    setStreamedResponse('')
-    setActiveToolEvents([])
-    setRunDone(false)
-    setWorking(true)
 
     try {
-      // 1. Ensure OpenCode engine is selected
-      try {
-        await window.app.setAgentProvider('opencode')
-      } catch {
-        // Fall back gracefully to active provider
-      }
-
-      // 2. Start agent run connected to OpenCode ACP client
       const promptText = mode === 'describe' ? describe : compiled.text
       const effectiveTools = [...tools]
       const lower = promptText.toLowerCase()
@@ -186,30 +155,23 @@ export default function Builder(props: BuilderProps): React.JSX.Element {
         effectiveTools.push('composio')
       }
 
-      const res = await window.app.agentRun({
-        prompt: promptText,
-        tools: effectiveTools,
-        source: 'chat'
-      })
-
-      if (!res.ok || !res.runId) {
-        throw new Error(res.error || 'Could not start OpenCode ACP client.')
+      let fullText = promptText
+      for (const t of effectiveTools) {
+        if (!fullText.toLowerCase().includes(`@${t.toLowerCase()}`)) {
+          fullText += ` @${t}`
+        }
       }
 
-      setCurrentRunId(res.runId)
+      const err = await props.onSubmit(fullText)
+      if (err) {
+        setError(err)
+        setBusy(false)
+        return
+      }
     } catch (reason) {
-      setWorking(false)
       setBusy(false)
       setError(reason instanceof Error ? reason.message : String(reason))
     }
-  }
-
-  function handleCancelRun(): void {
-    if (currentRunId) {
-      void window.app.agentCancel(currentRunId)
-    }
-    setWorking(false)
-    setBusy(false)
   }
 
   function toggleTool(id: ActiveToolId): void {
@@ -244,12 +206,6 @@ export default function Builder(props: BuilderProps): React.JSX.Element {
     }
   }
 
-  function copyResponse(): void {
-    if (!streamedResponse) return
-    void navigator.clipboard.writeText(streamedResponse)
-    setCopied(true)
-    setTimeout(() => setCopied(false), 2000)
-  }
 
   function parseTimeParts(time24: string): { ampm: 'AM' | 'PM'; hour12: string; minute: string } {
     const [hStr = '09', mStr = '00'] = time24.split(':')
@@ -315,84 +271,7 @@ export default function Builder(props: BuilderProps): React.JSX.Element {
             <button type="button" aria-label="Close builder" onClick={props.onClose}>×</button>
           </div>
 
-          {/* Working Animation Screen */}
-          {working && (
-            <div className="builder-working-container" role="status" aria-live="polite">
-              <div className="builder-working-orb">
-                <div className="builder-ring ring-1" />
-                <div className="builder-ring ring-2" />
-                <div className="builder-ring ring-3" />
-                <div className="builder-core" />
-              </div>
-              <h3 className="builder-working-title">OpenCode ACP is working…</h3>
-              <p className="builder-working-sub">
-                Communicating with OpenCode agent harness and executing workflow steps
-              </p>
-
-              {activeToolEvents.length > 0 && (
-                <div className="builder-tool-stream">
-                  {activeToolEvents.slice(-3).map((toolName, idx) => (
-                    <span key={idx} className="builder-tool-badge">
-                      ⚡ {toolName}
-                    </span>
-                  ))}
-                </div>
-              )}
-
-              {streamedResponse && (
-                <div className="builder-stream-preview">
-                  <pre>{streamedResponse}</pre>
-                </div>
-              )}
-
-              <div className="builder-working-actions">
-                <button type="button" className="builder-cancel-btn" onClick={handleCancelRun}>
-                  Cancel
-                </button>
-              </div>
-            </div>
-          )}
-
-          {/* Done State Screen */}
-          {!working && runDone && (
-            <div className="builder-done-container">
-              <div className="builder-done-header">
-                <span className="builder-check-mark">✓</span>
-                <div>
-                  <h3>OpenCode ACP Response</h3>
-                  <p>Workflow completed & schedule registered</p>
-                </div>
-              </div>
-
-              <div className="builder-response-box">
-                <pre>{streamedResponse || 'OpenCode completed the task successfully.'}</pre>
-              </div>
-
-              <div className="builder-done-footer">
-                <button type="button" className="builder-btn-sec" onClick={copyResponse}>
-                  {copied ? 'Copied!' : 'Copy Response'}
-                </button>
-                <button
-                  type="button"
-                  className="builder-btn-sec"
-                  onClick={() => {
-                    setRunDone(false)
-                    setStreamedResponse('')
-                  }}
-                >
-                  Edit & Run Again
-                </button>
-                <button type="button" className="builder-create" onClick={props.onClose}>
-                  Done
-                </button>
-              </div>
-            </div>
-          )}
-
-          {/* Default Form Screen (when not working and not done) */}
-          {!working && !runDone && (
-            <>
-              {mode === 'describe' ? (
+          {mode === 'describe' ? (
                 <textarea
                   className="builder-task"
                   rows={6}
@@ -815,24 +694,99 @@ export default function Builder(props: BuilderProps): React.JSX.Element {
                     />
                   </div>
 
-                  {/* Connected Pills from Screenshot (file-f9683365af60c1bc1f1ffc9151b6c3d3.png) */}
-                  <div className="builder-pill-badge" title="Desktop agent">
-                    <span>Desktop Agent</span>
-                  </div>
+                  {/* Active Agent Engine & Model Selector (OpenCode, Gemini, Built-in) */}
+                  <div className="builder-model-selector-container">
+                    <button
+                      type="button"
+                      className="builder-model-badge-trigger"
+                      onClick={() => setAgentMenuOpen((v) => !v)}
+                      title="Select Agent Engine & Model"
+                      aria-expanded={agentMenuOpen}
+                    >
+                      <span className="builder-model-badge-glyph">
+                        {activeProvider === 'opencode' ? '▣' : activeProvider === 'pi' ? 'π' : '◈'}
+                      </span>
+                      <span className="builder-model-badge-title">
+                        {activeProvider === 'opencode'
+                          ? 'OpenCode'
+                          : activeProvider === 'pi'
+                          ? 'pi'
+                          : activeModel || (keySet ? 'Built-in Agent' : 'Agent')}
+                      </span>
+                      <span className={`builder-model-badge-chevron${agentMenuOpen ? ' is-open' : ''}`}>▾</span>
+                    </button>
 
-                  <div className="builder-pill-badge" title="QuickAuto Automations">
-                    <span>Automations</span>
-                  </div>
+                    {agentMenuOpen && (
+                      <div className="builder-model-popover">
+                        <div className="builder-model-popover-title">Agent Engine</div>
 
-                  <button
-                    type="button"
-                    className="builder-pill-sliders"
-                    aria-label="Settings configuration"
-                    title="Connector options"
-                    onClick={() => setConnectorMenuOpen((v) => !v)}
-                  >
-                    <span>⊸</span>
-                  </button>
+                        <button
+                          type="button"
+                          className={`builder-model-popover-item${activeProvider === 'builtin' ? ' is-selected' : ''}`}
+                          onClick={async () => {
+                            await window.app.setAgentProvider('builtin')
+                            setActiveProvider('builtin')
+                            setAgentMenuOpen(false)
+                          }}
+                        >
+                          <span className="builder-model-item-glyph">◈</span>
+                          <span className="builder-model-item-text">
+                            <span className="builder-model-item-name">Built-in ({activeModel || 'API Key'})</span>
+                            <span className="builder-model-item-desc">{keySet ? 'Key configured ✓' : 'Add API key in settings'}</span>
+                          </span>
+                        </button>
+
+                        <button
+                          type="button"
+                          className={`builder-model-popover-item${activeProvider === 'opencode' ? ' is-selected' : ''}`}
+                          onClick={async () => {
+                            await window.app.setAgentProvider('opencode')
+                            setActiveProvider('opencode')
+                            setAgentMenuOpen(false)
+                          }}
+                        >
+                          <span className="builder-model-item-glyph">▣</span>
+                          <span className="builder-model-item-text">
+                            <span className="builder-model-item-name">OpenCode Agent</span>
+                            <span className="builder-model-item-desc">
+                              {availableHarnesses.find((h) => h.id === 'opencode')?.installed ? 'ACP Connected ✓' : 'Local ACP CLI'}
+                            </span>
+                          </span>
+                        </button>
+
+                        <button
+                          type="button"
+                          className={`builder-model-popover-item${activeProvider === 'pi' ? ' is-selected' : ''}`}
+                          onClick={async () => {
+                            await window.app.setAgentProvider('pi')
+                            setActiveProvider('pi')
+                            setAgentMenuOpen(false)
+                          }}
+                        >
+                          <span className="builder-model-item-glyph">π</span>
+                          <span className="builder-model-item-text">
+                            <span className="builder-model-item-name">Pi Agent</span>
+                            <span className="builder-model-item-desc">
+                              {availableHarnesses.find((h) => h.id === 'pi')?.installed ? 'Installed ✓' : 'Local CLI'}
+                            </span>
+                          </span>
+                        </button>
+
+                        <div className="builder-model-popover-footer">
+                          <button
+                            type="button"
+                            className="builder-model-configure-btn"
+                            onClick={() => {
+                              setAgentMenuOpen(false)
+                              window.app.openSettingsWindow('agents')
+                            }}
+                          >
+                            <span>⚙ Manage Engines & Keys</span>
+                          </button>
+                        </div>
+                      </div>
+                    )}
+                  </div>
 
                   {/* Selected tool pills */}
                   {tools.map((id) => (
@@ -847,14 +801,12 @@ export default function Builder(props: BuilderProps): React.JSX.Element {
                 <button
                   type="submit"
                   className="builder-create"
-                  disabled={!compiled.valid || busy || working}
-                  title={compiled.valid ? 'Send to OpenCode & create routine' : compiled.error}
+                  disabled={!compiled.valid || busy}
+                  title={compiled.valid ? 'Create scheduled automation' : compiled.error}
                 >
-                  Create
+                  {busy ? 'Creating…' : 'Create'}
                 </button>
               </div>
-            </>
-          )}
         </form>
       </div>
     </>

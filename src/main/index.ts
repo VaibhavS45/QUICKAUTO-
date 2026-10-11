@@ -10,6 +10,7 @@ import {
   RoutineCreateSchema,
   RoutineIdSchema,
   RoutineToggleSchema,
+  RoutineUpdateSchema,
   AgentCancelSchema,
   AcpModelSchema,
   AgentRunRequestSchema,
@@ -725,6 +726,21 @@ function wireIpc(): void {
     const parsed = RoutineToggleSchema.safeParse(payload)
     if (!parsed.success) return { ok: false as const, error: 'Invalid toggle request.' }
     const routine = scheduler.setEnabled(parsed.data.id, parsed.data.enabled)
+    return routine
+      ? { ok: true as const, routine }
+      : { ok: false as const, error: 'Routine not found.' }
+  })
+
+  ipcMain.handle(IpcChannels.routineUpdate, (_event, payload: unknown) => {
+    const parsed = RoutineUpdateSchema.safeParse(payload)
+    if (!parsed.success) return { ok: false as const, error: 'Invalid update request.' }
+    const routine = scheduler.update(parsed.data.id, {
+      prompt: parsed.data.prompt,
+      repeat: parsed.data.repeat,
+      runAt: parsed.data.runAt,
+      tools: parsed.data.tools,
+      enabled: parsed.data.enabled
+    })
     return routine
       ? { ok: true as const, routine }
       : { ok: false as const, error: 'Routine not found.' }

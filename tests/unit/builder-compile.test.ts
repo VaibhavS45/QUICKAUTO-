@@ -77,4 +77,17 @@ describe('builder compile', () => {
     const empty = { ...blankDraft(), mode: 'manual' as const, triggers: [] }
     expect(draftToText(empty).valid).toBe(false)
   })
+
+  it('compiles a schedule automation for weather with Daily repeat and time', () => {
+    const draft = {
+      ...blankDraft(),
+      title: '',
+      task: 'weather in bangalore',
+      triggers: [{ ...blankTrigger('schedule'), repeat: 'daily' as const, time: '10:00' }],
+      tools: []
+    }
+    const compiled = draftToText(draft)
+    expect(compiled.valid).toBe(true)
+    expect(compiled.text).toBe('When: every day at 10:00am. weather in bangalore')
+  })
 })

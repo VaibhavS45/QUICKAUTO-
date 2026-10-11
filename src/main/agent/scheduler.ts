@@ -97,6 +97,7 @@ export function parseScheduleFromText(text: string, now = new Date()): { runAt: 
 export function cleanPromptForRoutine(text: string, timePhrase: string): string {
   return text
     .replace(/@calendar\s*/gi, '')
+    .replace(/(?:^|\.\s*)When:\s*[^.]*?\.\s*/i, ' ')
     .replace(timePhrase, '')
     .replace(/\s{2,}/g, ' ')
     .trim()
@@ -181,6 +182,20 @@ export class Scheduler {
     r.enabled = enabled
     this.persist()
     if (enabled) this.arm(r)
+    else this.disarm(id)
+    return { ...r }
+  }
+
+  update(id: string, patch: { prompt?: string; repeat?: Repeat; runAt?: number; tools?: string[]; enabled?: boolean }): Routine | null {
+    const r = this.routines.find((x) => x.id === id)
+    if (!r) return null
+    if (typeof patch.prompt === 'string' && patch.prompt.trim()) r.prompt = patch.prompt.trim()
+    if (patch.repeat) r.repeat = patch.repeat
+    if (typeof patch.runAt === 'number' && patch.runAt > 0) r.runAt = patch.runAt
+    if (Array.isArray(patch.tools)) r.tools = patch.tools
+    if (typeof patch.enabled === 'boolean') r.enabled = patch.enabled
+    this.persist()
+    if (r.enabled) this.arm(r)
     else this.disarm(id)
     return { ...r }
   }

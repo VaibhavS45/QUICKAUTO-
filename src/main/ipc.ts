@@ -38,6 +38,8 @@ export const IpcChannels = {
   getConnector: 'connector:get',
   setConnectorKey: 'connector:set-key',
   clearConnectorKey: 'connector:clear-key',
+  composioToolkits: 'composio:toolkits',
+  composioConnect: 'composio:connect',
   routineList: 'routine:list',
   routineCreate: 'routine:create',
   routineRemove: 'routine:remove',
@@ -78,6 +80,14 @@ export const ApiKeySchema = z.object({
 export const ConnectionToolSchema = z.object({
   toolId: z.string().min(1).max(64)
 })
+
+export const ComposioToolkitSearchSchema = z.object({
+  query: z.string().max(100).default('')
+}).strict()
+
+export const ComposioToolkitConnectSchema = z.object({
+  toolkit: z.string().regex(/^[a-z0-9][a-z0-9_-]{0,63}$/i)
+}).strict()
 
 export const AgentCancelSchema = z.object({
   runId: z.string().min(1).max(128)

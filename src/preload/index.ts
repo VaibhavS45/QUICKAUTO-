@@ -2,6 +2,7 @@ import { contextBridge, ipcRenderer } from 'electron'
 import { shellApi } from './shell.js'
 import type { ChatMessage, ChatThread } from '../shared/chat.js'
 import { AgentEventSchema, type AgentEvent } from '../shared/agent.js'
+import type { ComposioToolkit } from '../main/connectors/composio-marketplace.js'
 
 /**
  * Preload: contextBridge API only. No API keys or tokens ever reach the renderer.
@@ -81,6 +82,10 @@ const api = {
   }> => ipcRenderer.invoke('connector:get'),
   setConnectorKey: (key: string) => ipcRenderer.invoke('connector:set-key', { key }),
   clearConnectorKey: () => ipcRenderer.invoke('connector:clear-key'),
+  composioToolkits: (query = ''): Promise<{ ok: boolean; toolkits?: ComposioToolkit[]; error?: string }> =>
+    ipcRenderer.invoke('composio:toolkits', { query }),
+  composioConnect: (toolkit: string): Promise<{ ok: boolean; error?: string }> =>
+    ipcRenderer.invoke('composio:connect', { toolkit }),
   githubStatus: (): Promise<{
     ok: boolean
     installed?: boolean

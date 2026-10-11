@@ -1,6 +1,7 @@
 /** Canonical @ tool ids. Aliases resolved in parseMentionedTools. */
 export const TOOL_IDS = [
   'websearch',
+  'composio',
   'notion',
   'gmail',
   'sheets',
@@ -22,6 +23,7 @@ export const TOOL_ALIASES: Record<string, ActiveToolId> = {
 
 export const TOOL_META: Record<ActiveToolId, { label: string; hint: string }> = {
   websearch: { label: '@websearch', hint: 'Search the web and optionally save a summary' },
+  composio: { label: '@composio', hint: 'Search and use connected Composio apps with approval' },
   notion: { label: '@notion', hint: 'Notion via Composio (M3)' },
   gmail: { label: '@gmail', hint: 'Gmail via Composio (read-only) — alias @email' },
   sheets: { label: '@sheets', hint: 'Sheets via Composio (M3) — alias @sheet' },

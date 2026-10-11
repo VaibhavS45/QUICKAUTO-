@@ -86,6 +86,7 @@ export function createBuiltinTools() {
 export const APPROVAL_REQUIRED_TOOLS: ReadonlySet<string> = new Set([
   'echo_write',
   'write_file',
+  'composio_execute',
   'notion_create',
   'gmail_draft',
   'gmail_send',

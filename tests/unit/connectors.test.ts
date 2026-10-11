@@ -1,11 +1,14 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import {
   ConnectorSettingsService,
   MemoryConnectorStore,
   type SafeStorageLike
 } from '../../src/main/settings/connector-settings.js'
-import { ComposioProvider, createComposioTools } from '../../src/main/connectors/composio-tools.js'
-import { createBuiltinTools } from '../../src/main/agent/tools.js'
+import { ComposioProvider, createComposioTools, isComposioBudgetGuardedTool } from '../../src/main/connectors/composio-tools.js'
+import { BudgetGuard } from '../../src/main/connectors/budget-guard.js'
+import { APPROVAL_REQUIRED_TOOLS, buildToolApproval, createBuiltinTools } from '../../src/main/agent/tools.js'
+
+const getGuard = (): BudgetGuard => new BudgetGuard()
 
 function fakeSafeStorage(): SafeStorageLike {
   return {
@@ -43,23 +46,66 @@ describe('ConnectorSettingsService', () => {
 })
 
 describe('ComposioProvider', () => {
-  it('maps @notion/@websearch to tools, ignores unknown', () => {
-    const p = new ComposioProvider(async () => 'ak_test')
-    expect(Object.keys(p.getTools(['notion']))).toEqual(['notion_search', 'notion_create'])
-    expect(Object.keys(p.getTools(['websearch']))).toEqual(['web_search'])
-    expect(Object.keys(p.getTools(['notion', 'websearch']))).not.toContain('calendar')
+  it('maps connected Composio app requests to generic tools and preserves web search', async () => {
+    const p = new ComposioProvider(async () => 'ak_test', getGuard, () => ({
+      sessions: {
+        create: async () => ({
+          toolkits: async () => ({ items: [{ slug: 'notion', name: 'Notion' }] }),
+          search: async () => ({ results: [] }),
+          execute: async () => ({ data: {} })
+        })
+      }
+    }))
+    expect(Object.keys(await p.getTools(['notion']))).toEqual(['composio_search', 'composio_execute'])
+    expect(Object.keys(await p.getTools(['websearch']))).toEqual(['web_search'])
+    expect(Object.keys(await p.getTools(['notion', 'websearch']))).toEqual([
+      'web_search',
+      'composio_search',
+      'composio_execute'
+    ])
   })
 
   it('status reflects key presence without leaking it', async () => {
-    const off = new ComposioProvider(async () => null)
+    const off = new ComposioProvider(async () => null, getGuard)
     expect(await off.status('notion')).toEqual({ connected: false, detail: expect.any(String) })
-    const on = new ComposioProvider(async () => 'ak_test')
+    const on = new ComposioProvider(async () => 'ak_test', getGuard)
     const st = await on.status('notion')
     expect(st.connected).toBe(true)
     expect(JSON.stringify(st)).not.toContain('ak_test')
   })
 
-  it('tools throw a connect hint when no key (never silently fail)', async () => {
+  it('requires an approval card for every generic Composio action', () => {
+    expect(APPROVAL_REQUIRED_TOOLS.has('composio_execute')).toBe(true)
+    expect(buildToolApproval('chat', ['composio_execute'])['composio_execute']).toBe('user-approval')
+    expect(buildToolApproval('scheduled', ['composio_execute'])['composio_execute']).toMatchObject({ type: 'denied' })
+  })
+
+  it('meters tool search and execution with BudgetGuard', async () => {
+    const guard = new BudgetGuard()
+    const executeGuarded = vi.spyOn(guard, 'execute')
+    const provider = new ComposioProvider(async () => 'ak_test', () => guard, () => ({
+      sessions: {
+        create: async () => ({
+          toolkits: async () => ({ items: [{ slug: 'gmail', name: 'Gmail' }] }),
+          search: async () => ({ results: [{ primaryToolSlugs: ['GMAIL_GET_MESSAGE'], relatedToolSlugs: [] }] }),
+          execute: async () => ({ data: { message: 'Hello' } })
+        })
+      }
+    }))
+    const tools = await provider.getTools(['composio']) as Record<
+      string,
+      { execute: (args: unknown) => Promise<unknown> }
+    >
+    expect(isComposioBudgetGuardedTool(tools['composio_search'])).toBe(true)
+    expect(isComposioBudgetGuardedTool(tools['composio_execute'])).toBe(true)
+    await tools['composio_search']!.execute({ query: 'find email' })
+    await tools['composio_execute']!.execute({ toolSlug: 'GMAIL_GET_MESSAGE', arguments: {} })
+    expect(executeGuarded).toHaveBeenCalledTimes(2)
+    expect(executeGuarded).toHaveBeenNthCalledWith(1, expect.objectContaining({ label: 'composio_search' }))
+    expect(executeGuarded).toHaveBeenNthCalledWith(2, expect.objectContaining({ label: 'composio_execute:GMAIL_GET_MESSAGE' }))
+  })
+
+  it('requires a key for Composio app tools and keeps web search available', async () => {
     const fakeProvider = {
       name: 'fake-search',
       search: async (query: string) => ({
@@ -71,11 +117,12 @@ describe('ComposioProvider', () => {
         searchedAt: '2026-10-08T00:00:00.000Z'
       })
     }
-    const tools = createComposioTools(async () => null, { webSearchProvider: fakeProvider }) as unknown as Record<
+    const provider = new ComposioProvider(async () => null, getGuard)
+    await expect(provider.getTools(['notion'])).rejects.toThrow(/Not connected/)
+    const tools = createComposioTools({ webSearchProvider: fakeProvider }) as unknown as Record<
       string,
       { execute: (args: unknown, opts?: unknown) => Promise<unknown> }
     >
-    await expect(tools['notion_search']!.execute({ query: 'x' })).rejects.toThrow(/Not connected/)
     await expect(tools['web_search']!.execute({ query: 'x' })).resolves.toMatchObject({ provider: 'fake-search' })
   })
 
@@ -94,7 +141,7 @@ describe('ComposioProvider', () => {
         searchedAt: '2026-10-08T00:00:00.000Z'
       })
     }
-    const tools = createComposioTools(async () => 'ak_test', { webSearchProvider: fakeProvider }) as unknown as Record<
+    const tools = createComposioTools({ webSearchProvider: fakeProvider }) as unknown as Record<
       string,
       { execute: (args: unknown, opts?: unknown) => Promise<unknown> }
     >

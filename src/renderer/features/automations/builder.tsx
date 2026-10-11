@@ -177,9 +177,18 @@ export default function Builder(props: BuilderProps): React.JSX.Element {
 
       // 2. Start agent run connected to OpenCode ACP client
       const promptText = mode === 'describe' ? describe : compiled.text
+      const effectiveTools = [...tools]
+      const lower = promptText.toLowerCase()
+      if (!effectiveTools.includes('websearch') && (lower.includes('weather') || lower.includes('search') || lower.includes('news') || lower.includes('forecast'))) {
+        effectiveTools.push('websearch')
+      }
+      if (!effectiveTools.includes('composio') && (lower.includes('weather') || lower.includes('notion') || lower.includes('sheet'))) {
+        effectiveTools.push('composio')
+      }
+
       const res = await window.app.agentRun({
         prompt: promptText,
-        tools: tools,
+        tools: effectiveTools,
         source: 'chat'
       })
 

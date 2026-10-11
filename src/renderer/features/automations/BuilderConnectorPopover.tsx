@@ -117,7 +117,7 @@ export default function BuilderConnectorPopover({
               <span className="bconn-browser-icon brave" title="Brave Browser">🦁</span>
             </div>
 
-            <h4 className="bconn-preview-title">Manus is browsing... Take over</h4>
+            <h4 className="bconn-preview-title">QuickAuto is browsing... Take over</h4>
             <p className="bconn-preview-sub">
               QuickAuto uses your default browser profile to access authorized sites and perform routine workflows seamlessly.
             </p>

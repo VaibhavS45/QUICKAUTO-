@@ -1,6 +1,7 @@
 import { ToolLoopAgent, isStepCount, type ModelMessage, type ToolSet } from 'ai'
 import { createAnthropic } from '@ai-sdk/anthropic'
 import { createOpenAI } from '@ai-sdk/openai'
+import { createGoogleGenerativeAI } from '@ai-sdk/google'
 import type { AgentEvent, RunSource } from '../../shared/agent.js'
 import { MAX_HISTORY_MESSAGES, type ChatMessage } from '../../shared/chat.js'
 import type { ToolId } from '../../shared/types.js'
@@ -88,6 +89,9 @@ export interface AgentLike {
 function resolveModel(config: ModelSettings, apiKey: string): unknown {
   if (config.provider === 'anthropic') {
     return createAnthropic({ apiKey })(config.model)
+  }
+  if (config.provider === 'google') {
+    return createGoogleGenerativeAI({ apiKey })(config.model)
   }
   // 'openai' and 'openai-compatible' both ride the OpenAI provider;
   // compatible endpoints (Ollama, LM Studio, gateways) just set baseURL.

@@ -150,9 +150,7 @@ export function RunDetailPage({ run, runs, onSelect, onBack }: {
 }): React.JSX.Element {
   return (
     <section className="automations" aria-label="Run details">
-      <div className="automations-create-top">
-        <button type="button" className="automations-back" onClick={onBack}>← Back</button>
-      </div>
+      <AutomationBreadcrumb parent="Updates" current={routineTitle(run.title)} onParentClick={onBack} />
       <div className="automations-run">
         <article className="automations-run-main" aria-label={routineTitle(run.title)}>
           <p className="automations-detail-kicker">
@@ -185,6 +183,20 @@ export function RunDetailPage({ run, runs, onSelect, onBack }: {
 
 export function routineKindLabel(routine: Routine): string {
   return routine.tools.length > 1 ? 'Advanced' : 'Scheduled'
+}
+
+function AutomationBreadcrumb({ parent = 'Manage', current, onParentClick }: {
+  parent?: string
+  current: string
+  onParentClick(): void
+}): React.JSX.Element {
+  return (
+    <nav className="automation-breadcrumb" aria-label="Breadcrumb">
+      <button type="button" onClick={onParentClick}>{parent}</button>
+      <span aria-hidden="true">/</span>
+      <strong>{current}</strong>
+    </nav>
+  )
 }
 
 const ENGINE_LABELS: Record<string, string> = {
@@ -805,10 +817,8 @@ export default function AutomationsView(props: FeatureProps): React.JSX.Element 
 
   if (creating) {
     return (
-      <section className="automations" aria-label="Create automation">
-        <div className="automations-create-top">
-          <button type="button" className="automations-back" onClick={closeCreate}>← Back</button>
-        </div>
+      <section className="automations is-creating" aria-label="Create automation">
+        <AutomationBreadcrumb current="Schedule" onParentClick={closeCreate} />
         {choiceOpen && !builderOpen && (
           <StartChoice onPick={pickStart} onClose={closeCreate} />
         )}
@@ -830,9 +840,7 @@ export default function AutomationsView(props: FeatureProps): React.JSX.Element 
     if (loading) {
       return (
         <section className="automations" aria-label="Run details">
-          <div className="automations-create-top">
-            <button type="button" className="automations-back" onClick={() => setRunId('')}>← Back</button>
-          </div>
+          <AutomationBreadcrumb parent="Updates" current="Loading" onParentClick={() => setRunId('')} />
           <p className="automations-empty">Loading run…</p>
         </section>
       )
@@ -840,9 +848,7 @@ export default function AutomationsView(props: FeatureProps): React.JSX.Element 
     if (!run) {
       return (
         <section className="automations" aria-label="Run details">
-          <div className="automations-create-top">
-            <button type="button" className="automations-back" onClick={() => setRunId('')}>← Back</button>
-          </div>
+          <AutomationBreadcrumb parent="Updates" current="Unavailable" onParentClick={() => setRunId('')} />
           <p className="automations-empty">This run is no longer available.</p>
         </section>
       )
@@ -862,18 +868,14 @@ export default function AutomationsView(props: FeatureProps): React.JSX.Element 
     if (!routine) {
       return (
         <section className="automations" aria-label="Automation details">
-          <div className="automations-create-top">
-            <button type="button" className="automations-back" onClick={() => setRoutinePageId('')}>← Back</button>
-          </div>
+          <AutomationBreadcrumb current="Unavailable" onParentClick={() => setRoutinePageId('')} />
           <p className="automations-empty">This automation is no longer available.</p>
         </section>
       )
     }
     return (
       <section className="automations" aria-label="Automation details">
-        <div className="automations-create-top">
-          <button type="button" className="automations-back" onClick={() => setRoutinePageId('')}>← Back</button>
-        </div>
+        <AutomationBreadcrumb current={routineTitle(routine.prompt)} onParentClick={() => setRoutinePageId('')} />
         <div className="automations-routine">
           <ManageDetail
             routine={routine}
@@ -894,20 +896,18 @@ export default function AutomationsView(props: FeatureProps): React.JSX.Element 
   }
 
   return (
-    <section className="automations" aria-label="Automations">
-      <div className="automations-toolbar">
+    <section className={`automations${tab === 'canvas' ? ' is-canvas-mode' : ''}`} aria-label="Automations">
+      {tab !== 'canvas' && <div className="automations-toolbar">
+        <h1 className="automations-toolbar-title">{tab === 'manage' ? 'Manage' : 'Updates'}</h1>
         <div className="automations-actions">
-          {tab !== 'canvas' && (
-            <div className="automations-view-toggle" role="tablist" aria-label={tab === 'updates' ? 'Updates view' : 'Manage view'}>
-              <button type="button" role="tab" aria-selected={view === 'list'} aria-label="List" title="List" onClick={() => setView('list')}>
-                <ListIcon />
-              </button>
-              <button type="button" role="tab" aria-selected={view === 'calendar'} aria-label="Calendar" title="Calendar" onClick={() => setView('calendar')}>
-                <CalendarIcon />
-              </button>
-            </div>
-          )}
-          <button type="button" className="automations-create-btn" onClick={() => setChoiceOpen(true)}>+ Create</button>
+          <div className="automations-view-toggle" role="tablist" aria-label={tab === 'updates' ? 'Updates view' : 'Manage view'}>
+            <button type="button" role="tab" aria-selected={view === 'list'} aria-label="List" title="List" onClick={() => setView('list')}>
+              <ListIcon />
+            </button>
+            <button type="button" role="tab" aria-selected={view === 'calendar'} aria-label="Calendar" title="Calendar" onClick={() => setView('calendar')}>
+              <CalendarIcon />
+            </button>
+          </div>
           <button
             type="button"
             className={`automations-filter${activeOnly ? ' is-on' : ''}`}
@@ -918,8 +918,9 @@ export default function AutomationsView(props: FeatureProps): React.JSX.Element 
           >
             <FilterIcon />
           </button>
+          <button type="button" className="automations-create-btn" onClick={() => setChoiceOpen(true)}>+ Create</button>
         </div>
-      </div>
+      </div>}
 
       {loading && <p className="automations-empty">Loading automations…</p>}
       {error && <p className="automations-error" role="alert">{error}</p>}
@@ -963,7 +964,7 @@ export default function AutomationsView(props: FeatureProps): React.JSX.Element 
       )}
 
       {!loading && !error && tab === 'manage' && view === 'list' && (
-        <div className="automations-body manage-layout">
+        <div className={`automations-body manage-layout${selection?.kind === 'routine' ? ' has-selection' : ''}`}>
           <div className="manage-list" role="listbox" aria-label="Automations">
             {visibleRoutines.length === 0 && <p className="automations-empty">No automations yet. Use Create to add one.</p>}
             {visibleRoutines.map((routine) => {

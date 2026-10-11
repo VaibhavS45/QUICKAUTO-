@@ -30,7 +30,10 @@ describe('sidebar rail', () => {
   it('centers automation tab icons that deep-link to each tab', () => {
     const html = renderToStaticMarkup(createElement(ShellApp))
     expect(html).toContain('aria-label="Automation views"')
-    for (const tab of AUTOMATION_TABS) expect(html).toContain(`title="${tab.label}"`)
+    for (const tab of AUTOMATION_TABS) {
+      expect(html).toContain(`title="${tab.label}"`)
+      expect(html).toContain(`data-tooltip="${tab.label}"`)
+    }
     expect(parseAutomationTab('canvas')).toBe('canvas')
     expect(parseAutomationTab('nope')).toBe(undefined)
     expect(createFeatureProps(shell, { automationTab: 'updates' }).initialAutomationTab).toBe('updates')

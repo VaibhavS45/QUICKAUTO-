@@ -31,7 +31,8 @@ export function pastDayLabel(key: string, todayKey: string): string {
 }
 
 export function routineTitle(prompt: string): string {
-  const firstLine = prompt.split('\n')[0] ?? prompt
+  const clean = prompt.replace(/^(?:When:\s*[^.]*?\.\s*)+/i, '').trim()
+  const firstLine = (clean || prompt).split('\n')[0] ?? prompt
   return firstLine.length > 80 ? `${firstLine.slice(0, 80)}…` : firstLine
 }
 
@@ -57,7 +58,11 @@ export function monthLabel(year: number, monthIndex: number): string {
 
 // ponytail: naive repeat heuristic (daily → every day, weekly → same weekday), expand if scheduler exposes real occurrences
 export function routineOccursOn(routine: { runAt: number; repeat: string }, key: string): boolean {
-  if (/dail|day/i.test(routine.repeat)) return true
+  if (/weekday/i.test(routine.repeat)) {
+    const day = new Date(`${key}T00:00:00`).getDay()
+    return day >= 1 && day <= 5
+  }
+  if (/daily|every\s*day/i.test(routine.repeat)) return true
   const runDay = localDayKey(new Date(routine.runAt))
   if (runDay === key) return true
   if (/week/i.test(routine.repeat)) {

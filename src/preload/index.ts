@@ -83,9 +83,15 @@ const api = {
   setConnectorKey: (key: string) => ipcRenderer.invoke('connector:set-key', { key }),
   clearConnectorKey: () => ipcRenderer.invoke('connector:clear-key'),
   composioToolkits: (query = ''): Promise<{ ok: boolean; toolkits?: ComposioToolkit[]; error?: string }> =>
-    ipcRenderer.invoke('composio:toolkits', { query }),
+    ipcRenderer.invoke('composio:toolkits', { query }).catch((error: unknown) => ({
+      ok: false,
+      error: error instanceof Error ? error.message : String(error)
+    })),
   composioConnect: (toolkit: string): Promise<{ ok: boolean; error?: string }> =>
-    ipcRenderer.invoke('composio:connect', { toolkit }),
+    ipcRenderer.invoke('composio:connect', { toolkit }).catch((error: unknown) => ({
+      ok: false,
+      error: error instanceof Error ? error.message : String(error)
+    })),
   githubStatus: (): Promise<{
     ok: boolean
     installed?: boolean
@@ -128,6 +134,8 @@ const api = {
   routineCreate: (text: string) => ipcRenderer.invoke('routine:create', { text }),
   routineRemove: (id: string) => ipcRenderer.invoke('routine:remove', { id }),
   routineToggle: (id: string, enabled: boolean) => ipcRenderer.invoke('routine:toggle', { id, enabled }),
+  routineUpdate: (id: string, patch: { prompt?: string; repeat?: string; runAt?: number; tools?: string[]; enabled?: boolean }) =>
+    ipcRenderer.invoke('routine:update', { id, ...patch }),
   getProfile: (): Promise<{ name: string; email: string; about: string; language: string }> =>
     ipcRenderer.invoke('settings:get-profile'),
   setProfile: (p: { name: string; email: string; about: string; language: string }) =>

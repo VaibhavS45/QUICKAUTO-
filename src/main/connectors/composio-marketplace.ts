@@ -51,6 +51,7 @@ interface ComposioClientLike {
 
 export interface ComposioMarketplaceDependencies {
   getApiKey: () => Promise<string | null>
+  fallbackApiKey?: string
   fetch?: typeof fetch
   createClient?: (apiKey: string) => ComposioClientLike
 }
@@ -88,7 +89,7 @@ export class ComposioMarketplace {
   }
 
   private async apiKey(): Promise<string> {
-    const key = await this.deps.getApiKey()
+    const key = (await this.deps.getApiKey()) || this.deps.fallbackApiKey || null
     if (!key) throw new Error('Add your Composio project key to browse and connect apps.')
     return key
   }

@@ -45,6 +45,11 @@ describe('automation date helpers', () => {
     expect(routineOccursOn({ runAt: new Date(2026, 9, 10, 18, 30).getTime(), repeat: 'once' }, '2026-10-10')).toBe(true)
     expect(routineOccursOn({ runAt: new Date(2026, 9, 10, 18, 30).getTime(), repeat: 'once' }, '2026-10-11')).toBe(false)
   })
+
+  it('matches weekday routines only on weekdays', () => {
+    expect(routineOccursOn({ runAt: new Date(2026, 9, 9, 18, 30).getTime(), repeat: 'weekdays' }, '2026-10-12')).toBe(true)
+    expect(routineOccursOn({ runAt: new Date(2026, 9, 9, 18, 30).getTime(), repeat: 'weekdays' }, '2026-10-11')).toBe(false)
+  })
 })
 
 describe('AutomationsView', () => {

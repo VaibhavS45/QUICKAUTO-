@@ -87,16 +87,18 @@ export function UpdatesStream({ shell }: { shell: ShellApi }): React.JSX.Element
         <button
           key={row.key}
           type="button"
-          className="updates-stream-box"
+          className="updates-stream-box updates-stream-card"
           onClick={() => openRow(row)}
           aria-label={`${row.title}, ${row.status.replaceAll('_', ' ')}`}
         >
-          <span className={`automations-dot is-${row.status}`} aria-hidden="true" />
-          <span className="updates-stream-text">
-            <strong>{row.title}</strong>
-            <small>{timeLabel(row.at)} · {row.status.replaceAll('_', ' ')}</small>
-            {row.body && <span>{row.body}</span>}
-          </span>
+          <div className="updates-card-left">
+            <span className="updates-card-icon" aria-hidden="true">⟁</span>
+            <strong className="updates-card-title">{row.title}</strong>
+            <small className="updates-card-time">{timeLabel(row.at)}</small>
+          </div>
+          <div className="updates-card-body">
+            <span>{row.body || 'No output recorded yet.'}</span>
+          </div>
         </button>
       ))}
     </div>

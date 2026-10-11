@@ -205,6 +205,7 @@ export default function AgentsTab(): React.JSX.Element {
           <div className="set-grid2">
             <Field label="Provider">
               <Select value={provider} onChange={(e) => setProvider(e.target.value)}>
+                <option value="google">google (gemini)</option>
                 <option value="anthropic">anthropic</option>
                 <option value="openai">openai</option>
                 <option value="openai-compatible">openai-compatible</option>

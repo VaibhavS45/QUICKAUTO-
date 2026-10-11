@@ -9,7 +9,6 @@ export interface CanvasStep {
   /** World coordinates on the n8n-style graph canvas. */
   pos: { x: number; y: number }
 }
-
 export interface CanvasRoutine {
   prompt: string
   tools: string[]
@@ -181,6 +180,26 @@ export function canvasToPrompt(steps: CanvasStep[]): { text: string; tools: stri
   const events = actions.map((s) => s.subtitle).filter((s) => s && !/^select the event/i.test(s))
   const text = [events.join('. ') || 'Run my automation', ...tools].join(' ').trim()
   return { text, tools: tools.map((t) => t.slice(1)) }
+}
+
+/** Compiles canvas steps into a scheduler-compatible routine prompt string with schedule phrase and @tool mentions. */
+export function compileCanvasToSchedulerText(steps: CanvasStep[], title?: string): string {
+  const trigger = steps.find((s) => s.kind === 'trigger')
+  const actions = steps.filter((s) => s.kind !== 'trigger')
+  const triggerText = trigger?.subtitle?.trim()
+  let timePhrase = 'every day at 9:00am'
+  if (triggerText && !/^select/i.test(triggerText)) {
+    if (/(\d{1,2}:\d{2}|\d{1,2}\s*(am|pm))/i.test(triggerText)) {
+      timePhrase = triggerText
+    } else {
+      timePhrase = `${triggerText} at 9:00am`
+    }
+  }
+
+  const { text: actionText, tools } = canvasToPrompt(steps)
+  const routineTitle = title?.trim() || actions[0]?.title || 'Automation'
+  const toolTags = tools.map((t) => `@${t}`).join(' ')
+  return `${routineTitle}. When: ${timePhrase}. ${actionText} ${toolTags}`.trim()
 }
 
 /** One-line advanced summary for Manage cards, e.g. "Advanced · daily · 6:30 PM · @gmail +1". */

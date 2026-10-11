@@ -2,8 +2,8 @@ import { describe, expect, it } from 'vitest'
 import { filterNewRuns, updateStreamRows } from '../../src/renderer/shell/UpdatesStream.js'
 
 const runs = [
-  { id: 'r1', title: 'nightly sync', summary: 'Synced 12 rows.\nSecond line.', startedAt: 1000, endedAt: 2000, status: 'done' },
-  { id: 'r2', title: 'job', summary: null as unknown as string, startedAt: 500, endedAt: null as unknown as number, status: 'failed' }
+  { id: 'r1', title: 'nightly sync', summary: 'Synced 12 rows.\nSecond line.', startedAt: 1000, endedAt: 2000, status: 'succeeded' as const },
+  { id: 'r2', title: 'job', summary: null as unknown as string, startedAt: 500, endedAt: null as unknown as number, status: 'failed' as const }
 ]
 
 describe('updateStreamRows', () => {

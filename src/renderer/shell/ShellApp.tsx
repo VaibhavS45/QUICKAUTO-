@@ -24,14 +24,51 @@ interface LocalProfile {
 
 function Icon({ name }: { name: string }): React.JSX.Element {
   const paths: Record<string, React.ReactNode> = {
-    automation: <><rect x="3" y="5" width="18" height="16" rx="2" /><path d="M16 3v4M8 3v4M3 10h18" /></>,
-    bell: <><path d="M18 8a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9M10 21h4" /></>,
-    updates: <path d="M22 12h-4l-3 9L9 3l-3 9H2" />,
-    manage: <><rect x="3" y="3" width="7" height="7" rx="1" /><rect x="14" y="3" width="7" height="7" rx="1" /><rect x="3" y="14" width="7" height="7" rx="1" /><rect x="14" y="14" width="7" height="7" rx="1" /></>,
-    canvas: <><circle cx="6" cy="6" r="2.5" /><circle cx="18" cy="6" r="2.5" /><circle cx="12" cy="18" r="2.5" /><path d="M8 7.5l2.5 8M16 7.5l-2.5 8M8.5 6h7" /></>
+    // Top nav: Calendar / Routine trigger with 3 dots in the body (dyn-7789db6ae1e12c9089784fa0aa3df72d.png)
+    automation: (
+      <>
+        <rect x="4" y="5" width="16" height="15" rx="3.5" strokeWidth="1.6" />
+        <path d="M8 2.5v3.5M16 2.5v3.5" strokeWidth="1.6" strokeLinecap="round" />
+        <path d="M4 10h16" strokeWidth="1.3" />
+        <circle cx="8.5" cy="14.5" r="0.8" fill="currentColor" stroke="none" />
+        <circle cx="12" cy="14.5" r="0.8" fill="currentColor" stroke="none" />
+        <circle cx="15.5" cy="14.5" r="0.8" fill="currentColor" stroke="none" />
+      </>
+    ),
+    // Updates: Clean ECG / heartbeat waveform (dyn-7789db6ae1e12c9089784fa0aa3df72d.png)
+    updates: (
+      <>
+        <path d="M4 12.5h3.8l2.2-5.5 3.5 11 2.5-5.5H20" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
+      </>
+    ),
+    // Manage: 4 pill-rounded rounded squares (dyn-7789db6ae1e12c9089784fa0aa3df72d.png)
+    manage: (
+      <>
+        <rect x="4.5" y="4.5" width="5.8" height="5.8" rx="2" strokeWidth="1.6" />
+        <rect x="13.7" y="4.5" width="5.8" height="5.8" rx="2" strokeWidth="1.6" />
+        <rect x="4.5" y="13.7" width="5.8" height="5.8" rx="2" strokeWidth="1.6" />
+        <rect x="13.7" y="13.7" width="5.8" height="5.8" rx="2" strokeWidth="1.6" />
+      </>
+    ),
+    // Canvas: Triangular branched node tree (dyn-7789db6ae1e12c9089784fa0aa3df72d.png)
+    canvas: (
+      <>
+        <circle cx="12" cy="5.5" r="2.2" strokeWidth="1.6" />
+        <circle cx="6" cy="18.5" r="2.2" strokeWidth="1.6" />
+        <circle cx="18" cy="18.5" r="2.2" strokeWidth="1.6" />
+        <path d="M10.8 7.3L7.2 16.5M13.2 7.3l3.6 9.2" strokeWidth="1.5" strokeLinecap="round" />
+      </>
+    ),
+    // Bell: Smooth curved bell with small bottom clapper
+    bell: (
+      <>
+        <path d="M18 8.5A6 6 0 0 0 6 8.5c0 6.5-2.8 7.8-2.8 8.5h17.6c0-.7-2.8-2-2.8-8.5" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
+        <path d="M10.2 20.5a1.8 1.8 0 0 0 3.6 0" strokeWidth="1.6" strokeLinecap="round" />
+      </>
+    )
   }
   return (
-    <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round">
+    <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
       {paths[name] ?? <circle cx="12" cy="12" r="8" />}
     </svg>
   )
@@ -133,6 +170,30 @@ export default function ShellApp(): React.JSX.Element {
       offClose()
     }
   }, [])
+
+  useEffect(() => {
+    if (!profileMenuOpen && !notificationsOpen) return
+    const onPointerDown = (event: PointerEvent): void => {
+      const target = event.target as HTMLElement | null
+      if (!target) return
+      if (target.closest('.shell-profile-menu, .shell-profile-button, .shell-notifications-panel, .shell-notifications-button')) {
+        return
+      }
+      setProfileMenuOpen(false)
+      setNotificationsOpen(false)
+    }
+    const onKeyDown = (event: KeyboardEvent): void => {
+      if (event.key !== 'Escape') return
+      setProfileMenuOpen(false)
+      setNotificationsOpen(false)
+    }
+    window.addEventListener('pointerdown', onPointerDown)
+    window.addEventListener('keydown', onKeyDown)
+    return () => {
+      window.removeEventListener('pointerdown', onPointerDown)
+      window.removeEventListener('keydown', onKeyDown)
+    }
+  }, [profileMenuOpen, notificationsOpen])
 
   useEffect(() => {
     const unsubscribe = router.subscribe(setRoute)
@@ -314,6 +375,10 @@ export default function ShellApp(): React.JSX.Element {
     }))
   ], [router, threads])
 
+  const isCanvasView =
+    route.view === 'automations' &&
+    (parseAutomationTab(route.params['automationTab']) ?? 'manage') === 'canvas'
+
   return (
     <main className="shell-frame is-collapsed">
       <header className="shell-drag-strip" aria-label="Window title bar">
@@ -359,6 +424,7 @@ export default function ShellApp(): React.JSX.Element {
                   aria-current={active ? 'page' : undefined}
                   aria-label={tab.label}
                   title={tab.label}
+                  data-tooltip={tab.label}
                   onClick={() => navigate('automations', { automationTab: tab.id })}
                 >
                   <Icon name={tab.icon} />
@@ -432,7 +498,7 @@ export default function ShellApp(): React.JSX.Element {
               <button type="button" onClick={() => { setChatError(''); setDashboardError('') }}>Dismiss</button>
             </div>
           )}
-          <div className={`shell-content${route.view === 'chat' ? ' has-chat-view' : ''}${!activeFeature && !activeChatId ? ' is-home' : ''}`}>
+          <div className={`shell-content${route.view === 'chat' ? ' has-chat-view' : ''}${!activeFeature && !activeChatId ? ' is-home' : ''}${activeFeature ? ' has-feature' : ''}${isCanvasView ? ' is-canvas-view' : ''}`}>
             {activeFeature ? (
               <FeatureContent feature={activeFeature} shell={shellApi} params={route.params} />
             ) : activeChatId ? (

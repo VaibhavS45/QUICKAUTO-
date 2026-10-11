@@ -2,14 +2,14 @@
   position: relative;
   display: flex;
   flex-direction: column;
-  width: min(100%, 1040px);
-  align-self: stretch;
+  width: min(100%, 980px);
+  align-self: center;
   justify-self: center;
   min-height: 100%;
 }
 
 .automations.is-creating {
-  justify-content: center;
+  justify-content: flex-start;
   align-items: center;
   padding: 20px 0 40px;
 }
@@ -1818,11 +1818,11 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 34px;
+  width: auto;
   height: 34px;
-  padding: 0;
+  padding: 0 12px;
   border: 1px solid #2a2a30;
-  border-radius: 50%;
+  border-radius: 8px;
   color: #a1a1aa;
   background: #18181b;
   font: inherit;

@@ -67,4 +67,14 @@ describe('builder compile', () => {
     expect(event.triggers[0]).toMatchObject({ kind: 'event' })
     expect(event.title).toBe(AUTOMATION_TEMPLATES[1]!.title)
   })
+
+  it('keeps @tags out of visible inputs and carries tools invisibly', () => {
+    for (const template of AUTOMATION_TEMPLATES) {
+      const draft = templateToDraft(template)
+      expect(draft.task).not.toContain('@')
+      expect(draftToText(draft).text).toContain('@')
+    }
+    const empty = { ...blankDraft(), mode: 'manual' as const, triggers: [] }
+    expect(draftToText(empty).valid).toBe(false)
+  })
 })

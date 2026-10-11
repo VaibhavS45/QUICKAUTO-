@@ -103,13 +103,127 @@ describe('Scheduler store', () => {
 
   it('remove + toggle enable/disable', () => {
     const s = new Scheduler(new MemoryRoutineStore(), { fire: () => {} })
-    const r = s.create('@calendar @websearch in 30 minutes news', BASE)
+    const r = s.create('@calendar @websearch in 30 minutes news', new Date())
     expect(s.setEnabled(r.id, false)?.enabled).toBe(false)
     expect(s.setEnabled(r.id, true)?.enabled).toBe(true)
     expect(s.remove(r.id)).toBe(true)
     expect(s.list()).toHaveLength(0)
   })
+})
 
+describe('Scheduler timing', () => {
+  function timedScheduler(
+    routines: Routine[],
+    opts: { now: () => number; fires: string[]; isRunning?: () => boolean }
+  ): Scheduler {
+    const store = new MemoryRoutineStore()
+    store.save(routines)
+    return new Scheduler(store, {
+      fire: (r) => opts.fires.push(r.id),
+      ...(opts.isRunning ? { isRunning: (_id: string) => opts.isRunning!() } : {}),
+      now: opts.now
+    })
+  }
+
+  it('daily routine fires at its occurrence (not re-armed away)', () => {
+    vi.useFakeTimers()
+    try {
+      let now = BASE.getTime()
+      const fires: string[] = []
+      const s = timedScheduler(
+        [routine({ id: 'daily1', repeat: 'daily', runAt: new Date(2026, 9, 7, 12, 1, 0).getTime() })],
+        { now: () => now, fires }
+      )
+      s.startAll()
+      vi.advanceTimersByTime(60_000)
+      expect(fires).toEqual(['daily1'])
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('daily routine fires again at the next occurrence after markRan', () => {
+    vi.useFakeTimers()
+    try {
+      let now = BASE.getTime()
+      const fires: string[] = []
+      const s = timedScheduler(
+        [routine({ id: 'daily2', repeat: 'daily', runAt: new Date(2026, 9, 7, 12, 1, 0).getTime() })],
+        { now: () => now, fires }
+      )
+      s.startAll()
+      vi.advanceTimersByTime(60_000)
+      expect(fires).toEqual(['daily2'])
+      s.markRan('daily2', 'done')
+      expect(s.list()[0]?.enabled).toBe(true)
+      now += 24 * 3600_000 + 60_000 // Thu 12:01, when the re-armed timer elapses
+      vi.advanceTimersByTime(24 * 3600_000 + 60_000)
+      expect(fires).toEqual(['daily2', 'daily2'])
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('one-shot still fires at runAt', () => {
+    vi.useFakeTimers()
+    try {
+      const now = BASE.getTime()
+      const fires: string[] = []
+      const s = timedScheduler([routine({ id: 'once1', runAt: now + 60_000 })], {
+        now: () => now,
+        fires
+      })
+      s.startAll()
+      vi.advanceTimersByTime(60_000)
+      expect(fires).toEqual(['once1'])
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('far-future one-shot re-arms instead of firing early, then fires', () => {
+    vi.useFakeTimers()
+    try {
+      const MAX = 2_147_483_647 // setTimeout ceiling, mirrors scheduler.ts
+      let now = BASE.getTime()
+      const fires: string[] = []
+      const runAt = now + MAX + 3_600_000
+      const s = timedScheduler([routine({ id: 'far1', runAt })], { now: () => now, fires })
+      s.startAll()
+      vi.advanceTimersByTime(MAX) // clamped timer elapses while still >1h out
+      expect(fires).toEqual([])
+      expect(s.list()[0]?.enabled).toBe(true)
+      now = runAt - 30_000 // time actually passes before the re-armed timer elapses
+      vi.advanceTimersByTime(MAX)
+      expect(fires).toEqual(['far1'])
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('overdue one-shot is disabled (not left enabled) on startAll', () => {
+    vi.useFakeTimers()
+    try {
+      const now = BASE.getTime()
+      const fires: string[] = []
+      const s = timedScheduler([routine({ id: 'past1', runAt: now - 3600_000 })], {
+        now: () => now,
+        fires
+      })
+      s.startAll()
+      expect(s.list()[0]?.enabled).toBe(false)
+      expect(s.list()[0]?.lastStatus).toMatch(/missed/)
+      // Re-enabling a past-due one-shot disables it again instead of stranding it.
+      expect(s.setEnabled('past1', true)?.enabled).toBe(false)
+      vi.advanceTimersByTime(24 * 3600_000)
+      expect(fires).toEqual([])
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+})
+
+describe('Scheduler store skip', () => {
   it('one-shot auto-disables after markRan; skips when previous run active', () => {
     vi.useFakeTimers()
     try {

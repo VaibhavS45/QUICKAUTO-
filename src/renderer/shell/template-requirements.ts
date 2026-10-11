@@ -22,21 +22,28 @@ const LABELS: Record<string, string> = {
   mcp: 'MCP servers'
 }
 
+export function toolDisplayLabel(id: string): string {
+  return LABELS[id] ?? TOOL_META[id as keyof typeof TOOL_META]?.label ?? id
+}
+
+export function requirementState(
+  id: string,
+  connected: Readonly<Record<string, boolean | undefined>>
+): RequirementState {
+  if (UNAVAILABLE_TOOLS.has(id)) return 'unavailable'
+  if (LOCAL_TOOLS.has(id)) return 'ready'
+  if (connected[id] === true) return 'ready'
+  if (connected[id] === false) return 'connect'
+  return 'unknown'
+}
+
 export function templateRequirementBadges(
   template: AutomationTemplate,
   connected: Readonly<Record<string, boolean | undefined>>
 ): RequirementBadge[] {
   return template.requires.map((id) => ({
     id,
-    label: LABELS[id] ?? TOOL_META[id as keyof typeof TOOL_META]?.label ?? id,
-    state: UNAVAILABLE_TOOLS.has(id)
-      ? 'unavailable'
-      : LOCAL_TOOLS.has(id)
-        ? 'ready'
-      : connected[id] === true
-        ? 'ready'
-        : connected[id] === false
-          ? 'connect'
-          : 'unknown'
+    label: toolDisplayLabel(id),
+    state: requirementState(id, connected)
   }))
 }

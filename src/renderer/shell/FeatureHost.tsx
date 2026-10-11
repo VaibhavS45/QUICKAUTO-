@@ -7,10 +7,16 @@ export function createFeatureProps(shell: ShellApi, params: Record<string, unkno
     ? AUTOMATION_TEMPLATES.find((template) => template.id === templateId)
     : undefined
   const focusId = params['focusId']
+  const focusRunId = params['focusRunId']
+  const startKind = params['startKind']
+  const automationTab = params['automationTab']
   return {
     shell,
     ...(initialTemplate ? { initialTemplate } : {}),
-    ...(typeof focusId === 'string' ? { focusId } : {})
+    ...(typeof focusId === 'string' ? { focusId } : {}),
+    ...(typeof focusRunId === 'string' ? { focusRunId } : {}),
+    ...(typeof startKind === 'string' ? { initialStartKind: startKind } : {}),
+    ...(typeof automationTab === 'string' ? { initialAutomationTab: automationTab } : {})
   }
 }
 

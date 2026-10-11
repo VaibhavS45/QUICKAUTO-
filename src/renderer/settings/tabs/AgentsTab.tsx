@@ -35,7 +35,7 @@ function EngineCard({ engine, active, onUse }: { engine: EngineInfo; active: boo
   const inner = (
     <>
       <div className="flex items-center gap-3">
-        <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-neutral-800 text-lg text-neutral-100" aria-hidden>
+        <span className="flex h-10 w-10 items-center justify-center rounded-md bg-neutral-800 text-lg text-neutral-100" aria-hidden>
           {engine.glyph}
         </span>
         <div className="min-w-0 flex-1">
@@ -46,9 +46,9 @@ function EngineCard({ engine, active, onUse }: { engine: EngineInfo; active: boo
       </div>
       <div className="flex items-center justify-between pt-3">
         {engine.ready ? (
-          <span className="rounded-full bg-emerald-950 px-2.5 py-1 text-xs text-emerald-300">✓ Ready</span>
+          <span className="rounded-md bg-emerald-950 px-2.5 py-1 text-xs text-emerald-300">✓ Ready</span>
         ) : (
-          <span className="rounded-full bg-neutral-800 px-2.5 py-1 text-xs text-amber-300">● Needs setup</span>
+          <span className="rounded-md bg-neutral-800 px-2.5 py-1 text-xs text-amber-300">● Needs setup</span>
         )}
         {active ? (
           <span className="text-xs font-medium text-sky-300">In use</span>
@@ -59,7 +59,7 @@ function EngineCard({ engine, active, onUse }: { engine: EngineInfo; active: boo
       {!engine.ready && engine.hint && <p className="pt-2 font-mono text-[11px] text-neutral-500">{engine.hint}</p>}
     </>
   )
-  const cls = `rounded-2xl border bg-neutral-900 p-4 text-left transition-colors ${
+  const cls = `rounded-lg border bg-neutral-900 p-4 text-left transition-colors ${
     active ? 'border-sky-500/60' : 'border-neutral-800 hover:border-neutral-600'
   }`
   return engine.ready && !active && onUse ? (

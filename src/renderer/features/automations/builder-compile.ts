@@ -21,6 +21,8 @@ export interface BuilderDraft {
   triggers: BuilderTrigger[]
   task: string
   describe: string
+  /** Hidden tool ids carried into the submitted text as @tags. Never shown in inputs. */
+  tools: string[]
 }
 
 let seq = 0
@@ -34,7 +36,7 @@ export function blankTrigger(kind: BuilderTriggerKind = 'schedule'): BuilderTrig
 }
 
 export function blankDraft(): BuilderDraft {
-  return { mode: 'manual', title: '', triggers: [blankTrigger()], task: '', describe: '' }
+  return { mode: 'manual', title: '', triggers: [blankTrigger()], task: '', describe: '', tools: [] }
 }
 
 /** HH:MM → "6:30pm" so Scheduler.create finds the time. */
@@ -65,6 +67,11 @@ export function triggerToPhrase(trigger: BuilderTrigger): string | null {
 
 function mentionsIn(text: string): string[] {
   return [...text.matchAll(/(?:^|\s)@([a-zA-Z]+)/g)].map((m) => m[1]!.toLowerCase())
+}
+
+/** Strip @tool tags so they never show in inputs; ids travel via draft.tools instead. */
+export function stripMentions(text: string): string {
+  return text.replace(/(?:^|\s)@[a-zA-Z]+/g, ' ').replace(/\s+/g, ' ').trim()
 }
 
 export interface CompiledDraft {
@@ -98,7 +105,11 @@ export function draftToText(draft: BuilderDraft): CompiledDraft {
     return { text: '', tools: [], valid: false, error: 'Give it a title or describe what the agent should do.' }
   }
   const appTags = draft.triggers.filter((t) => t.kind === 'event').map((t) => `@${t.app}`)
-  const text = [draft.title.trim(), `When: ${phrases.join('; ')}`, draft.task.trim(), ...appTags]
+  const extraTags = draft.tools
+    .map((t) => t.trim().toLowerCase())
+    .filter((t) => t && !appTags.some((a) => a.toLowerCase() === `@${t}`))
+    .map((t) => `@${t}`)
+  const text = [draft.title.trim(), `When: ${phrases.join('; ')}`, draft.task.trim(), ...appTags, ...extraTags]
     .filter(Boolean)
     .join('. ')
   return { text, tools: [...new Set([...mentionsIn(text)])], valid: true, error: '' }
@@ -110,15 +121,14 @@ function repeatFromTemplate(repeat?: string): BuilderRepeat {
   return 'once'
 }
 
-/** Template → editable manual draft, keeping its @tool mentions so tools carry over. */
+/** Template → editable manual draft. @tags are stripped from the visible task; ids travel via draft.tools. */
 export function templateToDraft(template: AutomationTemplate): BuilderDraft {
   const trigger = template.trigger
   const triggers: BuilderTrigger[] =
     trigger.kind === 'schedule'
       ? [{ ...blankTrigger('schedule'), repeat: repeatFromTemplate(trigger.repeat), time: /^\d{1,2}:\d{2}$/.test(trigger.at ?? '') ? trigger.at! : '18:00' }]
       : [{ ...blankTrigger('event'), app: template.toolIds[0] ?? 'gmail', event: template.description }]
-  const have = new Set(mentionsIn(template.prompt))
-  const missing = template.toolIds.filter((id) => !have.has(id.toLowerCase()))
-  const task = [template.prompt, ...missing.map((id) => `@${id}`)].join(' ').trim()
-  return { mode: 'manual', title: template.title, triggers, task, describe: '' }
+  const tools = [...new Set([...mentionsIn(template.prompt), ...template.toolIds.map((id) => id.toLowerCase())])]
+  const task = stripMentions(template.prompt)
+  return { mode: 'manual', title: template.title, triggers, task, describe: '', tools }
 }

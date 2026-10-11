@@ -1,18 +1,21 @@
 .shell-frame {
   height: 100vh;
   overflow: hidden;
+  border-radius: 12px;
   color: #e5e5e5;
   background: #111113;
   font-size: 13px;
 }
 
 .shell-drag-strip {
-  height: 42px;
+  position: relative;
+  height: 38px;
   display: flex;
   align-items: center;
   padding-left: 82px;
   color: #85858b;
-  background: #111113;
+  background: #0c0c0e;
+  border-bottom: 1px solid rgb(255 255 255 / 6%);
   -webkit-app-region: drag;
   user-select: none;
 }
@@ -21,33 +24,37 @@
   font-size: 12px;
   font-weight: 600;
   letter-spacing: 0.02em;
+  color: #f0f0f2;
 }
 
 .shell-workspace {
   display: flex;
-  height: calc(100vh - 42px);
+  box-sizing: border-box;
+  height: calc(100vh - 38px);
   min-height: 0;
+  padding: 8px 8px 8px 0;
 }
 
 .shell-sidebar {
   position: relative;
   display: flex;
-  flex: 0 0 260px;
+  flex: 0 0 60px;
   flex-direction: column;
+  align-items: stretch;
   min-height: 0;
-  padding: 12px 12px 12px;
-  border-right: 1px solid #27272a;
-  background: #161618;
-  transition: flex-basis 150ms ease;
-}
-
-.is-collapsed .shell-sidebar {
-  flex-basis: 72px;
+  padding: 12px 8px;
+  background: #111113;
 }
 
 .shell-primary-nav {
   display: grid;
   gap: 3px;
+}
+
+.shell-rail-center {
+  flex: 1;
+  align-content: center;
+  padding: 12px 0;
 }
 
 .shell-nav-item,
@@ -67,11 +74,20 @@
   height: 38px;
   gap: 11px;
   padding: 0 10px;
-  border-radius: 7px;
+  border-radius: 6px;
   text-align: left;
+  transition: background-color 150ms ease, color 150ms ease;
 }
 
-.shell-nav-item:hover,
+.shell-nav-item {
+  color: #8f8f97;
+}
+
+.shell-nav-item:hover {
+  color: #f4f4f5;
+  background: #232327;
+}
+
 .shell-profile-button:hover,
 .shell-icon-button:hover {
   color: #f4f4f5;
@@ -79,8 +95,8 @@
 }
 
 .shell-nav-item.is-active {
-  color: #f4f4f5;
-  background: #2b2b2f;
+  color: #ffffff;
+  background: #2e2e33;
 }
 
 .shell-nav-item svg,
@@ -116,8 +132,17 @@
   position: relative;
   display: grid;
   gap: 8px;
+  justify-items: center;
+  margin-top: auto;
   border-top: 1px solid #29292c;
   padding-top: 12px;
+}
+
+.shell-sidebar-footer .shell-profile-button {
+  width: 34px;
+  height: 34px;
+  justify-content: center;
+  padding: 0;
 }
 
 .shell-profile-button {
@@ -126,7 +151,7 @@
   height: 40px;
   gap: 9px;
   padding: 0 6px;
-  border-radius: 7px;
+  border-radius: 6px;
   text-align: left;
 }
 
@@ -180,7 +205,7 @@
   min-width: 14px;
   height: 14px;
   padding: 0 3px;
-  border: 1px solid #161618;
+  border: 1px solid #111113;
   border-radius: 8px;
   color: #fff;
   background: #b55f68;
@@ -198,9 +223,9 @@
   max-height: min(450px, 60vh);
   overflow: hidden;
   border: 1px solid #39393f;
-  border-radius: 10px;
+  border-radius: 8px;
   background: #222225;
-  box-shadow: 0 12px 36px #0009;
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / 5%), 0 16px 48px rgb(0 0 0 / 50%);
 }
 
 .shell-notifications-panel > header {
@@ -266,7 +291,7 @@
   height: 30px;
   margin: 5px;
   border: 0;
-  border-radius: 5px;
+  border-radius: 6px;
   color: #8c8c93;
   background: transparent;
   font-size: 16px;
@@ -286,32 +311,73 @@
   text-align: center;
 }
 
-.shell-account-menu {
-  position: absolute;
-  z-index: 2;
-  right: 0;
-  bottom: 84px;
-  left: 0;
-  padding: 5px;
-  border: 1px solid #39393f;
-  border-radius: 8px;
-  background: #222225;
-  box-shadow: 0 8px 24px #0008;
+.shell-menu-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 3;
+  border: 0;
+  padding: 0;
+  background: transparent;
+  cursor: default;
 }
 
-.shell-account-menu button {
+.shell-profile-menu {
+  position: absolute;
+  z-index: 4;
+  bottom: 0;
+  left: calc(100% + 10px);
+  width: 230px;
+  padding: 5px;
+  border: 1px solid #39393f;
+  border-radius: 10px;
+  background: #222225;
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / 5%), 0 16px 48px rgb(0 0 0 / 50%);
+}
+
+.shell-profile-menu-head {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  padding: 8px 9px 10px;
+  border-bottom: 1px solid #333337;
+  margin-bottom: 5px;
+}
+
+.shell-profile-menu-identity {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+
+.shell-profile-menu-identity strong {
+  overflow: hidden;
+  color: #f0f0f2;
+  font-size: 12px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.shell-profile-menu-identity small {
+  overflow: hidden;
+  color: #8c8c93;
+  font-size: 10px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.shell-profile-menu button[role="menuitem"] {
   width: 100%;
   height: 34px;
   padding: 0 9px;
   border: 0;
-  border-radius: 5px;
+  border-radius: 6px;
   color: #e5e5e5;
   background: transparent;
   text-align: left;
   cursor: pointer;
 }
 
-.shell-account-menu button:hover {
+.shell-profile-menu button[role="menuitem"]:hover {
   background: #343438;
 }
 
@@ -320,48 +386,11 @@
   flex: 1;
   flex-direction: column;
   min-width: 0;
-  background: #111113;
-}
-
-.shell-pane-header {
-  display: flex;
-  height: 48px;
-  flex: 0 0 auto;
-  align-items: center;
-  padding: 0 25px;
-  border-bottom: 1px solid #242427;
-}
-
-.shell-pane-header h1 {
-  margin: 0;
-  color: #e7e7e9;
-  font-size: 13px;
-  font-weight: 600;
-}
-
-.shell-feature-header-actions {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  margin-left: auto;
-}
-
-.shell-feature-header-actions button {
-  display: inline-flex;
-  min-height: 30px;
-  align-items: center;
-  gap: 6px;
-  padding: 0 9px;
-  border: 1px solid #35353a;
-  border-radius: 6px;
-  color: #d1d1d6;
-  background: #1b1b1e;
-  font: inherit;
-  cursor: pointer;
-}
-
-.shell-feature-header-actions button:hover {
-  background: #2a2a2e;
+  overflow: hidden;
+  border: 1px solid rgb(255 255 255 / 8%);
+  border-radius: 12px;
+  background: #161618;
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / 4%);
 }
 
 .shell-content {
@@ -369,7 +398,8 @@
   flex: 1;
   min-height: 0;
   place-items: center;
-  padding: 28px;
+  padding: 20px 28px 28px;
+  overflow-y: auto;
 }
 
 .shell-home {
@@ -477,14 +507,14 @@
   max-height: calc(100vh - 64px);
   overflow: hidden;
   border: 1px solid rgb(255 255 255 / 10%);
-  border-radius: 12px;
+  border-radius: 8px;
   background: #0c0c0e;
-  box-shadow: 0 24px 64px rgb(0 0 0 / 55%);
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / 5%), 0 16px 48px rgb(0 0 0 / 50%);
 }
 
 .shell-settings-card .settings {
   height: 100%;
-  border-radius: 12px;
+  border-radius: 8px;
 }
 
 .shell-chats-section {
@@ -526,7 +556,7 @@
   margin: 8px 10px 0;
   padding: 0 8px;
   border: 1px solid #39393f;
-  border-radius: 5px;
+  border-radius: 6px;
   outline: none;
   color: #e5e5e5;
   background: #202023;
@@ -539,7 +569,7 @@
   margin-top: 8px;
   padding: 0 8px;
   border: 1px solid #39393f;
-  border-radius: 5px;
+  border-radius: 6px;
   outline: none;
   color: #e5e5e5;
   background: #202023;
@@ -608,7 +638,7 @@
 .shell-chat-actions button {
   width: 21px;
   height: 24px;
-  border-radius: 4px;
+  border-radius: 6px;
   font-size: 14px;
 }
 
@@ -668,9 +698,9 @@
   margin: 7px 10px 0;
   padding: 9px;
   border: 1px solid #48484f;
-  border-radius: 7px;
+  border-radius: 6px;
   background: #242427;
-  box-shadow: 0 5px 16px #0007;
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / 5%);
 }
 
 .shell-confirm-card p {
@@ -685,7 +715,7 @@
   margin-right: 5px;
   padding: 0 7px;
   border: 1px solid #4b4b52;
-  border-radius: 4px;
+  border-radius: 6px;
   color: #dedee2;
   background: #333338;
   font-size: 10px;
@@ -724,6 +754,60 @@
   overflow: hidden;
 }
 
+.shell-content.is-home {
+  place-items: start center;
+  overflow-y: auto;
+}
+
+.shell-home-automate {
+  width: min(100%, 940px);
+  margin: 0 auto;
+  padding: 16px 0 64px;
+}
+
+.shell-home-automate > h2 {
+  margin: 0 0 28px;
+  color: #f0f0f2;
+  font-family: Georgia, 'Times New Roman', serif;
+  font-size: 30px;
+  font-weight: 500;
+  text-align: center;
+}
+
+.home-start-card {
+  padding: 20px;
+  border: 1px solid #232328;
+  border-radius: 8px;
+  background: #1a1a1d;
+}
+
+.home-start-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 14px;
+  color: #e7e7e9;
+  font-size: 13px;
+}
+
+.home-suggestions-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin: 28px 0 12px;
+}
+
+.home-suggestions-head h3 {
+  margin: 0;
+  color: #d8d8dc;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.shell-home-automate .shell-template-cards {
+  margin-top: 0;
+}
+
 .chat-composer {
   width: min(100%, 940px);
   margin: auto;
@@ -756,9 +840,9 @@
   position: relative;
   padding: 15px 16px 10px;
   border: 1px solid #343439;
-  border-radius: 14px;
+  border-radius: 8px;
   background: #1b1b1e;
-  box-shadow: 0 12px 35px #0002;
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / 5%);
 }
 
 .chat-composer-card textarea {
@@ -839,7 +923,7 @@
   border: 1px solid #34343b;
   border-radius: 8px;
   background: #19191d;
-  box-shadow: 0 12px 30px #0008;
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / 5%), 0 16px 48px rgb(0 0 0 / 50%);
 }
 
 .chat-model-menu input {
@@ -847,7 +931,7 @@
   box-sizing: border-box;
   margin-bottom: 4px;
   border: 1px solid #34343b;
-  border-radius: 5px;
+  border-radius: 6px;
   padding: 7px 8px;
   color: #e4e4e7;
   background: #24242a;
@@ -862,7 +946,7 @@
   align-items: flex-start;
   gap: 2px;
   border: 0;
-  border-radius: 5px;
+  border-radius: 6px;
   padding: 7px 8px;
   color: #d4d4d8;
   background: transparent;
@@ -896,7 +980,7 @@
 .chat-tool-chip {
   padding: 4px 7px;
   border: 1px solid #393941;
-  border-radius: 12px;
+  border-radius: 6px;
   color: #bcbcc3;
   background: #26262a;
   font-size: 10px;
@@ -908,7 +992,7 @@
   height: 30px;
   padding: 0 11px;
   border: 0;
-  border-radius: 7px;
+  border-radius: 6px;
   color: #111113;
   background: #e5e5e8;
   font-size: 11px;
@@ -935,7 +1019,7 @@
 .chat-template-row button,
 .chat-settings-link {
   border: 1px solid #39393f;
-  border-radius: 7px;
+  border-radius: 6px;
   padding: 7px 9px;
   color: #c8c8ce;
   background: #1c1c1f;
@@ -952,43 +1036,25 @@
   margin-top: 23px;
 }
 
-.shell-template-cards > header {
-  display: flex;
-  align-items: baseline;
-  gap: 10px;
-  margin-bottom: 9px;
-}
-
-.shell-template-cards > header h2 {
-  margin: 0;
-  color: #d8d8dc;
-  font-size: 12px;
-  font-weight: 600;
-}
-
-.shell-template-cards > header span {
-  color: #77777f;
-  font-size: 10px;
-}
-
 .shell-template-grid {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 8px;
+  align-items: start;
+  gap: 12px;
 }
 
+/* Suggestion flow card (reference: trigger step → arrow → action step, title strip). */
 .shell-template-card {
   min-width: 0;
-  padding: 10px;
-  border: 1px solid #333338;
-  border-radius: 9px;
-  background: #19191c;
+  overflow: hidden;
+  border: 1px solid #232328;
+  border-radius: 14px;
+  background: #1a1a1d;
 }
 
 .shell-template-select {
-  display: grid;
+  display: block;
   width: 100%;
-  gap: 6px;
   padding: 0;
   border: 0;
   color: inherit;
@@ -997,19 +1063,101 @@
   cursor: pointer;
 }
 
-.shell-template-select strong {
-  color: #e1e1e4;
-  font-size: 11px;
+.shell-template-flow {
+  display: grid;
+  justify-items: center;
+  padding: 16px 16px 18px;
 }
 
-.shell-template-select > span {
-  color: #929299;
-  font-size: 10px;
-  line-height: 1.4;
+.shell-flow-step {
+  display: flex;
+  width: 100%;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 12px 14px;
+  border: 1px solid rgb(255 255 255 / 6%);
+  border-radius: 10px;
+  color: #c9c9cf;
+  background: #101013;
+  font-size: 13px;
+  line-height: 1.45;
 }
 
-.shell-template-select:hover strong {
+.shell-flow-step > span:last-child {
+  display: -webkit-box;
+  min-width: 0;
+  overflow: hidden;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+
+.shell-flow-icon {
+  display: grid;
+  flex: 0 0 auto;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.shell-flow-icon.is-gmail {
+  background: linear-gradient(90deg, #ea4335, #fbbc05, #34a853, #4285f4);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+
+.shell-flow-icon.is-cal {
+  border-radius: 4px;
   color: #fff;
+  background: #3b82f6;
+  font-size: 10px;
+}
+
+.shell-flow-icon.is-action {
+  color: #e8e8ea;
+  font-weight: 400;
+}
+
+.shell-flow-icon.is-github,
+.shell-flow-icon.is-search,
+.shell-flow-icon.is-files {
+  color: #a8a8b0;
+}
+
+.shell-flow-arrow {
+  z-index: 1;
+  display: grid;
+  place-items: center;
+  width: 30px;
+  height: 30px;
+  margin: -15px 0;
+  border: 1px solid rgb(255 255 255 / 10%);
+  border-radius: 50%;
+  color: #b9b9c0;
+  background: #2c2c31;
+  font-size: 14px;
+}
+
+.shell-template-title {
+  display: block;
+  padding: 14px 16px;
+  border-top: 1px solid rgb(255 255 255 / 7%);
+  color: #f0f0f2;
+  background: #141416;
+  font-size: 14px;
+  font-weight: 500;
+}
+
+.shell-template-select:hover .shell-template-title {
+  color: #fff;
+}
+
+.shell-template-card .shell-template-requirements {
+  margin-top: 0;
+  padding: 0 16px 12px;
+  background: #141416;
 }
 
 .shell-template-requirements {
@@ -1026,7 +1174,7 @@
   gap: 4px;
   padding: 2px 6px;
   border: 1px solid #3b3b41;
-  border-radius: 11px;
+  border-radius: 6px;
   color: #b4c4ad;
   background: #20231f;
   font-size: 9px;
@@ -1078,9 +1226,9 @@
   overflow: auto;
   padding: 5px;
   border: 1px solid #3b3b41;
-  border-radius: 9px;
+  border-radius: 8px;
   background: #242427;
-  box-shadow: 0 8px 24px #0008;
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / 5%), 0 16px 48px rgb(0 0 0 / 50%);
 }
 
 .chat-mention-menu button {
@@ -1088,7 +1236,7 @@
   gap: 3px;
   padding: 8px;
   border: 0;
-  border-radius: 5px;
+  border-radius: 6px;
   color: #e5e5e7;
   background: transparent;
   text-align: left;
@@ -1163,7 +1311,7 @@
   margin-right: max(0px, calc((100% - 760px) / 2));
   margin-left: auto;
   padding: 11px 14px;
-  border-radius: 13px;
+  border-radius: 8px;
   color: #e8e8ea;
   background: #252528;
 }
@@ -1232,7 +1380,7 @@
   margin: 0 auto 16px;
   padding: 13px;
   border: 1px solid #645537;
-  border-radius: 9px;
+  border-radius: 8px;
   background: #28251e;
 }
 
@@ -1251,7 +1399,7 @@
   max-height: 190px;
   overflow: auto;
   padding: 9px;
-  border-radius: 5px;
+  border-radius: 6px;
   color: #d7d5cc;
   background: #191817;
   font-size: 10px;
@@ -1270,7 +1418,7 @@
   min-height: 29px;
   padding: 0 10px;
   border: 1px solid #5d5b52;
-  border-radius: 5px;
+  border-radius: 6px;
   color: #e5e2d7;
   background: #3b3931;
   cursor: pointer;
@@ -1344,7 +1492,7 @@
 
 @media (max-width: 760px) {
   .shell-sidebar {
-    flex-basis: 72px;
+    flex-basis: 60px;
     padding-right: 8px;
     padding-left: 8px;
   }
@@ -1375,4 +1523,212 @@
     padding-right: 14px;
     padding-left: 14px;
   }
+}
+
+/* Premium finish: hairline top light + soft depth. Geometry stays sharp 6/8px. */
+.chat-composer-card,
+.shell-confirm-card,
+.chat-approval-card,
+.chat-message.is-user {
+  border-color: rgb(255 255 255 / 9%);
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / 5%);
+}
+.shell-notifications-panel,
+.shell-profile-menu,
+.chat-mention-menu,
+.chat-model-menu {
+  border-color: rgb(255 255 255 / 9%);
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / 5%), 0 16px 48px rgb(0 0 0 / 50%);
+}
+.chat-send-button:not(:disabled) {
+  border-color: rgb(255 255 255 / 12%);
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / 12%), 0 2px 10px rgb(0 0 0 / 30%);
+}
+.shell-chat-entry.is-active {
+  border: 1px solid rgb(255 255 255 / 8%);
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / 5%);
+}
+/* Command palette: top trigger pill + dropdown panel. */
+.shell-palette-trigger {
+  position: absolute;
+  left: 50%;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 240px;
+  max-width: 420px;
+  height: 30px;
+  padding: 0 6px 0 12px;
+  border: 1px solid rgb(255 255 255 / 12%);
+  border-radius: 6px;
+  color: #a8a8b0;
+  background: #222226;
+  font: inherit;
+  font-size: 12px;
+  transform: translateX(-50%);
+  cursor: pointer;
+  -webkit-app-region: no-drag;
+}
+
+.shell-palette-trigger span {
+  flex: 1;
+  overflow: hidden;
+  text-align: left;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.shell-palette-trigger kbd {
+  padding: 2px 6px;
+  border: 0;
+  border-radius: 4px;
+  color: #8f8f97;
+  background: #26262b;
+  font: inherit;
+  font-size: 10px;
+}
+
+.shell-palette-trigger:hover {
+  color: #a2a2a9;
+  border-color: #2e2e34;
+}
+
+.shell-palette-trigger:focus-visible {
+  outline: 1px solid #4a4a51;
+  outline-offset: 1px;
+}
+
+.shell-palette-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  display: flex;
+  justify-content: center;
+  align-items: flex-start;
+  padding-top: 52px;
+  background: rgb(0 0 0 / 45%);
+}
+
+.shell-palette {
+  width: min(560px, calc(100vw - 64px));
+  overflow: hidden;
+  border: 1px solid rgb(255 255 255 / 10%);
+  border-radius: 8px;
+  background: #141416;
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / 5%), 0 24px 64px rgb(0 0 0 / 55%);
+}
+
+.shell-palette input {
+  width: 100%;
+  box-sizing: border-box;
+  height: 44px;
+  border: 0;
+  border-bottom: 1px solid rgb(255 255 255 / 7%);
+  outline: none;
+  padding: 0 14px;
+  color: #f0f0f2;
+  background: transparent;
+  font: inherit;
+  font-size: 13px;
+}
+
+.shell-palette input::placeholder {
+  color: #63636b;
+}
+
+.shell-palette-list {
+  max-height: 320px;
+  overflow-y: auto;
+  padding: 6px;
+}
+
+.shell-palette-item {
+  display: flex;
+  width: 100%;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  min-height: 34px;
+  padding: 0 10px;
+  border: 0;
+  border-radius: 6px;
+  color: #d1d1d6;
+  background: transparent;
+  font: inherit;
+  font-size: 13px;
+  text-align: left;
+  cursor: pointer;
+}
+
+.shell-palette-item small {
+  color: #77777f;
+  font-size: 11px;
+}
+
+.shell-palette-item.is-active {
+  color: #fff;
+  background: #2a2a2e;
+}
+
+.shell-palette-empty {
+  margin: 0;
+  padding: 16px;
+  color: #77777f;
+  font-size: 12px;
+  text-align: center;
+}
+
+/* Updates boxes: one card per update, click opens its info. */
+.updates-stream-list {
+  display: grid;
+  gap: 8px;
+}
+
+.updates-stream-box {
+  display: flex;
+  gap: 10px;
+  width: 100%;
+  padding: 12px 14px;
+  border: 1px solid rgb(255 255 255 / 9%);
+  border-radius: 8px;
+  color: inherit;
+  background: #19191c;
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / 5%);
+  text-align: left;
+  font: inherit;
+  cursor: pointer;
+}
+
+.updates-stream-box:hover {
+  background: #202024;
+}
+
+.updates-stream-text {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+
+.updates-stream-text strong {
+  overflow: hidden;
+  color: #e1e1e4;
+  font-size: 13px;
+  font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.updates-stream-text small {
+  color: #77777f;
+  font-size: 11px;
+}
+
+.updates-stream-text > span:last-child {
+  display: -webkit-box;
+  overflow: hidden;
+  color: #929299;
+  font-size: 12px;
+  line-height: 1.5;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
 }

@@ -24,6 +24,12 @@ export function timeLabel(at: number): string {
   return new Date(at).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })
 }
 
+export function pastDayLabel(key: string, todayKey: string): string {
+  if (key === todayKey) return 'Today'
+  if (key === addDaysKey(todayKey, -1)) return 'Yesterday'
+  return dayLabel(key, todayKey)
+}
+
 export function routineTitle(prompt: string): string {
   const firstLine = prompt.split('\n')[0] ?? prompt
   return firstLine.length > 80 ? `${firstLine.slice(0, 80)}…` : firstLine

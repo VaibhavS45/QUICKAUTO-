@@ -21,7 +21,7 @@ interface GhStatus {
 function ConnectorAvatar({ row }: { row: ConnectorRow }): React.JSX.Element {
   return (
     <span
-      className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl text-lg font-semibold"
+      className="flex h-10 w-10 shrink-0 items-center justify-center rounded-md text-lg font-semibold"
       style={{ backgroundColor: '#1c1c1e', color: row.color, border: '1px solid #2c2c2e' }}
       aria-hidden
     >
@@ -138,7 +138,7 @@ export default function ConnectorsTab(): React.JSX.Element {
               {row.id === 'gmail' && g.message && <p className="set-msg">{g.message}</p>}
             </div>
             {row.status === 'connected' ? (
-              <span className="rounded-full bg-neutral-800 px-3 py-1.5 text-xs text-neutral-400">Connected ✓</span>
+              <span className="rounded-md bg-neutral-800 px-3 py-1.5 text-xs text-neutral-400">Connected ✓</span>
             ) : row.action === 'connect-gmail' ? (
               <Button variant="secondary" size="sm" onClick={() => void g.connect()} disabled={g.connecting}>
                 {g.connecting ? 'Waiting…' : 'Connect'}

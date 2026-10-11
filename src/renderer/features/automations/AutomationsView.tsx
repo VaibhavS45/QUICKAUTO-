@@ -1,14 +1,13 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { FeatureProps } from '../../contracts/feature.js'
 import type { RunRecord, ScheduleItem } from '../../../shared/contracts/schedule.js'
-import { addDaysKey, dayLabel, localDayKey, monthGrid, monthLabel, routineOccursOn, routineTitle, timeLabel } from './dates.js'
+import { addDaysKey, dayLabel, localDayKey, monthGrid, monthLabel, pastDayLabel, routineOccursOn, routineTitle, timeLabel } from './dates.js'
 import {
   NODE_H,
   NODE_W,
   WORLD,
   blankStep,
   canvasStepsForRoutine,
-  describeRoutine,
   edgePath,
   insertCanvasStep,
   moveCanvasStep,
@@ -19,8 +18,12 @@ import {
   type CanvasKind,
   type CanvasStep
 } from './canvas-steps.js'
-import { blankDraft, templateToDraft, type BuilderDraft } from './builder-compile.js'
+import { blankDraft, blankTrigger, templateToDraft, type BuilderDraft } from './builder-compile.js'
+import { toolDisplayLabel, requirementState } from '../../shell/template-requirements.js'
+import { parseAutomationTab } from '../../shell/nav.js'
 import Builder from './builder.js'
+import CanvasDescribeBar from './canvas-describe.js'
+import StartChoice, { type StartKind } from './start-choice.js'
 import './automations.css'
 
 interface Routine {
@@ -98,8 +101,216 @@ export function stepsForRoutine(routine: Routine | undefined): ZapStep[] {
   }))
 }
 
+export function UpdatesList({ runs, todayKey, onSelect }: {
+  runs: RunRecord[]
+  todayKey: string
+  onSelect(run: RunRecord): void
+}): React.JSX.Element {
+  if (runs.length === 0) return <p className="automations-empty">No outputs yet. Run an automation to see results here.</p>
+  const byDay = new Map<string, RunRecord[]>()
+  for (const run of runs) {
+    const key = localDayKey(new Date(run.endedAt ?? run.startedAt))
+    const list = byDay.get(key) ?? []
+    list.push(run)
+    byDay.set(key, list)
+  }
+  const days = [...byDay.entries()].sort((a, b) => b[0].localeCompare(a[0]))
+  return (
+    <>
+      {days.map(([key, dayRuns]) => (
+        <section key={key} className="updates-day" aria-label={pastDayLabel(key, todayKey)}>
+          <h3>{pastDayLabel(key, todayKey)} <span>({dayRuns.length})</span></h3>
+          {dayRuns.map((run) => (
+            <button
+              key={run.id}
+              type="button"
+              className="updates-row"
+              onClick={() => onSelect(run)}
+            >
+              <span className="updates-row-meta">
+                <span className="updates-row-icon" aria-hidden="true">⟁</span>
+                <strong>{routineTitle(run.title)}</strong>
+                <small>{timeLabel(run.endedAt ?? run.startedAt)}</small>
+              </span>
+              <span className="updates-row-body">{run.summary || 'No output recorded yet.'}</span>
+            </button>
+          ))}
+        </section>
+      ))}
+    </>
+  )
+}
+
+/** Dedicated run page: full info left, every agent run in a right rail. */
+export function RunDetailPage({ run, runs, onSelect, onBack }: {
+  run: RunRecord
+  runs: RunRecord[]
+  onSelect(run: RunRecord): void
+  onBack(): void
+}): React.JSX.Element {
+  return (
+    <section className="automations" aria-label="Run details">
+      <div className="automations-create-top">
+        <button type="button" className="automations-back" onClick={onBack}>← Back</button>
+      </div>
+      <div className="automations-run">
+        <article className="automations-run-main" aria-label={routineTitle(run.title)}>
+          <p className="automations-detail-kicker">
+            Output · {new Date(run.startedAt).toLocaleString()}
+          </p>
+          <h3>{routineTitle(run.title)}</h3>
+          <p className={`automations-status is-${run.status}`}>{run.status.replaceAll('_', ' ')}</p>
+          <p className="automations-detail-body">{run.summary || 'No output recorded yet.'}</p>
+        </article>
+        <aside className="automations-run-rail" aria-label="All runs">
+          <h3>Runs <small>({runs.length})</small></h3>
+          {runs.map((item) => (
+            <button
+              key={item.id}
+              type="button"
+              className={`automations-day-item${item.id === run.id ? ' is-active' : ''}`}
+              aria-current={item.id === run.id}
+              onClick={() => onSelect(item)}
+            >
+              <span className={`automations-dot is-${item.status}`} aria-hidden="true" />
+              <span>{routineTitle(item.title)}</span>
+              <time>{timeLabel(item.endedAt ?? item.startedAt)}</time>
+            </button>
+          ))}
+        </aside>
+      </div>
+    </section>
+  )
+}
+
+export function routineKindLabel(routine: Routine): string {
+  return routine.tools.length > 1 ? 'Advanced' : 'Scheduled'
+}
+
+const ENGINE_LABELS: Record<string, string> = {
+  builtin: 'Built-in',
+  opencode: 'OpenCode',
+  pi: 'pi'
+}
+
+export function RoutineRail({ routine, engine, connected, onOpenConnectors }: {
+  routine: Routine
+  engine: string
+  connected: Readonly<Record<string, boolean | undefined>>
+  onOpenConnectors(): void
+}): React.JSX.Element {
+  return (
+    <aside className="manage-rail" aria-label="Automation configuration">
+      <section>
+        <h4>Agent</h4>
+        <p className="rail-group"><span>Model</span></p>
+        <p className="rail-row"><span>{ENGINE_LABELS[engine] ?? (engine || 'Not set')}</span></p>
+      </section>
+      <section>
+        <p className="rail-group"><span>Connectors</span><span>{routine.tools.length}</span></p>
+        {routine.tools.map((id) => {
+          const state = requirementState(id, connected)
+          return (
+            <p className="rail-row" key={id}>
+              <span>{toolDisplayLabel(id)}</span>
+              <span className={`rail-mark is-${state}`} title={state === 'ready' ? 'Connected' : state === 'connect' ? 'Needs connection' : 'Status unavailable'}>
+                {state === 'ready' ? '✓' : state === 'connect' ? '!' : '·'}
+              </span>
+            </p>
+          )
+        })}
+        <button type="button" className="rail-view-all" onClick={onOpenConnectors}>
+          <span>View all</span><span aria-hidden="true">›</span>
+        </button>
+      </section>
+    </aside>
+  )
+}
+
+export function ManageDetail({ routine, runs, onToggle, onRemove, onSelectRun }: {
+  routine: Routine
+  runs: RunRecord[]
+  onToggle(routine: Routine): void
+  onRemove(routine: Routine): void
+  onSelectRun(run: RunRecord): void
+}): React.JSX.Element {
+  const [menuOpen, setMenuOpen] = useState(false)
+  const [section, setSection] = useState<'details' | 'history'>('details')
+  const history = runs.filter((run) => run.routineId === routine.id)
+  return (
+    <div className="manage-detail">
+      <div className="md-top">
+        <span className="md-icon" aria-hidden="true">⟁</span>
+        <span className={`automations-status is-${routine.enabled ? 'active' : 'paused'}`}>
+          <span className={`automations-dot ${routine.enabled ? 'is-succeeded' : 'is-cancelled'}`} />{routine.enabled ? 'Active' : 'Paused'}
+        </span>
+        <div className="md-menu-wrap">
+          <button
+            type="button"
+            aria-label={`Options for ${routineTitle(routine.prompt)}`}
+            aria-expanded={menuOpen}
+            onClick={() => setMenuOpen((open) => !open)}
+          >
+            …
+          </button>
+          {menuOpen && (
+            <div className="automations-menu" role="menu">
+              <button type="button" role="menuitem" onClick={() => { setMenuOpen(false); onToggle(routine) }}>
+                {routine.enabled ? 'Pause' : 'Resume'}
+              </button>
+              <button type="button" role="menuitem" onClick={() => { setMenuOpen(false); onRemove(routine) }}>Delete</button>
+            </div>
+          )}
+        </div>
+      </div>
+      <p className="md-kind">{routineKindLabel(routine)}</p>
+      <h3>{routineTitle(routine.prompt)}</h3>
+      <p className="md-desc">{routine.prompt}</p>
+      <div className="md-tabs" role="tablist" aria-label={`${routineTitle(routine.prompt)} sections`}>
+        <button type="button" role="tab" aria-selected={section === 'details'} onClick={() => setSection('details')}>Details</button>
+        <button type="button" role="tab" aria-selected={section === 'history'} onClick={() => setSection('history')}>History</button>
+      </div>
+      {section === 'details' ? (
+        <>
+          <h4>Title</h4>
+          <p className="md-field">{routineTitle(routine.prompt)}</p>
+          <h4>When</h4>
+          <p className="md-field">Repeat {routine.repeat} at {timeLabel(routine.runAt)}</p>
+          <h4>The agent will</h4>
+          <p className="md-field">{routine.prompt}</p>
+          <details className="md-advanced">
+            <summary>
+              <span><strong>Advanced settings</strong><small>Repeat, tools, and last status.</small></span>
+            </summary>
+            <dl>
+              <div><dt>Repeat</dt><dd>{routine.repeat}</dd></div>
+              <div><dt>Runs at</dt><dd>{timeLabel(routine.runAt)}</dd></div>
+              <div><dt>Tools</dt><dd>{routine.tools.length ? routine.tools.map((t) => `@${t}`).join(' ') : 'none'}</dd></div>
+              {routine.lastStatus && <div><dt>Last status</dt><dd>{routine.lastStatus}</dd></div>}
+            </dl>
+          </details>
+        </>
+      ) : (
+        <>
+          <h4>History</h4>
+          {history.length === 0 && <p className="md-desc">No runs yet.</p>}
+          {history.map((run) => (
+            <button key={run.id} type="button" className="automations-history" onClick={() => onSelectRun(run)}>
+              <span className={`automations-dot is-${run.status}`} />
+              <span>
+                <strong>{new Date(run.endedAt ?? run.startedAt).toLocaleString()}</strong>
+                <small>{run.status.replaceAll('_', ' ')}</small>
+              </span>
+            </button>
+          ))}
+        </>
+      )}
+    </div>
+  )
+}
+
 export default function AutomationsView(props: FeatureProps): React.JSX.Element {
-  const [tab, setTab] = useState<'updates' | 'manage' | 'canvas'>('manage')
+  const [tab, setTab] = useState<'updates' | 'manage' | 'canvas'>(() => parseAutomationTab(props.initialAutomationTab) ?? 'manage')
   const [view, setView] = useState<'list' | 'calendar'>('list')
   const [routines, setRoutines] = useState<Routine[]>([])
   const [runs, setRuns] = useState<RunRecord[]>([])
@@ -129,6 +340,11 @@ export default function AutomationsView(props: FeatureProps): React.JSX.Element 
   const [error, setError] = useState('')
   const [activeOnly, setActiveOnly] = useState(false)
   const [builderOpen, setBuilderOpen] = useState(false)
+  const [choiceOpen, setChoiceOpen] = useState(false)
+  const [canvasDescribe, setCanvasDescribe] = useState(false)
+  const [canvasPrompt, setCanvasPrompt] = useState('')
+  const [canvasBusy, setCanvasBusy] = useState(false)
+  const [canvasError, setCanvasError] = useState('')
   const [builderInitial, setBuilderInitial] = useState<BuilderDraft>(() => blankDraft())
   const [gmailConnected, setGmailConnected] = useState<boolean | undefined>(undefined)
 
@@ -145,7 +361,25 @@ export default function AutomationsView(props: FeatureProps): React.JSX.Element 
     }
   }, [builderOpen])
   const [selection, setSelection] = useState<Selection | null>(null)
-  const [openMenuId, setOpenMenuId] = useState('')
+  const [engine, setEngine] = useState('')
+  const [connected, setConnected] = useState<Record<string, boolean | undefined>>({})
+
+  useEffect(() => {
+    let live = true
+    void Promise.all([window.app.getAgentProvider(), window.app.getConnector(), window.app.connectionStatus('gmail')])
+      .then(([provider, connector, gmail]) => {
+        if (!live) return
+        if (provider.ok && provider.provider) setEngine(provider.provider)
+        const statuses: Record<string, boolean | undefined> = {}
+        for (const service of connector.services ?? []) statuses[service.id] = service.connected
+        statuses.gmail = gmail.ok ? gmail.connected : undefined
+        setConnected(statuses)
+      })
+      .catch(() => {})
+    return () => {
+      live = false
+    }
+  }, [])
 
   const tomorrowKey = addDaysKey(todayKey, 1)
   const monthCells = monthGrid(monthCursor.y, monthCursor.m)
@@ -188,12 +422,32 @@ export default function AutomationsView(props: FeatureProps): React.JSX.Element 
   }, [refresh])
 
   const openedTemplate = useRef<string>('')
+  const openedStartKind = useRef<string>('')
   useEffect(() => {
     if (!props.initialTemplate || openedTemplate.current === props.initialTemplate.id) return
     openedTemplate.current = props.initialTemplate.id
     setBuilderInitial(templateToDraft(props.initialTemplate))
     setBuilderOpen(true)
   }, [props.initialTemplate])
+
+  useEffect(() => {
+    if (!props.initialStartKind || openedStartKind.current === props.initialStartKind) return
+    openedStartKind.current = props.initialStartKind
+    if (props.initialStartKind === 'schedule') setBuilderInitial({ ...blankDraft(), mode: 'manual', triggers: [blankTrigger('schedule')] })
+    else if (props.initialStartKind === 'triggered') setBuilderInitial({ ...blankDraft(), mode: 'manual', triggers: [] })
+    else if (props.initialStartKind === 'advanced') {
+      setTab('canvas')
+      setCanvasDescribe(true)
+      return
+    }
+    else return
+    setBuilderOpen(true)
+  }, [props.initialStartKind])
+
+  useEffect(() => {
+    const next = parseAutomationTab(props.initialAutomationTab)
+    if (next) setTab(next)
+  }, [props.initialAutomationTab])
 
   useEffect(() => {
     if (!props.focusId || routines.length === 0) return
@@ -206,6 +460,23 @@ export default function AutomationsView(props: FeatureProps): React.JSX.Element 
     }
   }, [props.focusId, routines.length, todayItems, tomorrowItems])
 
+  function pickStart(kind: StartKind): void {
+    setChoiceOpen(false)
+    if (kind === 'advanced') {
+      setTab('canvas')
+      setCanvasDescribe(true)
+      return
+    }
+    if (kind === 'schedule') setBuilderInitial({ ...blankDraft(), mode: 'manual', triggers: [blankTrigger('schedule')] })
+    else setBuilderInitial({ ...blankDraft(), mode: 'manual', triggers: [] })
+    setBuilderOpen(true)
+  }
+
+  function closeCreate(): void {
+    setChoiceOpen(false)
+    setBuilderOpen(false)
+  }
+
   async function submitBuilder(text: string): Promise<string | null> {
     try {
       const result = await window.app.routineCreate(text)
@@ -216,11 +487,30 @@ export default function AutomationsView(props: FeatureProps): React.JSX.Element 
       if (created) {
         setTab('manage')
         setView('list')
-        setSelection({ kind: 'routine', routine: created })
+        setRoutinePageId(created.id)
       }
       return null
     } catch (reason) {
       return errorText(reason)
+    }
+  }
+
+  async function submitCanvasDescribe(): Promise<void> {
+    const text = canvasPrompt.trim()
+    if (!text || canvasBusy) return
+    setCanvasBusy(true)
+    setCanvasError('')
+    try {
+      const failure = await submitBuilder(text)
+      if (failure) {
+        setCanvasError(failure)
+        return
+      }
+      setCanvasPrompt('')
+      setCanvasDescribe(false)
+      setTab('canvas')
+    } finally {
+      setCanvasBusy(false)
     }
   }
 
@@ -238,7 +528,6 @@ export default function AutomationsView(props: FeatureProps): React.JSX.Element 
     try {
       const result = await window.app.routineRemove(routine.id)
       if (!result.ok) throw new Error(result.error || 'Could not delete the automation.')
-      setOpenMenuId('')
       if (selection?.kind === 'routine' && selection.routine.id === routine.id) setSelection(null)
       await refresh()
     } catch (reason) {
@@ -376,6 +665,7 @@ export default function AutomationsView(props: FeatureProps): React.JSX.Element 
   }
 
   function beginPan(event: React.PointerEvent): void {
+    if ((event.target as HTMLElement).closest('input, select, textarea, button')) return
     dragRef.current = { mode: 'pan', sx: event.clientX, sy: event.clientY, ox: vp.x, oy: vp.y }
     const move = (e: PointerEvent): void => {
       const d = dragRef.current
@@ -503,14 +793,109 @@ export default function AutomationsView(props: FeatureProps): React.JSX.Element 
     </aside>
   )
 
+  const creating = choiceOpen || builderOpen
+  const [runId, setRunId] = useState(props.focusRunId ?? '')
+  const [routinePageId, setRoutinePageId] = useState('')
+  const openedRunId = useRef('')
+  useEffect(() => {
+    if (!props.focusRunId || openedRunId.current === props.focusRunId) return
+    openedRunId.current = props.focusRunId
+    setRunId(props.focusRunId)
+  }, [props.focusRunId])
+
+  if (creating) {
+    return (
+      <section className="automations" aria-label="Create automation">
+        <div className="automations-create-top">
+          <button type="button" className="automations-back" onClick={closeCreate}>← Back</button>
+        </div>
+        {choiceOpen && !builderOpen && (
+          <StartChoice onPick={pickStart} onClose={closeCreate} />
+        )}
+        {builderOpen && (
+          <Builder
+            initial={builderInitial}
+            gmailConnected={gmailConnected}
+            onConnect={() => props.shell.openSettings('connectors')}
+            onClose={closeCreate}
+            onSubmit={submitBuilder}
+          />
+        )}
+      </section>
+    )
+  }
+
+  if (runId) {
+    const run = runs.find((candidate) => candidate.id === runId)
+    if (loading) {
+      return (
+        <section className="automations" aria-label="Run details">
+          <div className="automations-create-top">
+            <button type="button" className="automations-back" onClick={() => setRunId('')}>← Back</button>
+          </div>
+          <p className="automations-empty">Loading run…</p>
+        </section>
+      )
+    }
+    if (!run) {
+      return (
+        <section className="automations" aria-label="Run details">
+          <div className="automations-create-top">
+            <button type="button" className="automations-back" onClick={() => setRunId('')}>← Back</button>
+          </div>
+          <p className="automations-empty">This run is no longer available.</p>
+        </section>
+      )
+    }
+    return (
+      <RunDetailPage
+        run={run}
+        runs={runs}
+        onSelect={(next) => setRunId(next.id)}
+        onBack={() => setRunId('')}
+      />
+    )
+  }
+
+  if (routinePageId) {
+    const routine = routines.find((candidate) => candidate.id === routinePageId)
+    if (!routine) {
+      return (
+        <section className="automations" aria-label="Automation details">
+          <div className="automations-create-top">
+            <button type="button" className="automations-back" onClick={() => setRoutinePageId('')}>← Back</button>
+          </div>
+          <p className="automations-empty">This automation is no longer available.</p>
+        </section>
+      )
+    }
+    return (
+      <section className="automations" aria-label="Automation details">
+        <div className="automations-create-top">
+          <button type="button" className="automations-back" onClick={() => setRoutinePageId('')}>← Back</button>
+        </div>
+        <div className="automations-routine">
+          <ManageDetail
+            routine={routine}
+            runs={runs}
+            onToggle={(target) => void toggleRoutine(target)}
+            onRemove={(target) => void removeRoutine(target)}
+            onSelectRun={(selected) => setRunId(selected.id)}
+          />
+          <RoutineRail
+            routine={routine}
+            engine={engine}
+            connected={connected}
+            onOpenConnectors={() => props.shell.openSettings('connectors')}
+          />
+        </div>
+      </section>
+    )
+  }
+
   return (
     <section className="automations" aria-label="Automations">
       <div className="automations-toolbar">
-        <nav aria-label="Automation sections" role="tablist">
-          <button type="button" role="tab" aria-selected={tab === 'updates'} onClick={() => setTab('updates')}>Updates</button>
-          <button type="button" role="tab" aria-selected={tab === 'manage'} onClick={() => setTab('manage')}>Manage</button>
-          <button type="button" role="tab" aria-selected={tab === 'canvas'} onClick={() => setTab('canvas')}>Canvas</button>
-        </nav>
         <div className="automations-actions">
           {tab !== 'canvas' && (
             <div className="automations-view-toggle" role="tablist" aria-label={tab === 'updates' ? 'Updates view' : 'Manage view'}>
@@ -522,6 +907,7 @@ export default function AutomationsView(props: FeatureProps): React.JSX.Element 
               </button>
             </div>
           )}
+          <button type="button" className="automations-create-btn" onClick={() => setChoiceOpen(true)}>+ Create</button>
           <button
             type="button"
             className={`automations-filter${activeOnly ? ' is-on' : ''}`}
@@ -532,19 +918,8 @@ export default function AutomationsView(props: FeatureProps): React.JSX.Element 
           >
             <FilterIcon />
           </button>
-          <button type="button" className="automations-create-btn" onClick={() => { setBuilderInitial(blankDraft()); setBuilderOpen(true) }}>+ Create</button>
         </div>
       </div>
-
-      {builderOpen && (
-        <Builder
-          initial={builderInitial}
-          gmailConnected={gmailConnected}
-          onConnect={() => props.shell.openSettings('connectors')}
-          onClose={() => setBuilderOpen(false)}
-          onSubmit={submitBuilder}
-        />
-      )}
 
       {loading && <p className="automations-empty">Loading automations…</p>}
       {error && <p className="automations-error" role="alert">{error}</p>}
@@ -552,22 +927,7 @@ export default function AutomationsView(props: FeatureProps): React.JSX.Element 
       {!loading && !error && tab === 'updates' && view === 'list' && (
         <div className="automations-body">
           <div className="automations-main">
-            {runs.length === 0 && <p className="automations-empty">No outputs yet. Run an automation to see results here.</p>}
-            {runs.map((run) => (
-              <button
-                key={run.id}
-                type="button"
-                className="automations-output"
-                onClick={() => setSelection({ kind: 'run', run })}
-              >
-                <span className={`automations-dot is-${run.status}`} />
-                <span className="automations-output-text">
-                  <strong>{routineTitle(run.title)}</strong>
-                  <small>{new Date(run.endedAt ?? run.startedAt).toLocaleString()} · {run.status.replaceAll('_', ' ')}</small>
-                  {run.summary && <span>{run.summary.slice(0, 140)}{run.summary.length > 140 ? '…' : ''}</span>}
-                </span>
-              </button>
-            ))}
+            <UpdatesList runs={runs} todayKey={todayKey} onSelect={(run) => setSelection({ kind: 'run', run })} />
           </div>
           {detail}
         </div>
@@ -603,42 +963,51 @@ export default function AutomationsView(props: FeatureProps): React.JSX.Element 
       )}
 
       {!loading && !error && tab === 'manage' && view === 'list' && (
-        <div className="automations-body">
-          <div className="automations-grid">
+        <div className="automations-body manage-layout">
+          <div className="manage-list" role="listbox" aria-label="Automations">
             {visibleRoutines.length === 0 && <p className="automations-empty">No automations yet. Use Create to add one.</p>}
-            {visibleRoutines.map((routine) => (
-              <article key={routine.id} className="automations-card">
-                <header>
-                  <span className="automations-card-icon" aria-hidden="true">⚙</span>
-                  <span className={`automations-status is-${routine.enabled ? 'active' : 'paused'}`}>
-                    <span className={`automations-dot ${routine.enabled ? 'is-succeeded' : 'is-cancelled'}`} />{routine.enabled ? 'Active' : 'Paused'}
+            {visibleRoutines.map((routine) => {
+              const selected = selection?.kind === 'routine' && selection.routine.id === routine.id
+              return (
+                <button
+                  key={routine.id}
+                  type="button"
+                  role="option"
+                  aria-selected={selected}
+                  className={`manage-row${selected ? ' is-active' : ''}`}
+                  onClick={() => setRoutinePageId(routine.id)}
+                >
+                  <span className="manage-row-top">
+                    <span className="manage-row-icon" aria-hidden="true">⟁</span>
+                    <span className={`automations-status is-${routine.enabled ? 'active' : 'paused'}`}>
+                      <span className={`automations-dot ${routine.enabled ? 'is-succeeded' : 'is-cancelled'}`} aria-hidden="true" />
+                      {routine.enabled ? 'Active' : 'Paused'}
+                    </span>
                   </span>
-                  <button
-                    type="button"
-                    aria-label={`Options for ${routineTitle(routine.prompt)}`}
-                    aria-expanded={openMenuId === routine.id}
-                    onClick={() => setOpenMenuId((current) => (current === routine.id ? '' : routine.id))}
-                  >
-                    …
-                  </button>
-                </header>
-                {openMenuId === routine.id && (
-                  <div className="automations-menu" role="menu">
-                    <button type="button" role="menuitem" onClick={() => void toggleRoutine(routine)}>
-                      {routine.enabled ? 'Pause' : 'Resume'}
-                    </button>
-                    <button type="button" role="menuitem" onClick={() => void removeRoutine(routine)}>Delete</button>
-                  </div>
-                )}
-                <button type="button" className="automations-card-body" onClick={() => setSelection({ kind: 'routine', routine })}>
-                  <small>{describeRoutine(routine)}</small>
+                  <span className="manage-row-kind">{routineKindLabel(routine)} automation</span>
                   <strong>{routineTitle(routine.prompt)}</strong>
-                  <span>{routine.prompt.length > 140 ? `${routine.prompt.slice(0, 140)}…` : routine.prompt}</span>
+                  <span className="manage-row-desc">{routine.prompt}</span>
                 </button>
-              </article>
-            ))}
+              )
+            })}
           </div>
-          {detail}
+          {selection?.kind === 'routine' ? (
+            <>
+              <ManageDetail
+                routine={selection.routine}
+                runs={runs}
+                onToggle={(routine) => void toggleRoutine(routine)}
+                onRemove={(routine) => void removeRoutine(routine)}
+                onSelectRun={(run) => setSelection({ kind: 'run', run })}
+              />
+              <RoutineRail
+                routine={selection.routine}
+                engine={engine}
+                connected={connected}
+                onOpenConnectors={() => props.shell.openSettings('connectors')}
+              />
+            </>
+          ) : detail}
         </div>
       )}
 
@@ -694,7 +1063,7 @@ export default function AutomationsView(props: FeatureProps): React.JSX.Element 
             ref={viewportRef}
             onPointerDown={beginPan}
             onDoubleClick={(e) => {
-              if ((e.target as HTMLElement).closest('.n8n-node, .n8n-menu, .n8n-edge-add, .n8n-end, button, .n8n-toolbar, .n8n-topbar, .n8n-inspector')) return
+              if ((e.target as HTMLElement).closest('.n8n-node, .n8n-menu, .n8n-edge-add, .n8n-end, button, .n8n-toolbar, .n8n-topbar, .n8n-inspector, .n8n-describe')) return
               addAtPoint(e.clientX, e.clientY)
             }}
             aria-label={canvasRoutine ? `Canvas for ${routineTitle(canvasRoutine.prompt)}` : 'Canvas builder'}
@@ -703,8 +1072,7 @@ export default function AutomationsView(props: FeatureProps): React.JSX.Element 
               <span className="n8n-status">
                 {canvasRoutine ? `${routineTitle(canvasRoutine.prompt)} · ${canvasRoutine.repeat} · ${timeLabel(canvasRoutine.runAt)}` : 'Blank canvas'}
               </span>
-              {/* ponytail: static until the automation builder lands; wire to it then */}
-              <button type="button" className="n8n-create" disabled title="Automation builder coming next">Create</button>
+              <button type="button" className="n8n-create" title="Describe an automation for the agent to create" onClick={() => setCanvasDescribe(true)}>Create</button>
             </div>
             <div className="n8n-toolbar" role="toolbar" aria-label="Canvas controls">
               <button type="button" aria-label="Zoom out" onClick={() => zoomBy(0.9)}>−</button>
@@ -829,6 +1197,16 @@ export default function AutomationsView(props: FeatureProps): React.JSX.Element 
               })()}
             </div>
             <p className="n8n-hint" aria-hidden="true">Drag nodes to arrange · drag background to pan · scroll to zoom · double-click empty canvas to add</p>
+            {canvasDescribe && (
+              <CanvasDescribeBar
+                value={canvasPrompt}
+                busy={canvasBusy}
+                error={canvasError}
+                onChange={(value) => { setCanvasPrompt(value); setCanvasError('') }}
+                onSubmit={() => void submitCanvasDescribe()}
+                onClose={() => { setCanvasDescribe(false); setCanvasError('') }}
+              />
+            )}
             {selectedStep && (
               <div className="n8n-inspector" aria-label={`Configure step ${selectedStep.title}`}>
                 <form className="canvas-editor" onSubmit={saveStepEdit}>

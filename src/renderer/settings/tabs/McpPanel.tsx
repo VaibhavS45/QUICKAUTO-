@@ -114,7 +114,7 @@ export default function McpPanel(): React.JSX.Element {
               <div key={server.id} className="rounded-lg border border-neutral-800 bg-neutral-950 p-3">
                 <div className="flex flex-wrap items-center gap-2">
                   <span className="font-medium text-sm text-neutral-100">{server.name}</span>
-                  <span className="rounded-full bg-neutral-800 px-2 py-0.5 text-[10px] uppercase text-neutral-300">{server.status}</span>
+                  <span className="rounded-md bg-neutral-800 px-2 py-0.5 text-[10px] uppercase text-neutral-300">{server.status}</span>
                   {server.status === 'running' && <span className="text-xs text-neutral-500">{server.toolCount} tools</span>}
                   <span className="flex-1" />
                   <Button variant="secondary" size="sm" onClick={() => edit(server)}>Edit</Button>

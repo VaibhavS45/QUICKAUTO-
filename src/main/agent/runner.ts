@@ -140,6 +140,9 @@ async function runViaHarness(args: HarnessRunArgs): Promise<{ text: string; step
           signal,
           emit,
           onPermission: async (perm) => {
+            // Scheduled runs never execute writes unapproved: deny without
+            // consulting the UI (headless — no approve/deny card could answer).
+            if (args.source === 'scheduled') return false
             if (!args.decideApproval) return false
             const decision = await args.decideApproval({
               approvalId: perm.id,
@@ -186,13 +189,19 @@ export async function runAgent(opts: RunAgentOptions): Promise<{ text: string; s
   const harness = deps.getAgentProvider?.() ?? 'builtin'
 
   // Harness runs bring their own models + auth (opencode config, pi /login),
-  // so no model API key is needed. Scheduled runs fall back to builtin:
-  // harness CLIs have no in-app per-tool approval protocol, and scheduled
-  // runs must never execute writes unapproved.
-  if ((harness === 'opencode' || harness === 'pi') && source !== 'scheduled') {
+  // so no model API key is needed. Scheduled runs go through opencode: its
+  // ACP permission protocol is fail-closed (deny without approval, see
+  // runViaHarness), so they still never execute writes unapproved. pi stays
+  // off scheduled runs — its print mode has no permission protocol.
+  if (harness === 'opencode' || (harness === 'pi' && source !== 'scheduled')) {
     // Harness selected: authoritative, no builtin fall-through (one outcome
     // per run; failures emit a single error with the install/auth fix).
-    return runViaHarness({ harness, prompt, source, signal, runId, emit, systemPrompt: opts.systemPrompt, decideApproval: opts.decideApproval, deps })
+    // Scheduled runs keep their read-only framing via buildInstructions.
+    const harnessSystemPrompt =
+      source === 'scheduled'
+        ? [opts.systemPrompt?.trim() ?? '', buildInstructions('scheduled', tools)].filter(Boolean).join('\n\n')
+        : opts.systemPrompt
+    return runViaHarness({ harness, prompt, source, signal, runId, emit, systemPrompt: harnessSystemPrompt, decideApproval: opts.decideApproval, deps })
   }
 
   const apiKey = await deps.getApiKey()

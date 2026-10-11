@@ -124,7 +124,7 @@ export interface SchedulerCallbacks {
   now?: () => number
 }
 
-const MAX_TIMER_MS = 2_147_483_647 // ponytail: setTimeout ceiling; longer waits re-arm hourly.
+const MAX_TIMER_MS = 2_147_483_647 // ponytail: setTimeout ceiling; longer waits re-arm when the clamped timer elapses.
 
 export class Scheduler {
   private timers = new Map<string, ReturnType<typeof setTimeout>>()
@@ -226,7 +226,17 @@ export class Scheduler {
   private arm(r: Routine): void {
     this.disarm(r.id)
     const next = nextFire(r, this.nowMs())
-    if (next === null) return
+    if (next === null) {
+      // One-shot whose time already passed (e.g. app was closed): it can
+      // never fire again, so disable it instead of leaving it enabled with
+      // no timer.
+      if (r.enabled && r.repeat === 'once' && r.runAt <= this.nowMs()) {
+        r.enabled = false
+        r.lastStatus = 'missed: scheduled time passed'
+        this.persist()
+      }
+      return
+    }
     const delay = Math.min(Math.max(0, next - this.nowMs()), MAX_TIMER_MS)
     this.timers.set(
       r.id,
@@ -237,12 +247,16 @@ export class Scheduler {
   private onTimer(id: string): void {
     const r = this.routines.find((x) => x.id === id)
     if (!r || !r.enabled) return
-    // Interval aligned to start time: if the delay was clamped (far future),
-    // re-arm instead of firing early.
-    const expected = nextFire(r, this.nowMs())
-    if (expected !== null && expected - this.nowMs() > 60_000) {
-      this.arm(r)
-      return
+    // Interval aligned to start time: if the delay was clamped (far future
+    // one-shot), re-arm instead of firing early. Repeats always resolve to a
+    // future occurrence, so this check applies to one-shots only — otherwise
+    // every repeat occurrence would re-arm instead of firing.
+    if (r.repeat === 'once') {
+      const expected = nextFire(r, this.nowMs())
+      if (expected !== null && expected - this.nowMs() > 60_000) {
+        this.arm(r)
+        return
+      }
     }
     // Skip an occurrence when the previous run is still active (no queue build-up).
     if (this.cb.isRunning?.(id)) {

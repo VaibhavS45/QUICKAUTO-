@@ -1,9 +1,10 @@
 import { useEffect, useMemo, useState } from 'react'
 import type { ShellApi } from '../contracts/feature.js'
 import type { RunRecord } from '../../shared/contracts/schedule.js'
-import { routineTitle, timeLabel } from '../features/automations/dates.js'
+import { localDayKey, pastDayLabel, routineTitle, timeLabel } from '../features/automations/dates.js'
 
 const SEEN_KEY = 'palette:updates-since'
+const PREVIEW_MAX_ROWS = 4
 
 export interface StreamRow {
   key: string
@@ -27,6 +28,20 @@ export function updateStreamRows(runs: Pick<RunRecord, 'id' | 'title' | 'summary
 /** Only runs newer than the last-close marker (pure, unit-tested). */
 export function filterNewRuns(rows: StreamRow[], sinceAt: number): StreamRow[] {
   return rows.filter((row) => row.at > sinceAt)
+}
+
+/** Group rows by local day, newest day first (pure, unit-tested). */
+export function groupStreamRows(rows: StreamRow[]): { key: string; rows: StreamRow[] }[] {
+  const byDay = new Map<string, StreamRow[]>()
+  for (const row of rows) {
+    const key = localDayKey(new Date(row.at))
+    const list = byDay.get(key) ?? []
+    list.push(row)
+    byDay.set(key, list)
+  }
+  return [...byDay.entries()]
+    .sort((a, b) => b[0].localeCompare(a[0]))
+    .map(([key, dayRows]) => ({ key, rows: dayRows }))
 }
 
 function readSeenAt(): number {
@@ -81,26 +96,40 @@ export function UpdatesStream({ shell }: { shell: ShellApi }): React.JSX.Element
   }
   if (!rows.length) return <p className="automations-empty">You’re all caught up.</p>
 
+  const preview = rows.slice(0, PREVIEW_MAX_ROWS)
+  const groups = groupStreamRows(preview)
+  const todayKey = localDayKey()
+
   return (
-    <div className="updates-stream-list" aria-label="Recent automation updates">
-      {rows.map((row) => (
-        <button
-          key={row.key}
-          type="button"
-          className="updates-stream-box updates-stream-card"
-          onClick={() => openRow(row)}
-          aria-label={`${row.title}, ${row.status.replaceAll('_', ' ')}`}
-        >
-          <div className="updates-card-left">
-            <span className="updates-card-icon" aria-hidden="true">⟁</span>
-            <strong className="updates-card-title">{row.title}</strong>
-            <small className="updates-card-time">{timeLabel(row.at)}</small>
-          </div>
-          <div className="updates-card-body">
-            <span>{row.body || 'No output recorded yet.'}</span>
-          </div>
+    <>
+      <div aria-label="Recent automation updates">
+        {groups.map((group) => (
+          <section key={group.key} className="updates-day" aria-label={pastDayLabel(group.key, todayKey)}>
+            <h3>{pastDayLabel(group.key, todayKey)} <span>({group.rows.length})</span></h3>
+            {group.rows.map((row) => (
+              <button
+                key={row.key}
+                type="button"
+                className="updates-row"
+                onClick={() => openRow(row)}
+                aria-label={`${row.title}, ${row.status.replaceAll('_', ' ')}`}
+              >
+                <span className="updates-row-meta">
+                  <span className="updates-row-icon" aria-hidden="true">⟁</span>
+                  <strong>{row.title}</strong>
+                  <small>{timeLabel(row.at)}</small>
+                </span>
+                <span className="updates-row-body">{row.body || 'No output recorded yet.'}</span>
+              </button>
+            ))}
+          </section>
+        ))}
+      </div>
+      {rows.length > preview.length && (
+        <button type="button" className="updates-more" onClick={() => shell.navigate('automations', { automationTab: 'updates' })}>
+          More
         </button>
-      ))}
-    </div>
+      )}
+    </>
   )
 }

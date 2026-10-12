@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { filterNewRuns, updateStreamRows } from '../../src/renderer/shell/UpdatesStream.js'
+import { filterNewRuns, groupStreamRows, updateStreamRows } from '../../src/renderer/shell/UpdatesStream.js'
 
 const runs = [
   { id: 'r1', title: 'nightly sync', summary: 'Synced 12 rows.\nSecond line.', startedAt: 1000, endedAt: 2000, status: 'succeeded' as const },
@@ -25,5 +25,21 @@ describe('filterNewRuns', () => {
     expect(filterNewRuns(rows, 0).map((r) => r.key)).toEqual(['r1', 'r2'])
     expect(filterNewRuns(rows, 1000).map((r) => r.key)).toEqual(['r1'])
     expect(filterNewRuns(rows, 9999)).toHaveLength(0)
+  })
+})
+
+describe('groupStreamRows', () => {
+  it('groups by local day with the newest day first', () => {
+    const day = new Date(2026, 9, 11, 9, 0).getTime()
+    const older = new Date(2026, 9, 10, 12, 2).getTime()
+    const rows = [
+      { key: 'old', title: 'Digest', body: 'b', at: older, status: 'succeeded' },
+      { key: 'new', title: 'Digest', body: 'b', at: day, status: 'succeeded' }
+    ]
+    const groups = groupStreamRows(rows)
+    expect(groups).toHaveLength(2)
+    expect(groups[0].key).toBe('2026-10-11')
+    expect(groups[0].rows.map((r) => r.key)).toEqual(['new'])
+    expect(groups[1].key).toBe('2026-10-10')
   })
 })

@@ -2,7 +2,7 @@ import { createElement } from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { describe, expect, it } from 'vitest'
 import StartChoice from '../../src/renderer/features/automations/start-choice.js'
-import Builder from '../../src/renderer/features/automations/builder.js'
+import Builder, { BuilderSettingsMenu } from '../../src/renderer/features/automations/builder.js'
 import { blankDraft, blankTrigger } from '../../src/renderer/features/automations/builder-compile.js'
 
 describe('start choice', () => {
@@ -13,6 +13,8 @@ describe('start choice', () => {
     expect(html).toContain('Triggered task')
     expect(html).toContain('Advanced automation')
     expect(html).toContain('Beta')
+    expect(html).toContain('Describe when Manus should act')
+    expect(html).toContain('<svg')
   })
 
   it('renders the describe form for advanced automations', () => {
@@ -79,9 +81,24 @@ describe('start choice', () => {
         onSubmit: async () => null
       })
     )
-    expect(html).toContain('What should it do')
-    expect(html).not.toContain('Describe the automation to the agent')
-    expect(html).not.toContain('Manus')
+    expect(html).toContain('Manus will')
+    expect(html).toContain('Describe what Manus should do')
+    expect(html).not.toContain('What should it do')
     expect(html).toContain('Add connector or tool')
+    expect(html).toContain('Automation settings')
+    expect(html).not.toContain('Connectors</span>')
+    expect(html).not.toContain('OpenCode')
+  })
+
+  it('renders the automation settings menu rows', () => {
+    const html = renderToStaticMarkup(
+      createElement(BuilderSettingsMenu, { onPickConnectors: () => {}, onPickAgent: () => {} })
+    )
+    for (const label of ['Confirmations', 'Run in', 'Agent', 'Connectors', 'Project', 'Cloud computer', 'Local folder', 'Expiration date']) {
+      expect(html).toContain(label)
+    }
+    expect(html).toContain('Approval required')
+    expect(html).toContain('Separate task')
+    expect(html).toContain('Manus 2.0')
   })
 })

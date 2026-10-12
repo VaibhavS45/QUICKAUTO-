@@ -18,7 +18,7 @@ describe('home view', () => {
     expect(html).toContain('Automate your work')
     expect(html).toContain('Choose how it starts')
     for (const opt of START_OPTIONS) expect(html).toContain(opt.title)
-    expect(html).toContain('Updates')
+    expect(html).toContain('No updates yet')
     expect(html).not.toContain('<textarea')
   })
 })

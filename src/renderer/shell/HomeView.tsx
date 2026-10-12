@@ -29,9 +29,6 @@ export function HomeView({ shell }: { shell: ShellApi }): React.JSX.Element {
           ))}
         </div>
       </div>
-      <div className="home-suggestions-head">
-        <h3>{t('home.updates')}</h3>
-      </div>
       <UpdatesStream shell={shell} />
     </section>
   )

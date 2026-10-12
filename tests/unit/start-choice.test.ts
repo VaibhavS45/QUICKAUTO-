@@ -13,6 +13,8 @@ describe('start choice', () => {
     expect(html).toContain('Triggered task')
     expect(html).toContain('Advanced automation')
     expect(html).toContain('Beta')
+    expect(html).toContain('Describe when Manus should act')
+    expect(html).toContain('<svg')
   })
 
   it('renders the describe form for advanced automations', () => {

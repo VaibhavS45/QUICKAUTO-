@@ -451,7 +451,7 @@
 .shell-content.is-home {
   display: grid;
   place-items: center;
-  padding: 24px 32px 32px;
+  padding: 24px 32px calc(32px + 12vh);
   overflow-y: auto;
   background: #1a1a1a;
 }
@@ -827,7 +827,7 @@
 
 .shell-home-automate {
   width: min(100%, 960px);
-  margin: 0 auto;
+  margin: auto;
   padding: 16px 0 64px;
 }
 

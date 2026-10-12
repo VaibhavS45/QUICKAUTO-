@@ -20,7 +20,7 @@
 .automations.is-creating {
   justify-content: flex-start;
   align-items: center;
-  padding: 20px 0 40px;
+  padding: 20px 0 calc(40px + 12vh);
 }
 
 .automations-toolbar {
@@ -1409,10 +1409,13 @@
 
 .builder-overlay {
   display: flex;
+  flex: 1;
   flex-direction: column;
   align-items: center;
   width: 100%;
+  min-height: 0;
   margin: 0 auto;
+  overflow-y: auto;
 }
 
 .builder-card {
@@ -1875,6 +1878,7 @@
 .start-card {
   box-sizing: border-box;
   width: min(100%, 800px);
+  margin-block: auto;
   padding: 0;
   overflow: hidden;
   border: 1px solid rgb(255 255 255 / 6%);
@@ -2785,6 +2789,7 @@
   flex-direction: column;
   width: 100%;
   max-width: 860px;
+  margin-block: auto;
   padding-top: 12px;
   padding-bottom: 12px;
   gap: 12px;

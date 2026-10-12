@@ -1807,3 +1807,342 @@
   -webkit-box-orient: vertical;
   -webkit-line-clamp: 2;
 }
+
+/* Day mode: light surfaces for the whole shell. Tinted status chips keep
+   their hues; text and chrome flip to dark-on-light. */
+.light .shell-frame {
+  border-color: rgb(0 0 0 / 10%);
+  color: #23262d;
+  background: #f4f5f7;
+}
+
+.light .shell-drag-strip,
+.light .shell-sidebar,
+.light .shell-main-pane {
+  background: #f4f5f7;
+}
+
+.light .shell-drag-strip {
+  border-bottom-color: rgb(0 0 0 / 8%);
+  color: #5b6270;
+}
+
+.light .shell-brand,
+.light .shell-home h2,
+.light .shell-home-automate > h2,
+.light .chat-composer-welcome h2 {
+  color: #17191e;
+}
+
+.light .shell-sidebar { border-right-color: rgb(0 0 0 / 8%); }
+.light .shell-sidebar-footer { border-top-color: rgb(0 0 0 / 10%); }
+
+.light .shell-nav-item,
+.light .shell-profile-button,
+.light .shell-icon-button {
+  color: #4b5260;
+}
+
+.light .shell-nav-item:hover,
+.light .shell-profile-button:hover,
+.light .shell-icon-button:hover {
+  color: #17191e;
+  background: rgb(0 0 0 / 6%);
+}
+
+.light .shell-nav-item.is-active {
+  color: #17191e;
+  background: rgb(0 0 0 / 8%);
+  box-shadow: 0 1px 3px rgb(0 0 0 / 12%), inset 0 1px 0 rgb(255 255 255 / 60%);
+}
+
+.light .shell-rail-center .shell-nav-item::after {
+  border-color: rgb(0 0 0 / 12%);
+  color: #17191e;
+  background: #fff;
+  box-shadow: 0 8px 20px rgb(0 0 0 / 14%);
+}
+
+.light .shell-avatar,
+.light .shell-home-mark {
+  color: #23262d;
+  background: #d5d8de;
+}
+
+.light .shell-notification-badge { border-color: #f4f5f7; }
+
+.light .shell-notifications-panel,
+.light .shell-profile-menu,
+.light .chat-model-menu,
+.light .chat-mention-menu {
+  border-color: rgb(0 0 0 / 10%);
+  background: #fff;
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / 60%), 0 16px 48px rgb(0 0 0 / 16%);
+}
+
+.light .shell-notifications-panel > header {
+  border-bottom-color: rgb(0 0 0 / 8%);
+  color: #23262d;
+}
+
+.light .shell-notifications-panel > header button { color: #5b6270; }
+.light .shell-notification { border-bottom-color: rgb(0 0 0 / 8%); }
+.light .shell-notification.is-unread { background: #eef0f4; }
+.light .shell-notification-body { color: #23262d; }
+.light .shell-notification-body small,
+.light .shell-notification-body time { color: #5b6270; }
+.light .shell-notification-dismiss { color: #6f7785; }
+.light .shell-notification-dismiss:hover { color: #17191e; background: #e8eaee; }
+.light .shell-notifications-empty { color: #6f7785; }
+
+.light .shell-profile-menu-head { border-bottom-color: rgb(0 0 0 / 8%); }
+.light .shell-profile-menu-identity strong { color: #17191e; }
+.light .shell-profile-menu-identity small { color: #6f7785; }
+.light .shell-profile-menu button[role="menuitem"] { color: #23262d; }
+.light .shell-profile-menu button[role="menuitem"]:hover { background: #eef0f4; }
+
+.light .shell-settings-card {
+  border-color: rgb(0 0 0 / 10%);
+  background: #f2f3f5;
+}
+
+.light .shell-home p,
+.light .shell-empty-state,
+.light .shell-automations-placeholder p,
+.light .chat-composer-welcome p {
+  color: #5b6270;
+}
+
+.light .home-start-card,
+.light .shell-template-card {
+  border-color: rgb(0 0 0 / 10%);
+  background: #fff;
+  box-shadow: 0 8px 24px rgb(0 0 0 / 6%);
+}
+
+.light .home-start-head { color: #23262d; }
+.light .home-suggestions-head h3 { color: #3a3f47; }
+
+.light .shell-automations-placeholder nav { border-bottom-color: rgb(0 0 0 / 12%); }
+.light .shell-automations-placeholder [role="tab"] { color: #5b6270; }
+.light .shell-automations-placeholder [role="tab"][aria-selected="true"] {
+  border-bottom-color: #3a3f47;
+  color: #17191e;
+}
+
+.light .chat-composer-card {
+  border-color: rgb(0 0 0 / 12%);
+  background: #fff;
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / 60%), 0 8px 24px rgb(0 0 0 / 6%);
+}
+
+.light .chat-composer-card textarea { color: #17191e; }
+.light .chat-composer-card textarea::placeholder { color: #8a919d; }
+.light .chat-agent-picker { color: #5b6270; }
+.light .chat-agent-picker select,
+.light .chat-model-trigger { color: #23262d; }
+.light .chat-model-trigger::after { color: #5b6270; }
+.light .chat-model-menu { border-color: rgb(0 0 0 / 10%); background: #fff; }
+.light .chat-model-menu input {
+  border-color: rgb(0 0 0 / 12%);
+  color: #17191e;
+  background: #f0f1f4;
+}
+.light .chat-model-menu button { color: #23262d; }
+.light .chat-model-menu button:hover,
+.light .chat-model-menu button[aria-selected='true'] { background: #eef0f4; }
+.light .chat-model-menu small,
+.light .chat-model-menu p { color: #5b6270; }
+
+.light .chat-tool-selection span,
+.light .chat-tool-chip {
+  border-color: rgb(0 0 0 / 12%);
+  color: #3a3f47;
+  background: #eef0f4;
+}
+
+.light .chat-send-button,
+.light .chat-stop-button {
+  color: #fafafa;
+  background: #23262d;
+}
+
+.light .chat-send-button:disabled {
+  color: #8a919d;
+  background: #d5d8de;
+}
+
+.light .chat-stop-button {
+  color: #fafafa;
+  background: #8f2f38;
+}
+
+.light .chat-template-row { color: #5b6270; }
+.light .chat-template-row button,
+.light .chat-settings-link {
+  border-color: rgb(0 0 0 / 12%);
+  color: #23262d;
+  background: #fff;
+}
+.light .chat-template-row button:hover,
+.light .chat-settings-link:hover { background: #eef0f4; }
+
+.light .shell-flow-step {
+  border-color: rgb(0 0 0 / 8%);
+  color: #3a3f47;
+  background: #f0f1f4;
+}
+
+.light .shell-flow-arrow {
+  border-color: rgb(0 0 0 / 12%);
+  color: #3a3f47;
+  background: #fff;
+}
+
+.light .shell-flow-icon.is-action { color: #23262d; }
+.light .shell-flow-icon.is-github,
+.light .shell-flow-icon.is-search,
+.light .shell-flow-icon.is-files { color: #5b6270; }
+
+.light .shell-template-title {
+  border-top-color: rgb(0 0 0 / 8%);
+  color: #17191e;
+  background: #f4f5f7;
+}
+
+.light .shell-template-select:hover .shell-template-title { color: #000; }
+.light .shell-template-card .shell-template-requirements { background: #f4f5f7; }
+
+.light .chat-message.is-user {
+  border-color: rgb(0 0 0 / 8%);
+  color: #17191e;
+  background: #e8eaee;
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / 60%);
+}
+
+.light .chat-message p,
+.light .chat-answer p { color: #23262d; }
+.light .chat-message-role { color: #5b6270; }
+.light .chat-answer h3 { color: #17191e; }
+.light .chat-run-status { color: #5b6270; }
+.light .chat-inline-hint { color: #5b6270; }
+
+.light .chat-approval-card,
+.light .chat-run-error {
+  border-color: #d8c391;
+  background: #faf3e3;
+}
+
+.light .chat-approval-card strong { color: #6b5316; }
+.light .chat-approval-card p,
+.light .chat-run-error p { color: #5c5545; }
+.light .chat-approval-card pre {
+  color: #3a372e;
+  background: #efe8d6;
+}
+
+.light .chat-approval-actions button,
+.light .chat-run-error button {
+  border-color: #c9c2ae;
+  color: #3a372e;
+  background: #fff;
+}
+
+.light .chat-run-error {
+  border-color: #dfa3ab;
+  background: #fae9eb;
+}
+
+.light .chat-run-error p { color: #8f2f38; }
+.light .chat-inline-error,
+.light .shell-chat-error { color: #8f2f38; }
+.light .shell-chat-error { background: #fae9eb; }
+.light .shell-chat-error button { color: #8f2f38; }
+.light .chat-inline-action { color: #3a3f47; }
+
+.light .chat-mention-menu { border-color: rgb(0 0 0 / 10%); background: #fff; }
+.light .chat-mention-menu button { color: #23262d; }
+.light .chat-mention-menu button:hover { background: #eef0f4; }
+.light .chat-mention-menu small { color: #5b6270; }
+
+.light .shell-chat-search,
+.light .shell-chat-rename input {
+  border-color: rgb(0 0 0 / 12%);
+  color: #17191e;
+  background: #fff;
+}
+
+.light .shell-chats-heading button,
+.light .shell-chat-actions button,
+.light .shell-chat-rename button,
+.light .shell-clear-chats { color: #5b6270; }
+
+.light .shell-chat-actions button:hover,
+.light .shell-chats-heading button:hover,
+.light .shell-chat-rename button:hover { color: #17191e; background: #e0e2e8; }
+.light .shell-clear-chats:hover { color: #17191e; }
+
+.light .shell-chat-entry:hover,
+.light .shell-chat-entry.is-active { background: #e8eaee; }
+.light .shell-chat-link { color: #4b5260; }
+.light .shell-chat-entry.is-active .shell-chat-link,
+.light .shell-chat-entry:hover .shell-chat-link { color: #17191e; }
+.light .shell-chat-empty,
+.light .shell-chat-count { color: #6f7785; }
+
+.light .shell-confirm-card {
+  border-color: rgb(0 0 0 / 12%);
+  background: #fff;
+}
+
+.light .shell-confirm-card p { color: #23262d; }
+.light .shell-confirm-card button {
+  border-color: rgb(0 0 0 / 14%);
+  color: #23262d;
+  background: #eef0f4;
+}
+
+.light .shell-palette-trigger {
+  border-color: rgb(0 0 0 / 12%);
+  color: #4b5260;
+  background: #fff;
+}
+
+.light .shell-palette-trigger kbd {
+  color: #5b6270;
+  background: #eef0f4;
+}
+
+.light .shell-palette-trigger:hover {
+  color: #3a3f47;
+  border-color: rgb(0 0 0 / 18%);
+}
+
+.light .shell-palette {
+  border-color: rgb(0 0 0 / 10%);
+  background: #fff;
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / 60%), 0 24px 64px rgb(0 0 0 / 20%);
+}
+
+.light .shell-palette input {
+  border-bottom-color: rgb(0 0 0 / 8%);
+  color: #17191e;
+}
+
+.light .shell-palette input::placeholder { color: #8a919d; }
+.light .shell-palette-item { color: #3a3f47; }
+.light .shell-palette-item small { color: #6f7785; }
+.light .shell-palette-item.is-active { color: #17191e; background: #e8eaee; }
+.light .shell-palette-empty { color: #6f7785; }
+
+.light .updates-stream-box {
+  border-color: rgb(0 0 0 / 10%);
+  background: #fff;
+}
+
+.light .updates-stream-box:hover { background: #f4f5f7; }
+.light .updates-stream-text strong { color: #23262d; }
+.light .updates-stream-text small { color: #6f7785; }
+.light .updates-stream-text > span:last-child { color: #4b5260; }
+
+.light .shell-template-status-error { color: #8f2f38; }

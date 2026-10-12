@@ -9,6 +9,8 @@ export interface AppShortcut {
   action: string
   keys: string[]
   description: string
+  /** i18n key prefix in strings.ts (sc.<name>.action / sc.<name>.desc). */
+  textId: 'sc.palette' | 'sc.settings' | 'sc.newchat' | 'sc.close'
 }
 
 export const APP_SHORTCUTS: AppShortcut[] = [
@@ -16,24 +18,28 @@ export const APP_SHORTCUTS: AppShortcut[] = [
     id: 'palette',
     action: 'Open / close command palette',
     keys: ['⌘K', 'Ctrl K'],
-    description: 'Search commands and jump to recent chats.'
+    description: 'Search commands and jump to recent chats.',
+    textId: 'sc.palette'
   },
   {
     id: 'settings',
     action: 'Open settings',
     keys: ['⌘,', 'Ctrl ,'],
-    description: 'Open the settings panel.'
+    description: 'Open the settings panel.',
+    textId: 'sc.settings'
   },
   {
     id: 'new-chat',
     action: 'New chat',
     keys: ['⌘N', 'Ctrl N'],
-    description: 'Start a fresh chat from anywhere.'
+    description: 'Start a fresh chat from anywhere.',
+    textId: 'sc.newchat'
   },
   {
     id: 'close',
     action: 'Close dialog',
     keys: ['Esc'],
-    description: 'Close settings, the palette, menus, and notifications.'
+    description: 'Close settings, the palette, menus, and notifications.',
+    textId: 'sc.close'
   }
 ]

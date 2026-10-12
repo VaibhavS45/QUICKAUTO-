@@ -12,6 +12,13 @@ export const APP_THEMES = [
 
 export type AppThemeValue = (typeof APP_THEMES)[number]['value']
 
+/** i18n keys for the theme labels in strings.ts (day/night wording). */
+export const THEME_LABEL_KEYS: Record<AppThemeValue, string> = {
+  light: 'theme.day',
+  dark: 'theme.night',
+  system: 'theme.system'
+}
+
 export function isAppTheme(value: unknown): value is AppThemeValue {
   return value === 'light' || value === 'dark' || value === 'system'
 }

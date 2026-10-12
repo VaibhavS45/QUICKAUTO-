@@ -2,6 +2,7 @@ import React from 'react'
 import { createRoot } from 'react-dom/client'
 import SettingsApp from './settings/SettingsDialog'
 import ShellApp from './shell/ShellApp'
+import { LanguageProvider } from './i18n/LanguageContext'
 import { applyTheme } from './settings/theme'
 import './styles.css'
 
@@ -20,8 +21,8 @@ function Root(): React.JSX.Element {
       .then((r) => applyTheme((r as unknown as { theme?: unknown }).theme))
       .catch(() => applyTheme('system'))
   }, [])
-  if (hash.startsWith('#settings')) return <SettingsApp />
-  return <ShellApp />
+  if (hash.startsWith('#settings')) return <LanguageProvider><SettingsApp /></LanguageProvider>
+  return <LanguageProvider><ShellApp /></LanguageProvider>
 }
 
 createRoot(document.getElementById('root')!).render(

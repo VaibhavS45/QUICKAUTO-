@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
+import { useI18n } from '../i18n/LanguageContext.js'
 
 export interface PaletteItem {
   id: string
@@ -21,6 +22,7 @@ export function CommandPalette({ open, items, onClose }: {
   items: PaletteItem[]
   onClose(): void
 }): React.JSX.Element | null {
+  const { t } = useI18n()
   const [query, setQuery] = useState('')
   const [active, setActive] = useState(0)
   const inputRef = useRef<HTMLInputElement | null>(null)
@@ -47,7 +49,7 @@ export function CommandPalette({ open, items, onClose }: {
     <div className="shell-palette-overlay" onClick={(event) => {
       if (event.target === event.currentTarget) onClose()
     }}>
-      <div className="shell-palette" role="dialog" aria-label="Command palette">
+      <div className="shell-palette" role="dialog" aria-label={t('palette.title')}>
         <input
           ref={inputRef}
           value={query}
@@ -68,11 +70,11 @@ export function CommandPalette({ open, items, onClose }: {
               onClose()
             }
           }}
-          placeholder="Type a command or search chats…"
-          aria-label="Command palette"
+          placeholder={t('palette.placeholder')}
+          aria-label={t('palette.title')}
         />
-        <div className="shell-palette-list" role="listbox" aria-label="Commands">
-          {results.length === 0 && <p className="shell-palette-empty">No matching commands.</p>}
+        <div className="shell-palette-list" role="listbox" aria-label={t('palette.commands')}>
+          {results.length === 0 && <p className="shell-palette-empty">{t('palette.empty')}</p>}
           {results.map((item, index) => (
             <button
               key={item.id}

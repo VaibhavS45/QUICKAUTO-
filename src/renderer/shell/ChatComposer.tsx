@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { AutomationTemplateCards } from './AutomationTemplateCards.js'
 import type { AutomationTemplate } from '../../shared/contracts/automation-templates.js'
 import { activeMention, parseMentionedTools, TOOL_META } from '../../shared/types.js'
+import { useI18n } from '../i18n/LanguageContext.js'
 
 interface ChatComposerProps {
   busy: boolean
@@ -22,6 +23,7 @@ export function ChatComposer({
   onOpenAutomations,
   onSelectTemplate
 }: ChatComposerProps): React.JSX.Element {
+  const { t } = useI18n()
   const [value, setValue] = useState('')
   const [caret, setCaret] = useState(0)
   const [error, setError] = useState('')
@@ -142,15 +144,15 @@ export function ChatComposer({
       {!compact && (
         <div className="chat-composer-welcome">
           <div className="shell-home-mark" aria-hidden="true">+</div>
-          <h2>What can I help with?</h2>
-          <p>Start a conversation with your assistant.</p>
+          <h2>{t('composer.welcome')}</h2>
+          <p>{t('composer.welcomeSub')}</p>
         </div>
       )}
       <div className="chat-composer-card">
         <textarea
           ref={textarea}
-          aria-label="Message your assistant"
-          placeholder="Ask anything. Type @ to choose a tool."
+          aria-label={t('composer.label')}
+          placeholder={t('composer.placeholder')}
           value={value}
           disabled={busy}
           rows={compact ? 2 : 4}
@@ -242,7 +244,7 @@ export function ChatComposer({
             {selectedTools.filter((id) => id !== 'calendar').map((id) => <span key={id}>{TOOL_META[id].label}</span>)}
           </span>
           <button type="button" className="chat-send-button" disabled={busy || !value.trim()} onClick={() => void send()}>
-            {busy ? 'Working…' : 'Send'}
+            {busy ? t('composer.working') : t('composer.send')}
           </button>
         </div>
       </div>
@@ -264,8 +266,8 @@ export function ChatComposer({
       {!compact && (
         <>
           <div className="chat-template-row">
-            <span>Get started with automation</span>
-            <button type="button" onClick={onOpenAutomations}>＋ New automation</button>
+            <span>{t('composer.getStarted')}</span>
+            <button type="button" onClick={onOpenAutomations}>{t('composer.newAutomation')}</button>
           </div>
           <AutomationTemplateCards
             onSelect={onSelectTemplate}

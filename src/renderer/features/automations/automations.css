@@ -2644,3 +2644,240 @@
   border-color: #3f3f4c;
   color: #ffffff;
 }
+
+/* Day mode: light surfaces for automations pages. The canvas drawing surface
+   (.automations-canvas) intentionally stays dark in both modes. */
+.light .automations-toolbar-title,
+.light .automation-breadcrumb strong,
+.light .automations-card-body strong,
+.light .updates-day > h3,
+.light .updates-row-meta strong,
+.light .manage-row strong,
+.light .manage-detail > h3,
+.light .automations-month-head strong,
+.light .automations-cell-day,
+.light .builder-trig-text,
+.light .builder-trig-line {
+  color: #17191e;
+}
+
+.light .automation-breadcrumb,
+.light .automation-breadcrumb button,
+.light .automations-month-head,
+.light .automations-weekdays,
+.light .automations-cell.is-outside .automations-cell-day,
+.light .automations-more,
+.light .automations-card-body small,
+.light .updates-day > h3 span,
+.light .manage-row-kind,
+.light .manage-row-desc,
+.light .md-kind,
+.light .automations-detail-kicker,
+.light .automations-detail-meta,
+.light .automations-empty,
+.light .automations-day-item time,
+.light .automations-days h3 small,
+.light .automations-history small,
+.light .md-advanced dt,
+.light .builder-sched-note {
+  color: #5b6270;
+}
+
+.light .automation-breadcrumb button:hover { color: #17191e; }
+.light .automations-toolbar nav { border-bottom-color: rgb(0 0 0 / 12%); }
+.light .automations-toolbar nav [role="tab"] { color: #5b6270; }
+.light .automations-toolbar nav [role="tab"][aria-selected="true"] {
+  border-bottom-color: #3a3f47;
+  color: #17191e;
+}
+
+.light .automations-actions button {
+  border-color: rgb(0 0 0 / 12%);
+  color: #23262d;
+  background: #fff;
+}
+
+.light .automations-actions button:hover {
+  border-color: rgb(0 0 0 / 18%);
+  background: #eef0f4;
+}
+
+.light .automations-filter.is-on {
+  border-color: #5560d8;
+  color: #3b46b8;
+  background: #e4e7fb;
+}
+
+.light .automations-create-btn {
+  color: #fafafa !important;
+  background: #23262d !important;
+}
+
+.light .automations-create-btn:hover { background: #000 !important; }
+.light .automations-view-toggle {
+  border-color: rgb(0 0 0 / 12%);
+  background: #e8eaee;
+}
+
+.light .automations-view-toggle [role="tab"] { color: #5b6270; }
+.light .automations-view-toggle [role="tab"][aria-selected="true"] {
+  color: #17191e;
+  background: #fff;
+  box-shadow: 0 1px 3px rgb(0 0 0 / 14%);
+}
+
+.light .automations-month-grid {
+  border-top-color: rgb(0 0 0 / 12%);
+  border-left-color: rgb(0 0 0 / 12%);
+}
+
+.light .automations-cell {
+  border-right-color: rgb(0 0 0 / 12%);
+  border-bottom-color: rgb(0 0 0 / 12%);
+  background: #fff;
+}
+
+.light .automations-cell.is-outside { background: #eef0f4; }
+.light .automations-cell.is-today .automations-cell-day {
+  color: #fafafa;
+  background: #3a3f47;
+}
+
+.light .automations-chip {
+  border-color: rgb(0 0 0 / 12%);
+  color: #3a3f47;
+  background: #f0f1f4;
+}
+
+.light .automations-chip:hover { background: #e4e6eb; }
+
+.light .automations-card,
+.light .manage-row,
+.light .updates-row,
+.light .automations-days section,
+.light .automations-history {
+  border-color: rgb(0 0 0 / 10%);
+  background: #fff;
+  box-shadow: 0 8px 24px rgb(0 0 0 / 6%);
+}
+
+.light .manage-row:hover { background: #f4f5f7; border-color: rgb(0 0 0 / 16%); }
+.light .updates-row:hover { border-color: rgb(0 0 0 / 16%); }
+.light .updates-row-meta {
+  border-color: rgb(0 0 0 / 8%);
+  background: #f4f5f7;
+}
+
+.light .updates-row-meta small,
+.light .automations-status,
+.light .automations-card header > button,
+.light .md-menu-wrap > button,
+.light .automations-detail-close,
+.light .rail-view-all {
+  color: #5b6270;
+}
+
+.light .updates-row-icon,
+.light .manage-detail > h4,
+.light .manage-rail h4,
+.light .md-advanced summary strong,
+.light .automations-days h3,
+.light .automations-detail h3 {
+  color: #23262d;
+}
+
+.light .updates-row-body,
+.light .md-field,
+.light .md-advanced dd {
+  color: #3a3f47;
+}
+
+.light .manage-row-icon,
+.light .md-icon {
+  border-color: rgb(0 0 0 / 12%);
+  color: #3a3f47;
+}
+
+.light .automations-card-icon { border-color: rgb(0 0 0 / 12%); }
+.light .automations-menu {
+  border-color: rgb(0 0 0 / 10%);
+  background: #fff;
+  box-shadow: 0 16px 48px rgb(0 0 0 / 16%);
+}
+
+.light .automations-menu button { color: #23262d; }
+.light .automations-menu button:hover { background: #eef0f4; }
+.light .automations-detail {
+  border-color: rgb(0 0 0 / 10%);
+  background: #fff;
+  box-shadow: 0 16px 48px rgb(0 0 0 / 16%);
+}
+
+.light .automations-detail h4 { color: #5b6270; }
+.light .automations-detail-body { color: #3a3f47; }
+.light .automations-detail-row button {
+  border-color: rgb(0 0 0 / 12%);
+  color: #23262d;
+  background: #eef0f4;
+}
+
+.light .automations-card-body span,
+.light .md-desc {
+  color: #4b5260;
+}
+
+.light .md-tabs {
+  border-color: rgb(0 0 0 / 10%);
+  background: #e8eaee;
+}
+
+.light .md-tabs button { color: #5b6270; }
+.light .md-tabs button[aria-selected="true"] {
+  color: #17191e;
+  background: #fff;
+  box-shadow: 0 1px 3px rgb(0 0 0 / 14%);
+}
+
+.light .rail-group {
+  border-color: rgb(0 0 0 / 10%);
+  color: #23262d;
+  background: #fff;
+}
+
+.light .rail-row { color: #3a3f47; }
+.light .rail-mark.is-ready { color: #2c7a3f; }
+.light .rail-mark.is-connect { color: #92690f; }
+.light .rail-view-all:hover { color: #17191e; }
+.light .automations-day-item { color: #3a3f47; }
+.light .automations-day-item:hover { background: #e8eaee; }
+.light .manage-row-top .automations-status { color: #5b6270; }
+
+.light .builder-card {
+  border-color: rgb(0 0 0 / 10%);
+  background: #fff;
+  box-shadow: 0 12px 36px rgb(0 0 0 / 12%);
+}
+
+.light .builder-when-head > strong { color: #17191e; }
+.light .builder-when-head > button { color: #5b6270; }
+.light .builder-when-head > button:hover { background: #e8eaee; color: #17191e; }
+.light .builder-trig {
+  border-color: rgb(0 0 0 / 10%);
+  background: #f4f5f7;
+}
+
+.light .builder-pill {
+  border-color: rgb(0 0 0 / 12%);
+  color: #4b5260;
+  background: #fff;
+}
+
+.light .builder-pill-input,
+.light .builder-trig select,
+.light .builder-trig input[type="time"] {
+  border-color: rgb(0 0 0 / 12%);
+  color: #17191e;
+  background: #fff;
+}
+
+.light .builder-pill-input::placeholder { color: #8a919d; }

@@ -1,19 +1,21 @@
 import type { ShellApi } from '../contracts/feature.js'
 import { START_OPTIONS, type StartKind } from '../features/automations/start-choice.js'
+import { useI18n } from '../i18n/LanguageContext.js'
 import { UpdatesStream } from './UpdatesStream.js'
 import '../features/automations/automations.css'
 
 export function HomeView({ shell }: { shell: ShellApi }): React.JSX.Element {
+  const { t } = useI18n()
   function pickStart(kind: StartKind): void {
     shell.navigate('automations', { startKind: kind })
   }
 
   return (
-    <section className="shell-home-automate" aria-label="Automate your work">
-      <h2>Automate your work</h2>
+    <section className="shell-home-automate" aria-label={t('home.title')}>
+      <h2>{t('home.title')}</h2>
       <div className="home-start-card">
         <div className="home-start-head">
-          <strong>Choose how it starts</strong>
+          <strong>{t('home.chooseStart')}</strong>
         </div>
         <div className="start-grid">
           {START_OPTIONS.map((opt) => (
@@ -28,7 +30,7 @@ export function HomeView({ shell }: { shell: ShellApi }): React.JSX.Element {
         </div>
       </div>
       <div className="home-suggestions-head">
-        <h3>Updates</h3>
+        <h3>{t('home.updates')}</h3>
       </div>
       <UpdatesStream shell={shell} />
     </section>

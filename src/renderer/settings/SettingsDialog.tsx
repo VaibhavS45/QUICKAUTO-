@@ -5,9 +5,11 @@ import { Input, Textarea } from '../components/ui/input.js'
 import { Switch } from '../components/ui/switch.js'
 import { filterSettingsNav, groupedSettingsNav, isSettingsTabRegistered, SETTINGS_NAV, type SettingsTabId } from './nav.js'
 import { EXTRA_TABS } from './extra-tabs.js'
-import { APP_THEMES, applyTheme, isAppTheme, type AppThemeValue } from './theme.js'
+import { APP_THEMES, applyTheme, isAppTheme, THEME_LABEL_KEYS, type AppThemeValue } from './theme.js'
 import { SUPPORTED_LANGUAGES } from './languages.js'
 import { APP_SHORTCUTS } from './shortcuts.js'
+import { useI18n } from '../i18n/LanguageContext.js'
+import type { UiKey } from '../i18n/strings.js'
 import ConnectorsTab from './tabs/ConnectorsTab.js'
 import './settings.css'
 
@@ -32,6 +34,7 @@ interface BudgetState {
 }
 
 function AccountPanel(): React.JSX.Element {
+  const { t } = useI18n()
   const [profile, setProfile] = useState<Profile>({ name: '', email: '', about: '', language: 'system' })
   const [status, setStatus] = useState('Loading…')
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null)
@@ -81,29 +84,29 @@ function AccountPanel(): React.JSX.Element {
   return (
     <div className="set-stack">
       <div className="settings-page-intro">
-        <h2>Account</h2>
-        <p>Manage the profile details and context shared with the assistant.</p>
+        <h2>{t('account.heading')}</h2>
+        <p>{t('account.intro')}</p>
       </div>
       <Card>
-        <CardTitle>Profile</CardTitle>
-        <CardSub>Your name and shared context for the assistant. Changes save automatically. {status}</CardSub>
+        <CardTitle>{t('account.profileTitle')}</CardTitle>
+        <CardSub>{t('account.profileSub')}{status}</CardSub>
         <div className="set-list">
           <Input
             value={profile.name}
             onChange={(e) => patch({ name: e.target.value })}
-            placeholder="Your name"
-            aria-label="Your name"
+            placeholder={t('account.namePlaceholder')}
+            aria-label={t('account.namePlaceholder')}
           />
           <Input
             value={profile.email}
             onChange={(e) => patch({ email: e.target.value })}
-            placeholder="you@example.com"
+            placeholder={t('account.emailPlaceholder')}
             aria-label="Email"
             inputMode="email"
           />
           <div>
             <span className="set-field-label">
-              About me{' '}
+              {t('account.aboutLabel')}{' '}
               <span title="Shared with the agent as background context." className="set-help">
                 ?
               </span>
@@ -112,7 +115,7 @@ function AccountPanel(): React.JSX.Element {
               value={profile.about}
               onChange={(e) => patch({ about: e.target.value })}
               rows={5}
-              aria-label="About me"
+              aria-label={t('account.aboutLabel')}
             />
           </div>
         </div>
@@ -122,6 +125,7 @@ function AccountPanel(): React.JSX.Element {
 }
 
 function GeneralPanel(): React.JSX.Element {
+  const { t } = useI18n()
   const [stayOn, setStayOn] = useState(true)
   const [behaviorStatus, setBehaviorStatus] = useState('')
 
@@ -133,10 +137,10 @@ function GeneralPanel(): React.JSX.Element {
         if (live && behavior.ok && typeof behavior.keepBackground === 'boolean') setStayOn(behavior.keepBackground)
       })
       .catch(() => {
-        if (live) setBehaviorStatus('Could not load app preferences.')
+        if (live) setBehaviorStatus(t('common.failed'))
       })
     return () => { live = false }
-  }, [])
+  }, [t])
 
   function toggleStayOn(next: boolean): void {
     const previous = stayOn
@@ -146,42 +150,41 @@ function GeneralPanel(): React.JSX.Element {
       .then((r) => {
         const res = r as unknown as { ok: boolean; error?: string }
         if (!res.ok) setStayOn(previous)
-        setBehaviorStatus(res.ok ? 'Saved.' : (res.error ?? 'Save failed.'))
+        setBehaviorStatus(res.ok ? t('common.saved') : (res.error ?? t('common.failed')))
       })
       .catch(() => {
         setStayOn(previous)
-        setBehaviorStatus('Save failed.')
+        setBehaviorStatus(t('common.failed'))
       })
   }
 
   return (
     <div className="set-stack">
       <div className="settings-page-intro">
-        <h2>General</h2>
-        <p>Set app-wide preferences and what happens when you close the window.</p>
+        <h2>{t('general.heading')}</h2>
+        <p>{t('general.intro')}</p>
       </div>
       <section className="set-split">
         <div className="set-split-text">
-          <h3>Stay on in background</h3>
+          <h3>{t('general.stayTitle')}</h3>
           <p>
-            Keep the app, tray and scheduled routines running in the background.
-            Turn off to quit the app when its window closes.
+            {t('general.stayBody')}
             {behaviorStatus ? ` ${behaviorStatus}` : ''}
           </p>
         </div>
-        <Switch checked={stayOn} label="Stay on in background" onCheckedChange={toggleStayOn} />
+        <Switch checked={stayOn} label={t('general.stayTitle')} onCheckedChange={toggleStayOn} />
       </section>
       <section className="set-shortcuts">
         <div className="set-split-text">
-          <h3>Keyboard shortcuts</h3>
-          <p>Open, close, and move around the app without touching the mouse.</p>
+          <h3>{t('general.shortcutsTitle')}</h3>
+          <p>{t('general.shortcutsBody')}</p>
         </div>
         <ul className="set-shortcut-list">
           {APP_SHORTCUTS.map((shortcut) => (
             <li key={shortcut.id} className="set-shortcut-row">
               <div className="set-split-text">
-                <h4>{shortcut.action}</h4>
-                <p>{shortcut.description}</p>
+                <h4>{t(`${shortcut.textId}.action` as UiKey)}</h4>
+                <p>{t(`${shortcut.textId}.desc` as UiKey)}</p>
               </div>
               <span className="set-kbd-group">
                 {shortcut.keys.map((key) => (
@@ -207,51 +210,23 @@ function AppearancePanel({
   theme: AppThemeValue
   onTheme: (next: AppThemeValue) => void
 }): React.JSX.Element {
+  const { t, preference, setPreference } = useI18n()
   const [status, setStatus] = useState('')
-  const [language, setLanguage] = useState('system')
   const [languageStatus, setLanguageStatus] = useState('')
   const [themeStatus, setThemeStatus] = useState('')
 
-  useEffect(() => {
-    let live = true
-    window.app.getProfile()
-      .then((result) => {
-        const profile = result as unknown as Partial<Profile>
-        if (live && typeof profile.language === 'string') setLanguage(profile.language)
-      })
-      .catch(() => {
-        if (live) setLanguageStatus('Could not load language preference.')
-      })
-    return () => { live = false }
-  }, [])
-
   async function saveLanguage(next: string): Promise<void> {
-    const previous = language
-    setLanguage(next)
-    setLanguageStatus('Saving…')
-    try {
-      const result = await window.app.getProfile()
-      const profile = result as unknown as Partial<Profile>
-      const saved = await window.app.setProfile({
-          name: profile.name ?? '',
-          email: profile.email ?? '',
-          about: profile.about ?? '',
-          language: next
-        })
-      const response = saved as { ok: boolean; error?: string }
-      if (!response.ok) setLanguage(previous)
-      setLanguageStatus(response.ok ? 'Saved.' : (response.error ?? 'Save failed.'))
-    } catch {
-      setLanguage(previous)
-      setLanguageStatus('Save failed.')
-    }
+    setLanguageStatus(t('common.saving'))
+    const result = await setPreference(next)
+    // The select reads from context, so it reverts on its own on failure.
+    setLanguageStatus(result.ok ? t('common.saved') : (result.error ?? t('common.failed')))
   }
 
   function saveTheme(next: AppThemeValue): void {
     const previous = theme
     onTheme(next)
     applyTheme(next)
-    setThemeStatus('Saving…')
+    setThemeStatus(t('common.saving'))
     window.app
       .setAppBehavior({ theme: next })
       .then((r) => {
@@ -260,31 +235,30 @@ function AppearancePanel({
           onTheme(previous)
           applyTheme(previous)
         }
-        setThemeStatus(res.ok ? 'Saved.' : (res.error ?? 'Save failed.'))
+        setThemeStatus(res.ok ? t('common.saved') : (res.error ?? t('common.failed')))
       })
       .catch(() => {
         onTheme(previous)
         applyTheme(previous)
-        setThemeStatus('Save failed.')
+        setThemeStatus(t('common.failed'))
       })
   }
 
   return (
     <div className="set-stack">
       <div className="settings-page-intro">
-        <h2>Appearance</h2>
-        <p>Pick day or night mode, choose a language, and tune the background.</p>
+        <h2>{t('appearance.heading')}</h2>
+        <p>{t('appearance.intro')}</p>
       </div>
       <section className="set-split">
         <div className="set-split-text">
-          <h3>Mode</h3>
+          <h3>{t('appearance.modeTitle')}</h3>
           <p>
-            Day is a bright light theme, night is the dim dark theme.
-            System follows your OS setting.
+            {t('appearance.modeBody')}
             {themeStatus ? ` ${themeStatus}` : ''}
           </p>
         </div>
-        <div className="set-theme-group" role="radiogroup" aria-label="Color mode">
+        <div className="set-theme-group" role="radiogroup" aria-label={t('appearance.modeTitle')}>
           {APP_THEMES.map((entry) => (
             <button
               key={entry.value}
@@ -295,24 +269,21 @@ function AppearancePanel({
               className={`set-theme-option${theme === entry.value ? ' is-active' : ''}`}
               onClick={() => { if (theme !== entry.value && isAppTheme(entry.value)) saveTheme(entry.value) }}
             >
-              {entry.label}
+              {t(THEME_LABEL_KEYS[entry.value] as UiKey)}
             </button>
           ))}
         </div>
       </section>
       <section className="set-split">
         <div className="set-split-text">
-          <h3>Language</h3>
-          <p>
-            The app follows your system language unless you pick one here. Only part of the interface is translated
-            so far — untranslated text stays in English.
-          </p>
+          <h3>{t('appearance.languageTitle')}</h3>
+          <p>{t('appearance.languageBody')}</p>
           {languageStatus && <span className="set-save-status">{languageStatus}</span>}
         </div>
         <select
-          value={language}
+          value={preference}
           onChange={(e) => void saveLanguage(e.target.value)}
-          aria-label="Language"
+          aria-label={t('appearance.languageTitle')}
           className="set-select-native"
         >
           {SUPPORTED_LANGUAGES.map((entry) => (
@@ -325,27 +296,27 @@ function AppearancePanel({
       <Card className="appearance-card">
         <div className={`appearance-preview${shader ? '' : ' is-static'}`} aria-hidden>
           <ShaderBackdrop enabled={shader} />
-          <span>{shader ? 'Animated color wash' : 'Static background'}</span>
+          <span>{shader ? t('appearance.wash') : t('appearance.static')}</span>
         </div>
         <div className="appearance-setting">
           <div>
-            <CardTitle>Animated background</CardTitle>
-            <CardSub>Slow-moving color behind the app. Turn it off for a flat look and lower GPU use on battery.</CardSub>
+            <CardTitle>{t('appearance.animatedTitle')}</CardTitle>
+            <CardSub>{t('appearance.animatedBody')}</CardSub>
             {status && <p className="set-save-status">{status}</p>}
           </div>
           <Switch
             checked={shader}
-            label="Animated background"
+            label={t('appearance.animatedTitle')}
             onCheckedChange={(next) => {
               const previous = shader
               onShader(next)
-              setStatus('Saving…')
+              setStatus(t('common.saving'))
               window.app
                 .setAppBehavior({ shader: next })
                 .then((r) => {
                   const res = r as unknown as { ok: boolean; error?: string }
                   if (!res.ok) onShader(previous)
-                  setStatus(res.ok ? 'Saved.' : (res.error ?? 'Save failed.'))
+                  setStatus(res.ok ? t('common.saved') : (res.error ?? t('common.failed')))
                 })
                 .catch(() => {
                   onShader(previous)
@@ -429,12 +400,12 @@ function UsagePanel(): React.JSX.Element {
   )
 }
 
-const TAB_TITLES: Record<string, string> = {
-  general: 'General',
-  appearance: 'Appearance',
-  agents: 'Agents',
-  connectors: 'Connectors',
-  usage: 'Usage'
+const TAB_TITLES: Record<string, UiKey> = {
+  general: 'settings.tab.general',
+  appearance: 'settings.tab.appearance',
+  agents: 'settings.tab.agents',
+  connectors: 'settings.tab.connectors',
+  usage: 'settings.tab.usage'
 }
 
 function NavGlyph({ id }: { id: SettingsTabId }): React.JSX.Element {
@@ -480,6 +451,7 @@ function NavGlyph({ id }: { id: SettingsTabId }): React.JSX.Element {
 
 /** Floating settings panel: grouped sidebar + content, shadcn components on the app theme. */
 export default function SettingsApp({ initialTab }: { initialTab?: string }): React.JSX.Element {
+  const { t } = useI18n()
   const [tab, setTab] = useState<SettingsTabId>(() => {
     if (initialTab && isSettingsTabRegistered(initialTab)) return initialTab
     const value = new URLSearchParams(window.location.hash.split('?')[1] ?? '').get('tab')
@@ -519,19 +491,19 @@ export default function SettingsApp({ initialTab }: { initialTab?: string }): Re
   }, [theme])
 
   return (
-    <div className="settings" role="dialog" aria-label="Settings">
+    <div className="settings" role="dialog" aria-label={t('settings.title')}>
       <aside className="settings-sidebar">
         <ShaderBackdrop enabled={shader} />
         <div className="settings-dragover" />
         <div className="settings-side-head">
-          <h2>Settings</h2>
+          <h2>{t('settings.title')}</h2>
           <div className="settings-search">
             <span className="settings-search-icon">⌕</span>
             <input
               value={query}
               onChange={(e) => setQuery(e.target.value)}
-              placeholder="Search"
-              aria-label="Search settings"
+              placeholder={t('settings.searchPlaceholder')}
+              aria-label={t('settings.searchPlaceholder')}
             />
           </div>
         </div>
@@ -539,7 +511,7 @@ export default function SettingsApp({ initialTab }: { initialTab?: string }): Re
           {groups.map((g) => (
             <div key={g.id}>
               <div className="settings-nav-group-label">
-                {g.label}
+                {t(`settings.group.${g.id}` as UiKey)}
               </div>
               <div className="settings-nav-group">
                 {g.items.map((n) => (
@@ -549,23 +521,23 @@ export default function SettingsApp({ initialTab }: { initialTab?: string }): Re
                     className={`settings-nav-item${tab === n.id ? ' is-active' : ''}`}
                   >
                     <NavGlyph id={n.id} />
-                    {n.label}
+                    {t(`settings.tab.${n.id}` as UiKey) === `settings.tab.${n.id}` ? n.label : t(`settings.tab.${n.id}` as UiKey)}
                   </button>
                 ))}
               </div>
             </div>
           ))}
-          {items.length === 0 && <p className="settings-nav-empty">No matches.</p>}
+          {items.length === 0 && <p className="settings-nav-empty">{t('settings.noMatches')}</p>}
         </nav>
       </aside>
       <div className="settings-main">
         <div className="settings-header">
           <span className="settings-header-title">
-            {TAB_TITLES[tab] ?? SETTINGS_NAV.find((item) => item.id === tab)?.label ?? 'Settings'}
+            {TAB_TITLES[tab] ? t(TAB_TITLES[tab]) : (SETTINGS_NAV.find((item) => item.id === tab)?.label ?? t('settings.title'))}
           </span>
           <button
             onClick={() => window.app.closeSettings()}
-            aria-label="Close settings"
+            aria-label={t('settings.close')}
             className="settings-close"
           >
             ✕

@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { Button } from '../../components/ui/button.js'
 import { Card, CardSub, CardTitle, Hint } from '../../components/ui/card.js'
 import { Input } from '../../components/ui/input.js'
+import { getConnectorLogo } from '../connectorLogos.js'
 import type { ComposioToolkit } from '../../../main/connectors/composio-marketplace.js'
 
 interface ConnectorState {
@@ -23,13 +24,14 @@ interface BuiltinItem {
   name: string
   description: string
   category: string
-  iconType: 'video' | 'phone' | 'email' | 'browser' | 'gmail' | 'calendar' | 'instagram' | 'notion' | 'outlook' | 'workspace' | 'slack' | 'meta'
+  iconType?: 'video' | 'phone' | 'email' | 'browser'
+  logoSrc?: string
   connected?: boolean
 }
 
 const CATEGORIES = ['All', 'Productivity', 'Creativity', 'Business', 'Development', 'Finance', 'Travel', 'Health', 'Custom'] as const
 
-function ConnectorIcon({ type }: { type: BuiltinItem['iconType'] }): React.JSX.Element {
+function ConnectorIcon({ type }: { type: NonNullable<BuiltinItem['iconType']> }): React.JSX.Element {
   switch (type) {
     case 'video':
       return (
@@ -62,67 +64,15 @@ function ConnectorIcon({ type }: { type: BuiltinItem['iconType'] }): React.JSX.E
           <line x1="10.88" y1="21.94" x2="15.46" y2="14" />
         </svg>
       )
-    case 'gmail':
-      return (
-        <svg viewBox="0 0 24 24">
-          <path fill="#EA4335" d="M20 4H4C2.9 4 2 4.9 2 6v12c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V6c0-1.1-.9-2-2-2zM4 6l8 5 8-5v2l-8 5-8-5V6z"/>
-        </svg>
-      )
-    case 'calendar':
-      return (
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
-          <rect x="3" y="4" width="18" height="18" rx="3" />
-          <line x1="16" y1="2" x2="16" y2="6" />
-          <line x1="8" y1="2" x2="8" y2="6" />
-          <line x1="3" y1="10" x2="21" y2="10" />
-          <text x="12" y="18" textAnchor="middle" fontSize="8" fill="currentColor" fontWeight="700">31</text>
-        </svg>
-      )
-    case 'instagram':
-      return (
-        <svg viewBox="0 0 24 24" fill="none" stroke="#E1306C" strokeWidth="1.8">
-          <rect x="2" y="2" width="20" height="20" rx="5" />
-          <circle cx="12" cy="12" r="4" />
-          <circle cx="17.5" cy="6.5" r="1" fill="#E1306C" />
-        </svg>
-      )
-    case 'notion':
-      return (
-        <svg viewBox="0 0 24 24" fill="currentColor">
-          <path d="M4 4.5A2.5 2.5 0 0 1 6.5 2H18a2 2 0 0 1 2 2v15.5a2.5 2.5 0 0 1-2.5 2.5H6a2 2 0 0 1-2-2V4.5zm4 3.5v8h2v-5l4 5h2V8h-2v5l-4-5H8z"/>
-        </svg>
-      )
-    case 'outlook':
-      return (
-        <svg viewBox="0 0 24 24" fill="#0078D4">
-          <rect x="2" y="4" width="20" height="16" rx="3" fill="#0078D4" />
-          <circle cx="12" cy="12" r="4" fill="#fff" />
-        </svg>
-      )
-    case 'workspace':
-      return (
-        <svg viewBox="0 0 24 24">
-          <polygon points="12,2 22,20 2,20" fill="#4285F4" />
-          <polygon points="12,6 19,19 5,19" fill="#34A853" />
-          <polygon points="12,10 16,18 8,18" fill="#FBBC05" />
-        </svg>
-      )
-    case 'slack':
-      return (
-        <svg viewBox="0 0 24 24" fill="#ECB22E">
-          <rect x="3" y="3" width="8" height="8" rx="2" fill="#E01E5A" />
-          <rect x="13" y="3" width="8" height="8" rx="2" fill="#36C5F0" />
-          <rect x="3" y="13" width="8" height="8" rx="2" fill="#2EB67D" />
-          <rect x="13" y="13" width="8" height="8" rx="2" fill="#ECB22E" />
-        </svg>
-      )
-    case 'meta':
-      return (
-        <svg viewBox="0 0 24 24" fill="#0081FB">
-          <path d="M12 14c-1.5 0-3-1.5-4-3-1.5-2.2-2.5-3-3.5-3C2.8 8 2 9.2 2 11c0 2.5 1.8 5 4.5 5 2.2 0 3.8-1.5 5.5-3.5 1.7 2 3.3 3.5 5.5 3.5 2.7 0 4.5-2.5 4.5-5 0-1.8-.8-3-2.5-3-1 0-2 .8-3.5 3-1 1.5-2.5 3-4 3z"/>
-        </svg>
-      )
   }
+}
+
+function ConnectorBrandIcon({ item }: { item: BuiltinItem }): React.JSX.Element {
+  const logoSrc = item.logoSrc ?? getConnectorLogo(item.id)
+  if (logoSrc) {
+    return <img src={logoSrc} alt={`${item.name} logo`} />
+  }
+  return <ConnectorIcon type={item.iconType ?? 'browser'} />
 }
 
 export default function ConnectorsTab(): React.JSX.Element {
@@ -318,7 +268,7 @@ export default function ConnectorsTab(): React.JSX.Element {
       name: 'Gmail',
       description: 'Draft replies, search your inbox, and summarize email threads instantly',
       category: 'Productivity',
-      iconType: 'gmail',
+      logoSrc: getConnectorLogo('gmail'),
       connected: gmailConnected
     },
     {
@@ -326,7 +276,7 @@ export default function ConnectorsTab(): React.JSX.Element {
       name: 'Google Calendar',
       description: 'Understand your schedule, manage events, and optimize your time effectively',
       category: 'Productivity',
-      iconType: 'calendar',
+      logoSrc: getConnectorLogo('calendar'),
       connected: false
     },
     {
@@ -334,7 +284,7 @@ export default function ConnectorsTab(): React.JSX.Element {
       name: 'Instagram',
       description: 'Generate and publish Posts, Stories, or Reels to Instagram',
       category: 'Creativity',
-      iconType: 'instagram',
+      logoSrc: getConnectorLogo('instagram'),
       connected: false
     },
     {
@@ -342,7 +292,7 @@ export default function ConnectorsTab(): React.JSX.Element {
       name: 'Notion',
       description: 'Search workspace content, update notes, and automate workflows in Notion',
       category: 'Productivity',
-      iconType: 'notion',
+      logoSrc: getConnectorLogo('notion'),
       connected: !!state?.services?.find((s) => s.id === 'notion')?.connected
     },
     {
@@ -350,7 +300,7 @@ export default function ConnectorsTab(): React.JSX.Element {
       name: 'Outlook Mail',
       description: 'Write, search, and manage your Outlook emails seamlessly within Manus',
       category: 'Productivity',
-      iconType: 'outlook',
+      logoSrc: getConnectorLogo('outlook'),
       connected: false
     },
     {
@@ -358,7 +308,7 @@ export default function ConnectorsTab(): React.JSX.Element {
       name: 'Google Workspace',
       description: 'Access your files, search instantly, and let Manus help you manage documents...',
       category: 'Business',
-      iconType: 'workspace',
+      logoSrc: getConnectorLogo('google-workspace'),
       connected: false
     },
     {
@@ -366,7 +316,7 @@ export default function ConnectorsTab(): React.JSX.Element {
       name: 'Slack',
       description: 'Search, read, and act across your Slack workspace',
       category: 'Business',
-      iconType: 'slack',
+      logoSrc: getConnectorLogo('slack'),
       connected: false
     },
     {
@@ -374,7 +324,7 @@ export default function ConnectorsTab(): React.JSX.Element {
       name: 'Meta Ads Manager',
       description: 'Automate ads insights and optimization to save hours and maximize profits',
       category: 'Business',
-      iconType: 'meta',
+      logoSrc: getConnectorLogo('meta-ads'),
       connected: false
     }
   ]
@@ -440,10 +390,12 @@ export default function ConnectorsTab(): React.JSX.Element {
 
       {/* Main Connectors Grid */}
       <div className="conn-cards-grid">
-        {filteredCards.map((item) => (
+        {filteredCards.map((item) => {
+          const hasLogo = Boolean(item.logoSrc ?? getConnectorLogo(item.id))
+          return (
           <div key={item.id} className="conn-card-item">
-            <div className="conn-card-icon-box">
-              <ConnectorIcon type={item.iconType} />
+            <div className={`conn-card-icon-box${hasLogo ? ' has-logo' : ''}`}>
+              <ConnectorBrandIcon item={item} />
             </div>
             <div className="conn-card-info">
               <h4>{item.name}</h4>
@@ -481,7 +433,8 @@ export default function ConnectorsTab(): React.JSX.Element {
               )}
             </div>
           </div>
-        ))}
+          )
+        })}
       </div>
 
       {connectMessage && <p className="set-msg" role="status">{connectMessage}</p>}

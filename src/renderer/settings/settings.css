@@ -1477,6 +1477,17 @@
   height: 22px;
 }
 
+.conn-card-icon-box.has-logo {
+  background: #ffffff;
+  border-color: #e4e4e7;
+}
+
+.conn-card-icon-box img {
+  width: 26px;
+  height: 26px;
+  object-fit: contain;
+}
+
 .conn-card-info {
   flex: 1;
   min-width: 0;

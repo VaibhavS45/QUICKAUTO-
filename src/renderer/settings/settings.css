@@ -714,6 +714,185 @@
   font-size: 11px;
 }
 
+/* Day/night mode segmented control (Appearance). */
+.set-theme-group {
+  display: flex;
+  flex: 0 0 auto;
+  gap: 4px;
+  border: 1px solid #343946;
+  border-radius: 9px;
+  background: #0d0f13;
+  padding: 4px;
+}
+
+.set-theme-option {
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  padding: 7px 14px;
+  color: #9299a6;
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+}
+
+.set-theme-option:hover {
+  background: rgb(255 255 255 / 6%);
+  color: #d7dbe2;
+}
+
+.set-theme-option.is-active {
+  background: rgb(255 255 255 / 10%);
+  color: #fafafa;
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / 6%);
+}
+
+/* Keyboard shortcut reference (General). */
+.set-shortcuts {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  border-top: 1px solid rgb(255 255 255 / 6%);
+  padding-top: 18px;
+}
+
+.set-shortcut-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.set-shortcut-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  border: 1px solid #2b303a;
+  border-radius: 9px;
+  background: #101216;
+  padding: 10px 12px;
+}
+
+.set-shortcut-row h4 {
+  margin: 0;
+  font-size: 12px;
+  font-weight: 600;
+  color: #e3e6ed;
+}
+
+.set-shortcut-row p {
+  margin: 0;
+  padding-top: 2px;
+  font-size: 11px;
+  line-height: 1.5;
+  color: #9299a6;
+}
+
+.set-kbd-group {
+  display: flex;
+  flex: 0 0 auto;
+  gap: 6px;
+}
+
+.set-kbd {
+  border: 1px solid #3a3f47;
+  border-bottom-width: 2px;
+  border-radius: 6px;
+  background: #1c1f24;
+  padding: 3px 8px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 11px;
+  color: #e4e7ed;
+  white-space: nowrap;
+}
+
+/* Day mode: light surfaces for the settings window. The shell behind keeps
+   its dark chrome; variable-driven components follow .light tokens. */
+.light .settings {
+  --border: #e2e4e9;
+  --input: #e2e4e9;
+  --card: #ffffff;
+  --ring: #9aa3b2;
+  background: #f2f3f5;
+  color: #23262d;
+}
+
+.light .settings-sidebar {
+  background: linear-gradient(180deg, #ffffff 0%, #f0f1f4 100%);
+  border-right-color: rgb(0 0 0 / 8%);
+}
+
+.light .settings-side-head h2,
+.light .settings-nav-item.is-active,
+.light .settings-header-title,
+.light .settings .set-split-text h3,
+.light .settings-page-intro h2,
+.light .set-shortcut-row h4 {
+  color: #17191e;
+}
+
+.light .settings-search input {
+  border-color: rgb(0 0 0 / 10%);
+  background: rgb(255 255 255 / 80%);
+  color: #17191e;
+}
+
+.light .settings-nav-item { color: #5b6270; }
+.light .settings-nav-item:hover { background: rgb(0 0 0 / 5%); color: #23262d; }
+.light .settings-nav-item.is-active { background: rgb(0 0 0 / 7%); box-shadow: inset 2px 0 #5560d8; }
+
+.light .settings-main { background: #f2f3f5; }
+.light .settings-header { border-bottom-color: rgb(0 0 0 / 8%); }
+.light .settings-close { color: #6f7785; }
+.light .settings-close:hover { background: rgb(0 0 0 / 7%); color: #17191e; }
+.light .settings-page-intro p,
+.light .settings .set-split-text p,
+.light .set-shortcut-row p { color: #5b6270; }
+
+.light .settings .set-split { border-bottom-color: rgb(0 0 0 / 8%); }
+.light .set-theme-group { border-color: #d5d8de; background: #ffffff; }
+.light .set-theme-option { color: #5b6270; }
+.light .set-theme-option:hover { background: rgb(0 0 0 / 5%); color: #23262d; }
+.light .set-theme-option.is-active { background: #23262d; color: #fafafa; }
+
+.light .set-select-native {
+  border-color: #c9cdd5;
+  background: #ffffff;
+  color: #17191e;
+}
+
+.light .set-shortcut-row {
+  border-color: #e0e2e8;
+  background: #ffffff;
+}
+
+.light .set-kbd {
+  border-color: #c9cdd5;
+  background: #f0f1f4;
+  color: #23262d;
+}
+
+.light .appearance-preview {
+  border-color: #d5d8de;
+}
+
+.light .appearance-preview.is-static {
+  background: linear-gradient(145deg, #eef0f4, #dde0e7 72%);
+}
+
+.light .settings .rounded-xl {
+  border-color: #e0e2e8;
+  background: linear-gradient(145deg, #ffffff, #f4f5f7);
+  box-shadow: 0 8px 24px rgb(0 0 0 / 6%);
+}
+
+.light .settings .rounded-xl > h3:first-child,
+.light .settings .set-subhead { color: #17191e; }
+.light .settings .rounded-xl > p { color: #5b6270; }
+
 .usage-card {
   padding: 22px !important;
 }

@@ -66,15 +66,16 @@ installStdioGuard()
 const gotLock = app.requestSingleInstanceLock()
 if (!gotLock) app.quit()
 
-const store = new Store<{ openAtLogin: boolean; keepBackground: boolean; shader: boolean; hotkey?: string }>({
-  defaults: { openAtLogin: false, keepBackground: true, shader: true }
+const store = new Store<{ openAtLogin: boolean; keepBackground: boolean; shader: boolean; theme: string; hotkey?: string }>({
+  defaults: { openAtLogin: false, keepBackground: true, shader: true, theme: 'system' }
 })
 store.delete('hotkey')
 
 function storedAppBehavior(): AppBehavior {
   return resolveAppBehavior({
     keepBackground: store.get('keepBackground', true),
-    shader: store.get('shader', true)
+    shader: store.get('shader', true),
+    theme: store.get('theme', 'system')
   })
 }
 
@@ -381,6 +382,7 @@ function wireIpc(): void {
     if (!next) return { ok: false as const, error: 'Invalid app behavior.' }
     store.set('keepBackground', next.keepBackground)
     store.set('shader', next.shader)
+    store.set('theme', next.theme)
     return { ok: true as const, ...next }
   })
 

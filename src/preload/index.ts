@@ -140,12 +140,13 @@ const api = {
     ipcRenderer.invoke('settings:get-profile'),
   setProfile: (p: { name: string; email: string; about: string; language: string }) =>
     ipcRenderer.invoke('settings:set-profile', p),
-  getAppBehavior: (): Promise<{ ok: boolean; keepBackground: boolean; shader: boolean }> =>
+  getAppBehavior: (): Promise<{ ok: boolean; keepBackground: boolean; shader: boolean; theme: string }> =>
     ipcRenderer.invoke('app:get-behavior'),
   setAppBehavior: (p: {
     keepBackground?: boolean
     shader?: boolean
-  }): Promise<{ ok: boolean; keepBackground?: boolean; shader?: boolean; error?: string }> =>
+    theme?: string
+  }): Promise<{ ok: boolean; keepBackground?: boolean; shader?: boolean; theme?: string; error?: string }> =>
     ipcRenderer.invoke('app:set-behavior', p),
   chatList: (): Promise<{ ok: boolean; threads: ChatThread[] }> =>
     ipcRenderer.invoke('shell:chat-list'),

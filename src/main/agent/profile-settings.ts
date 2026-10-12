@@ -6,7 +6,7 @@ import { z } from 'zod'
  * electron-store alongside model settings. No polling, no external calls.
  */
 
-export const ProfileLanguageSchema = z.enum(['system', 'en'])
+export const ProfileLanguageSchema = z.enum(['system', 'en', 'es', 'fr', 'de', 'hi', 'pt', 'ja', 'zh'])
 export type ProfileLanguage = z.infer<typeof ProfileLanguageSchema>
 
 export const ProfileSettingsSchema = z.object({

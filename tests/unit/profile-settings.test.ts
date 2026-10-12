@@ -34,6 +34,13 @@ describe('ProfileSettingsService', () => {
     expect(saved.name.length).toBeLessThanOrEqual(80)
     expect(saved.about.length).toBeLessThanOrEqual(2000)
   })
+
+  it('accepts the expanded appearance language options', () => {
+    const svc = new ProfileSettingsService(memStore())
+    for (const language of ['es', 'fr', 'de', 'hi', 'pt', 'ja', 'zh'] as const) {
+      expect(svc.set({ name: '', email: '', about: '', language }).language).toBe(language)
+    }
+  })
 })
 
 describe('filterSettingsNav', () => {
@@ -47,6 +54,7 @@ describe('filterSettingsNav', () => {
 
   it('groups remaining items and drops empty groups', () => {
     const groups = groupedSettingsNav(filterSettingsNav('shortcut'))
-    expect(groups).toEqual([])
+    expect(groups.flatMap((g) => g.items).map((n) => n.id)).toEqual(['general'])
+    expect(groupedSettingsNav(filterSettingsNav('zzz'))).toEqual([])
   })
 })

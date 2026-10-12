@@ -16,19 +16,26 @@ describe('launch policy', () => {
 
 describe('app-prefs', () => {
   it('defaults to keeping the app in the background after its window closes', () => {
-    expect(DEFAULT_APP_BEHAVIOR).toEqual({ keepBackground: true, shader: true })
-    expect(resolveAppBehavior(undefined)).toEqual({ keepBackground: true, shader: true })
-    expect(resolveAppBehavior({ keepBackground: false })).toEqual({ keepBackground: false, shader: true })
+    expect(DEFAULT_APP_BEHAVIOR).toEqual({ keepBackground: true, shader: true, theme: 'system' })
+    expect(resolveAppBehavior(undefined)).toEqual({ keepBackground: true, shader: true, theme: 'system' })
+    expect(resolveAppBehavior({ keepBackground: false })).toEqual({ keepBackground: false, shader: true, theme: 'system' })
   })
 
   it('falls back to defaults on garbage', () => {
-    expect(resolveAppBehavior(null)).toEqual({ keepBackground: true, shader: true })
-    expect(resolveAppBehavior({ keepBackground: 'yes' })).toEqual({ keepBackground: true, shader: true })
+    expect(resolveAppBehavior(null)).toEqual({ keepBackground: true, shader: true, theme: 'system' })
+    expect(resolveAppBehavior({ keepBackground: 'yes' })).toEqual({ keepBackground: true, shader: true, theme: 'system' })
+    expect(resolveAppBehavior({ theme: 'neon' })).toEqual({ keepBackground: true, shader: true, theme: 'system' })
   })
 
   it('merges appearance patches without dropping keepBackground', () => {
-    const next = applyAppBehaviorPatch({ keepBackground: false, shader: true }, { shader: false })
-    expect(next).toEqual({ keepBackground: false, shader: false })
-    expect(applyAppBehaviorPatch({ keepBackground: true, shader: true }, {})).toBeNull()
+    const next = applyAppBehaviorPatch({ keepBackground: false, shader: true, theme: 'system' }, { shader: false })
+    expect(next).toEqual({ keepBackground: false, shader: false, theme: 'system' })
+    expect(applyAppBehaviorPatch({ keepBackground: true, shader: true, theme: 'system' }, {})).toBeNull()
+  })
+
+  it('merges theme patches for day/night mode', () => {
+    const next = applyAppBehaviorPatch({ keepBackground: true, shader: true, theme: 'system' }, { theme: 'light' })
+    expect(next).toEqual({ keepBackground: true, shader: true, theme: 'light' })
+    expect(applyAppBehaviorPatch({ keepBackground: true, shader: true, theme: 'light' }, { theme: 'nope' })).toBeNull()
   })
 })

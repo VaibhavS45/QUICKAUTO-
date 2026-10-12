@@ -2,6 +2,7 @@ import React from 'react'
 import { createRoot } from 'react-dom/client'
 import SettingsApp from './settings/SettingsDialog'
 import ShellApp from './shell/ShellApp'
+import { applyTheme } from './settings/theme'
 import './styles.css'
 
 /** Single renderer entry; app and settings share hash-based routing. */
@@ -11,6 +12,13 @@ function Root(): React.JSX.Element {
     const onChange = (): void => setHash(window.location.hash)
     window.addEventListener('hashchange', onChange)
     return () => window.removeEventListener('hashchange', onChange)
+  }, [])
+  // Apply the saved day/night mode before first paint of either surface.
+  React.useEffect(() => {
+    window.app
+      .getAppBehavior()
+      .then((r) => applyTheme((r as unknown as { theme?: unknown }).theme))
+      .catch(() => applyTheme('system'))
   }, [])
   if (hash.startsWith('#settings')) return <SettingsApp />
   return <ShellApp />

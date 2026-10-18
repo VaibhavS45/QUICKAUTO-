@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { flushSync } from 'react-dom'
 import type { ShellApi } from '../contracts/feature.js'
 import type { ChatThread } from '../../shared/chat.js'
 import type { AgentEvent } from '../../shared/agent.js'
@@ -250,10 +251,19 @@ export default function ShellApp(): React.JSX.Element {
   useEffect(() => window.app.onAgentEvent(handleAgentEvent), [handleAgentEvent])
 
   function navigate(view: string, params: Record<string, unknown> = {}): void {
-    router.navigate(view, params)
-    setChatError('')
-    setNotificationsOpen(false)
-    setProfileMenuOpen(false)
+    const apply = () => flushSync(() => {
+      router.navigate(view, params)
+      setChatError('')
+      setNotificationsOpen(false)
+      setProfileMenuOpen(false)
+    })
+    // Router updates state synchronously via its subscribe(setRoute), so
+    // flushSync commits the new DOM inside the transition snapshot.
+    if (document.startViewTransition && !window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+      document.startViewTransition(apply)
+    } else {
+      apply()
+    }
   }
 
   const shellApi: ShellApi = {
@@ -391,6 +401,7 @@ export default function ShellApp(): React.JSX.Element {
         key={item.id}
         type="button"
         className={`shell-topnav-item${active ? ' is-active' : ''}`}
+        style={{ viewTransitionName: `nav-${item.id}` }}
         aria-current={active ? 'page' : undefined}
         title={item.label}
         aria-label={item.label}
@@ -477,7 +488,10 @@ export default function ShellApp(): React.JSX.Element {
               <button type="button" onClick={() => { setChatError(''); setDashboardError('') }}>{t('shell.dismiss')}</button>
             </div>
           )}
-          <div className={`shell-content${route.view === 'chat' ? ' has-chat-view' : ''}${!activeFeature && !activeChatId ? ' is-home' : ''}${activeFeature ? ' has-feature' : ''}${isCanvasView ? ' is-canvas-view' : ''}`}>
+          <div
+            className={`shell-content${route.view === 'chat' ? ' has-chat-view' : ''}${!activeFeature && !activeChatId ? ' is-home' : ''}${activeFeature ? ' has-feature' : ''}${isCanvasView ? ' is-canvas-view' : ''}`}
+            style={{ viewTransitionName: 'shell-content' }}
+          >
             {activeFeature ? (
               <FeatureContent feature={activeFeature} shell={shellApi} params={route.params} />
             ) : activeChatId ? (

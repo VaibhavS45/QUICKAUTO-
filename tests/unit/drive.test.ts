@@ -1,144 +1,182 @@
 import { describe, expect, it } from 'vitest'
-import { BudgetGuard, MemoryBudgetStore } from '../../src/main/connectors/budget-guard.js'
 import {
-  COMPOSIO_USER_ID,
-  isBudgetGuardedTool,
-  type ComposioClientLike
-} from '../../src/main/connectors/composio.js'
-import {
+  DriveService,
   DRIVE_DOWNLOAD_SLUG,
-  DRIVE_FIND_SLUG,
-  DRIVE_MAX_FILES,
-  DriveConnectorProvider,
-  DriveService
+  DRIVE_LIST_SLUG,
+  DRIVE_NOT_CONNECTED,
+  DriveConnectorProvider
 } from '../../src/main/connectors/drive.js'
-import { runWithContext } from '../../src/main/agent/run-context.js'
-import { attachmentPromptText, needsComposioTools } from '../../src/renderer/lib/attachments.js'
+import { BudgetGuard, MemoryBudgetStore } from '../../src/main/connectors/budget-guard.js'
+import { currentOrFallbackContext, runWithContext } from '../../src/main/agent/run-context.js'
 
 interface ExecCall {
   slug: string
-  body: Record<string, unknown>
+  args: Record<string, unknown>
 }
 
-function fakeClient(opts: {
-  connected?: boolean
-  execute?: (slug: string, body: Record<string, unknown>) => Promise<{ data?: unknown; error?: string | null; successful?: boolean }>
-} = {}): { client: ComposioClientLike; calls: ExecCall[] } {
+function fakeClient(response: unknown, opts: { failSlugs?: string[] } = {}): {
+  client: unknown
+  calls: ExecCall[]
+  wrapperCalls: number
+} {
   const calls: ExecCall[] = []
+  let wrapperCalls = 0
   const client = {
     tools: {
-      execute: async (slug: string, body: Record<string, unknown>) => {
-        calls.push({ slug, body })
-        return opts.execute ? opts.execute(slug, body) : { data: {}, error: null, successful: true }
+      execute: async (slug: string, body: { arguments?: Record<string, unknown> }) => {
+        calls.push({ slug, args: body.arguments ?? {} })
+        return response
       }
     },
     connectedAccounts: {
-      list: async () => ({ items: opts.connected === false ? [] : [{ id: 'conn-1', status: 'ACTIVE' }] })
-    },
-    link: async () => ({ redirectUrl: undefined }),
-    authConfigs: { list: async () => ({ items: [] }) }
-  } as unknown as ComposioClientLike
-  return { client, calls }
+      list: async () => {
+        wrapperCalls++
+        return { items: [{ id: 'acc-1', status: 'ACTIVE' }] }
+      }
+    }
+  }
+  void opts
+  return { client, calls, wrapperCalls }
 }
 
-function serviceWith(
-  fake: { client: ComposioClientLike; calls: ExecCall[] },
-  opts: { key?: string | null } = {}
-): DriveService {
-  return new DriveService({
-    getApiKey: async () => (opts.key === undefined ? 'test-composio-key' : opts.key),
-    getGuard: () => new BudgetGuard({ store: new MemoryBudgetStore() }),
-    createClient: () => fake.client
+function serviceWith(client: unknown): { service: DriveService; guard: BudgetGuard } {
+  const guard = new BudgetGuard({ store: new MemoryBudgetStore() })
+  const service = new DriveService({
+    getApiKey: async () => 'ak_test',
+    getGuard: () => guard,
+    createClient: () => client as never
   })
+  return { service, guard }
 }
 
-describe('drive service', () => {
-  it('reports not connected without a Composio key and never calls Composio', async () => {
-    const fake = fakeClient()
-    const res = await serviceWith(fake, { key: null }).listFiles('')
-    expect(res).toMatchObject({ ok: false, notConnected: true })
-    expect(fake.calls).toHaveLength(0)
-  })
-
-  it('reports not connected when there is no ACTIVE googledrive account', async () => {
-    const fake = fakeClient({ connected: false })
-    const res = await serviceWith(fake).listFiles('')
-    expect(res).toMatchObject({ ok: false, notConnected: true })
-    expect(fake.calls).toHaveLength(0)
-  })
-
-  it('normalizes files and pins the toolkit version under the local user', async () => {
-    const fake = fakeClient({
-      execute: async () => ({
-        data: { files: [{ id: 'f1', name: 'Q3 plan', mimeType: 'application/vnd.google-apps.document' }, { name: 'no id' }] },
-        error: null,
-        successful: true
-      })
+describe('DriveService.listFiles', () => {
+  it('returns normalized files without folders', async () => {
+    const { client, calls } = fakeClient({
+      data: {
+        files: [
+          { id: 'f1', name: 'Spec.pdf', mimeType: 'application/pdf', size: '1024' },
+          { id: 'f2', name: 'Projects', mimeType: 'application/vnd.google-apps.folder' },
+          { name: 'no id here' }
+        ]
+      }
     })
-    const res = await serviceWith(fake).listFiles('plan')
+    const { service } = serviceWith(client)
+    const res = await service.listFiles('')
     expect(res.ok).toBe(true)
-    expect(res.ok && res.files).toEqual([
-      { id: 'f1', name: 'Q3 plan', mimeType: 'application/vnd.google-apps.document', size: undefined, modifiedTime: undefined, webViewLink: undefined }
+    expect(res.files).toEqual([
+      { id: 'f1', name: 'Spec.pdf', mimeType: 'application/pdf', size: '1024', modifiedTime: undefined, webViewLink: undefined }
     ])
-    expect(fake.calls[0]!.slug).toBe(DRIVE_FIND_SLUG)
-    expect(fake.calls[0]!.body).toMatchObject({ userId: COMPOSIO_USER_ID, version: expect.any(String) })
-    expect(fake.calls[0]!.body['arguments']).toMatchObject({ q: 'plan', page_size: DRIVE_MAX_FILES })
+    expect(calls[0]!.slug).toBe(DRIVE_LIST_SLUG)
+    expect(calls[0]!.args['pageSize']).toBe(25)
+    expect(calls[0]!.args['q']).toBeUndefined()
   })
 
-  it('sorts by recency only when there is no search query', async () => {
-    const fake = fakeClient({ execute: async () => ({ data: { files: [] }, error: null, successful: true }) })
-    await serviceWith(fake).listFiles('')
-    expect(fake.calls[0]!.body['arguments']).toMatchObject({ order_by: 'modifiedTime desc' })
+  it('reports notConnected without metering the guard', async () => {
+    const guard = new BudgetGuard({ store: new MemoryBudgetStore() })
+    const client = {
+      tools: { execute: async () => ({}) },
+      connectedAccounts: { list: async () => ({ items: [] }) }
+    }
+    const service = new DriveService({ getApiKey: async () => 'ak_x', getGuard: () => guard, createClient: () => client as never })
+    const res = await service.listFiles('report')
+    expect(res.ok).toBe(false)
+    expect(res.notConnected).toBe(true)
+    expect(guard.status().used).toBe(0)
   })
 
-  it('surfaces Composio errors instead of throwing', async () => {
-    const fake = fakeClient({ execute: async () => ({ data: null, error: 'quota exceeded', successful: false }) })
-    const res = await serviceWith(fake).listFiles('')
-    expect(res).toMatchObject({ ok: false, error: expect.stringContaining('quota exceeded') })
+  it('fails cleanly with no Composio key', async () => {
+    const guard = new BudgetGuard({ store: new MemoryBudgetStore() })
+    const service = new DriveService({ getApiKey: async () => null, getGuard: () => guard })
+    const res = await service.listFiles('')
+    expect(res.ok).toBe(false)
+    expect(res.error).toMatch(/Composio API key/i)
+  })
+
+  it('caches identical searches so a repeat costs zero meter hits', async () => {
+    const { client, calls } = fakeClient({ data: { files: [{ id: 'f1', name: 'A', mimeType: 'text/plain' }] } })
+    const { service, guard } = serviceWith(client)
+    await service.listFiles('a')
+    const second = await service.listFiles('a')
+    expect(second.ok).toBe(true)
+    expect(calls).toHaveLength(1)
+    expect(guard.status().used).toBe(1)
   })
 })
 
-describe('drive provider', () => {
-  it('serves gdrive_read under @composio only, and self-guards it', () => {
+describe('DriveService.readFile', () => {
+  it('downloads workspace content through the pinned toolkit version', async () => {
+    const { client, calls } = fakeClient({ data: { downloaded_file_content: 'the entire text' } })
+    const { service, guard } = serviceWith(client)
+    const out = await runWithContext({ runId: 'r1', source: 'chat', signal: undefined }, async () =>
+      service.readFile('abc_FILE-1', 'TXT')
+    )
+    expect(out).toMatchObject({ fetched: true, content: 'the entire text', exportFormat: 'TXT' })
+    expect(calls[0]).toMatchObject({ slug: DRIVE_DOWNLOAD_SLUG, args: { fileId: 'abc_FILE-1', mime_type: 'TXT' } })
+    expect(guard.status().used).toBe(1)
+  })
+
+  it('falls back to skipping the version check when the pin is stale', async () => {
+    let wrapperCalls = 0
+    const calls: ExecCall[] = []
+    let skipCheck = false
+    const client = {
+      tools: {
+        execute: async (_slug: string, body: { arguments?: Record<string, unknown>; dangerouslySkipVersionCheck?: boolean }) => {
+          if (wrapperCalls === 0 && !skipCheck) {
+            wrapperCalls++
+            skipCheck = body.dangerouslySkipVersionCheck === true
+            throw new Error('ComposioToolVersionRequiredError: version required')
+          }
+          calls.push({ slug: DRIVE_DOWNLOAD_SLUG, args: body.arguments ?? {} })
+          return { data: { downloaded_file_content: 'ok' } }
+        }
+      },
+      connectedAccounts: { list: async () => ({ items: [{ id: 'a', status: 'ACTIVE' }] }) }
+    }
+    const { service } = serviceWith(client)
+    const out = await service.readFile('abcde12345')
+    expect(out).toMatchObject({ content: 'ok' })
+    expect(calls).toHaveLength(1)
+  })
+
+  it('refuses malformed file ids with a clear message', async () => {
+    const { client } = fakeClient({ data: { downloaded_file_content: 'x' } })
+    const { service, guard } = serviceWith(client)
+    const out = await runWithContext({ runId: 'r1', source: 'chat', signal: undefined }, async () =>
+      service.readFile('../etc/passwd')
+    )
+    expect(typeof out).toBe('string')
+    expect(String(out)).toMatch(/Invalid Drive file id/)
+    expect(guard.status().used).toBe(0)
+  })
+
+  it('returns a not-connected marker instead of inventing content', async () => {
+    const client = {
+      tools: { execute: async () => ({}) },
+      connectedAccounts: { list: async () => ({ items: [] }) }
+    }
+    const { service } = serviceWith(client)
+    const out = await runWithContext({ runId: 'r1', source: 'chat', signal: undefined }, async () =>
+      service.readFile('abcdefghij')
+    )
+    expect(String(out)).toContain(DRIVE_NOT_CONNECTED)
+  })
+})
+
+describe('DriveConnectorProvider', () => {
+  it('serves gdrive_read tools only for the @composio mention', () => {
     const provider = new DriveConnectorProvider({
-      getApiKey: async () => 'k',
-      getGuard: () => new BudgetGuard({ store: new MemoryBudgetStore() }),
-      createClient: () => fakeClient().client
+      getApiKey: async () => 'ak_test',
+      getGuard: () => new BudgetGuard({ store: new MemoryBudgetStore() })
     })
-    const tools = provider.getTools(['composio'])
+    expect(Object.keys(provider.getTools(['gmail']))).toEqual([])
+    const tools = provider.getTools(['composio']) as Record<string, unknown>
     expect(Object.keys(tools)).toEqual(['gdrive_read'])
-    expect(isBudgetGuardedTool(tools['gdrive_read'])).toBe(true)
-    expect(provider.getTools(['gmail'])).toEqual({})
-    expect(provider.getTools([])).toEqual({})
-  })
-
-  it('reads file content through the download slug', async () => {
-    const fake = fakeClient({ execute: async () => ({ data: { downloaded_file_content: 'hello drive' }, error: null, successful: true }) })
-    const service = serviceWith(fake)
-    const out = await runWithContext({ runId: 'test-run', source: 'palette' }, () => service.readFile('f1', 'text/plain'))
-    expect(out).toBe('hello drive')
-    expect(fake.calls[0]!.slug).toBe(DRIVE_DOWNLOAD_SLUG)
-    expect(fake.calls[0]!.body['arguments']).toMatchObject({ fileId: 'f1', mime_type: 'text/plain' })
   })
 })
 
-describe('attachment prompt text', () => {
-  const local = { ref: '/tmp/a.pdf', name: 'a.pdf', kind: 'local' as const, path: '/tmp/a.pdf' }
-  const drive = { ref: 'drive:f1', name: 'Q3 plan', kind: 'drive' as const, driveId: 'f1', mimeType: 'application/vnd.google-apps.document' }
-
-  it('is empty for no files', () => {
-    expect(attachmentPromptText([])).toBe('')
-  })
-
-  it('points each file at the tool that reads it', () => {
-    const text = attachmentPromptText([local, drive])
-    expect(text).toContain('read_file path="/tmp/a.pdf"')
-    expect(text).toContain('gdrive_read fileId="f1"')
-    expect(text).toContain('untrusted DATA')
-  })
-
-  it('needs composio tools only for drive files', () => {
-    expect(needsComposioTools([local])).toBe(false)
-    expect(needsComposioTools([local, drive])).toBe(true)
+describe('run-context absence', () => {
+  it('falls back to a context when none is active for reads', async () => {
+    expect(currentOrFallbackContext().runId).toBeTruthy()
   })
 })

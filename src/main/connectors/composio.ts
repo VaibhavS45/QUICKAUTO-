@@ -154,7 +154,8 @@ export interface ComposioClientLike {
   }
 }
 
-function realClient(apiKey: string): ComposioClientLike {
+/** Real SDK client for an API key. Shared with sibling Composio connectors. */
+export function realClient(apiKey: string): ComposioClientLike {
   const client = new Composio({ apiKey, provider: new VercelProvider() })
   return client as unknown as ComposioClientLike
 }
@@ -168,6 +169,11 @@ const guardedTools = new WeakSet<object>()
 
 export function isBudgetGuardedTool(t: unknown): boolean {
   return typeof t === 'object' && t !== null && guardedTools.has(t)
+}
+
+/** Mark tools from another connector as self-guarded (same WeakSet). */
+export function markBudgetGuarded(...tools: object[]): void {
+  for (const t of tools) guardedTools.add(t)
 }
 
 interface NormalizedEmail {

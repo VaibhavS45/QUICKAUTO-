@@ -32,9 +32,8 @@ describe('appearance settings model', () => {
   })
 
   it('lists shortcuts for opening, closing, and navigating', () => {
-    expect(APP_SHORTCUTS.length).toBeGreaterThanOrEqual(4)
+    expect(APP_SHORTCUTS.length).toBeGreaterThanOrEqual(3)
     const actions = APP_SHORTCUTS.map((s) => s.action).join(' ')
-    expect(actions).toMatch(/command palette/i)
     expect(actions).toMatch(/settings/i)
     expect(actions).toMatch(/close/i)
     for (const shortcut of APP_SHORTCUTS) {

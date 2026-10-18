@@ -102,6 +102,44 @@
   }
 }
 
+/* View-transition tuning: the orange pill morphs between slots (each nav item
+   carries a unique view-transition-name set inline), the page content fades.
+   The morph timing lives on ::view-transition-group(*). */
+::view-transition-group(*) {
+  animation-duration: 260ms;
+  animation-timing-function: cubic-bezier(0.4, 0, 0.1, 1);
+}
+
+::view-transition-old(shell-content) {
+  animation: shell-view-out 140ms ease both;
+}
+
+::view-transition-new(shell-content) {
+  animation: shell-view-in 220ms ease both;
+}
+
+@keyframes shell-view-out {
+  to {
+    opacity: 0;
+    transform: translateY(-6px);
+  }
+}
+
+@keyframes shell-view-in {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  ::view-transition-group(*),
+  ::view-transition-old(*),
+  ::view-transition-new(*) {
+    animation: none !important;
+  }
+}
+
 .shell-topbar-actions {
   position: relative;
   display: flex;

@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { FeatureProps } from '../../contracts/feature.js'
 import type { RunRecord, ScheduleItem } from '../../../shared/contracts/schedule.js'
-import { addDaysKey, dayLabel, localDayKey, monthGrid, monthLabel, pastDayLabel, routineOccursOn, routineTitle, timeLabel } from './dates.js'
+import { addDaysKey, dayLabel, localDayKey, pastDayLabel, routineTitle, timeLabel } from './dates.js'
 import {
   NODE_H,
   NODE_W,
@@ -24,6 +24,7 @@ import { parseAutomationTab } from '../../shell/nav.js'
 import Builder from './builder.js'
 import CanvasDescribeBar from './canvas-describe.js'
 import StartChoice, { type StartKind } from './start-choice.js'
+import WeekCalendar from './week-calendar.js'
 import './automations.css'
 
 interface Routine {
@@ -83,13 +84,6 @@ function FilterIcon(): React.JSX.Element {
       <path d="M2 3h12l-4.5 5.2V13l-3 1.2V8.2L2 3Z" strokeLinejoin="round" />
     </svg>
   )
-}
-
-function occurrenceAt(routine: Routine, cell: Date): number {
-  const t = new Date(routine.runAt)
-  const d = new Date(cell)
-  d.setHours(t.getHours(), t.getMinutes(), 0, 0)
-  return d.getTime()
 }
 
 export function stepsForRoutine(routine: Routine | undefined): ZapStep[] {
@@ -329,10 +323,6 @@ export default function AutomationsView(props: FeatureProps): React.JSX.Element 
   const [todayItems, setTodayItems] = useState<ScheduleItem[]>([])
   const [tomorrowItems, setTomorrowItems] = useState<ScheduleItem[]>([])
   const [todayKey] = useState(() => localDayKey())
-  const [monthCursor, setMonthCursor] = useState(() => {
-    const now = new Date()
-    return { y: now.getFullYear(), m: now.getMonth() }
-  })
   const [canvasSteps, setCanvasSteps] = useState<CanvasStep[]>(() => canvasStepsForRoutine(undefined))
   const [canvasKey, setCanvasKey] = useState('')
   const [selectedStepId, setSelectedStepId] = useState('')
@@ -394,7 +384,6 @@ export default function AutomationsView(props: FeatureProps): React.JSX.Element 
   }, [])
 
   const tomorrowKey = addDaysKey(todayKey, 1)
-  const monthCells = monthGrid(monthCursor.y, monthCursor.m)
 
   const refresh = useCallback(async (): Promise<void> => {
     const [routineRes, runsRes, todayRes, tomorrowRes] = await Promise.all([
@@ -558,37 +547,6 @@ export default function AutomationsView(props: FeatureProps): React.JSX.Element 
     }
     return Number(b.enabled) - Number(a.enabled) || a.runAt - b.runAt
   })
-
-  const runsByDay = new Map<string, RunRecord[]>()
-  for (const run of runs) {
-    const key = localDayKey(new Date(run.endedAt ?? run.startedAt))
-    const list = runsByDay.get(key) ?? []
-    list.push(run)
-    runsByDay.set(key, list)
-  }
-
-  function shiftMonth(delta: number): void {
-    setMonthCursor((cur) => {
-      const d = new Date(cur.y, cur.m + delta, 1)
-      return { y: d.getFullYear(), m: d.getMonth() }
-    })
-  }
-
-  function goToday(): void {
-    const now = new Date()
-    setMonthCursor({ y: now.getFullYear(), m: now.getMonth() })
-  }
-
-  const monthHead = (
-    <div className="automations-month-head">
-      <strong>{monthLabel(monthCursor.y, monthCursor.m)}</strong>
-      <div className="automations-month-nav">
-        <button type="button" aria-label="Previous month" onClick={() => shiftMonth(-1)}>‹</button>
-        <button type="button" onClick={goToday}>Today</button>
-        <button type="button" aria-label="Next month" onClick={() => shiftMonth(1)}>›</button>
-      </div>
-    </div>
-  )
 
   const canvasRoutine =
     (selection?.kind === 'routine' ? selection.routine : undefined) ??
@@ -936,30 +894,19 @@ export default function AutomationsView(props: FeatureProps): React.JSX.Element 
 
       {!loading && !error && tab === 'updates' && view === 'calendar' && (
         <div className="automations-calendar">
-          {monthHead}
-          <div className="automations-weekdays" aria-hidden="true">
-            {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map((d) => <span key={d}>{d}</span>)}
-          </div>
-          <div className="automations-month-grid">
-            {monthCells.map((cell) => {
-              const dayRuns = runsByDay.get(cell.key) ?? []
-              const label = cell.date.getMonth() !== monthCursor.m
-                ? cell.date.toLocaleDateString([], { month: 'short', day: 'numeric' })
-                : String(cell.date.getDate())
-              return (
-                <div key={cell.key} className={`automations-cell${cell.key === todayKey ? ' is-today' : ''}${cell.inMonth ? '' : ' is-outside'}`}>
-                  <span className="automations-cell-day">{label}</span>
-                  {dayRuns.slice(0, 3).map((run) => (
-                    <button key={run.id} type="button" className="automations-chip" onClick={() => setSelection({ kind: 'run', run })}>
-                      <span aria-hidden="true">⚡</span> {routineTitle(run.title)}
-                    </button>
-                  ))}
-                  {dayRuns.length > 3 && <small className="automations-more">+{dayRuns.length - 3} more</small>}
-                </div>
-              )
-            })}
-          </div>
-          {detail}
+          <WeekCalendar
+            events={runs.map((run) => ({
+              id: run.id,
+              title: routineTitle(run.title),
+              meta: `${timeLabel(run.endedAt ?? run.startedAt)} · ${run.status.replaceAll('_', ' ')}`,
+              at: run.endedAt ?? run.startedAt,
+              status: run.status
+            }))}
+            onOpen={(id) => {
+              const run = runs.find((candidate) => candidate.id === id)
+              if (run) setSelection({ kind: 'run', run })
+            }}
+          />
         </div>
       )}
 
@@ -1014,46 +961,18 @@ export default function AutomationsView(props: FeatureProps): React.JSX.Element 
 
       {!loading && !error && tab === 'manage' && view === 'calendar' && (
         <div className="automations-calendar">
-          {monthHead}
-          <div className="automations-weekdays" aria-hidden="true">
-            {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map((d) => <span key={d}>{d}</span>)}
-          </div>
-          <div className="automations-month-grid">
-            {monthCells.map((cell) => {
-              const occurring = visibleRoutines.filter((r) => routineOccursOn(r, cell.key))
-              const label = cell.date.getMonth() !== monthCursor.m
-                ? cell.date.toLocaleDateString([], { month: 'short', day: 'numeric' })
-                : String(cell.date.getDate())
-              return (
-                <div key={cell.key} className={`automations-cell${cell.key === todayKey ? ' is-today' : ''}${cell.inMonth ? '' : ' is-outside'}`}>
-                  <span className="automations-cell-day">{label}</span>
-                  {occurring.slice(0, 3).map((routine) => (
-                    <button
-                      key={`${routine.id}-${cell.key}`}
-                      type="button"
-                      className="automations-chip"
-                      onClick={() => setSelection({
-                        kind: 'schedule',
-                        item: {
-                          id: `${routine.id}-${cell.key}`,
-                          routineId: routine.id,
-                          title: routine.prompt,
-                          kind: 'schedule',
-                          at: occurrenceAt(routine, cell.date),
-                          status: routine.enabled ? 'upcoming' : 'skipped',
-                          toolIds: routine.tools
-                        }
-                      })}
-                    >
-                      <span aria-hidden="true">⚡</span> {routineTitle(routine.prompt)}
-                    </button>
-                  ))}
-                  {occurring.length > 3 && <small className="automations-more">+{occurring.length - 3} more</small>}
-                </div>
-              )
-            })}
-          </div>
-          {detail}
+          <WeekCalendar
+            events={visibleRoutines.map((routine) => ({
+              id: routine.id,
+              title: routineTitle(routine.prompt),
+              meta: `${timeLabel(routine.runAt)} · ${routine.repeat} · ${routine.enabled ? 'active' : 'paused'}`,
+              at: routine.runAt,
+              repeat: routine.repeat,
+              enabled: routine.enabled,
+              tools: routine.tools
+            }))}
+            onOpen={(id) => setRoutinePageId(id)}
+          />
         </div>
       )}
 

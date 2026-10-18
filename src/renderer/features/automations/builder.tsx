@@ -1,8 +1,10 @@
-import { useMemo, useRef, useState } from 'react'
+import { useMemo, useState } from 'react'
 import { TOOL_IDS, TOOL_META, type ActiveToolId } from '../../../shared/types.js'
 import { GMAIL_EVENTS } from './trigger-events.js'
 import { draftToText, makeTriggerId, type BuilderDraft, type BuilderRepeat, type BuilderTrigger } from './builder-compile.js'
+import { attachmentPromptText, needsComposioTools, useAttachments } from '../../lib/attachments.js'
 import type { RunRecord } from '../../../shared/contracts/schedule.js'
+import type { DriveFile } from '../../../main/connectors/drive.js'
 import BuilderConnectorPopover from './BuilderConnectorPopover.js'
 import './automations.css'
 import './builder-opencode.css'
@@ -344,16 +346,20 @@ export default function Builder(props: BuilderProps): React.JSX.Element {
   const [skillsSubmenuOpen, setSkillsSubmenuOpen] = useState(false)
   const [recentTasksSubmenuOpen, setRecentTasksSubmenuOpen] = useState(false)
   const [recentTasks, setRecentTasks] = useState<RunRecord[]>([])
+  const [driveOpen, setDriveOpen] = useState(false)
+  const [driveQuery, setDriveQuery] = useState('')
+  const [driveFiles, setDriveFiles] = useState<DriveFile[] | null>(null)
+  const [driveState, setDriveState] = useState<'idle' | 'loading' | 'ready' | 'connect' | 'error'>('idle')
+  const [driveMessage, setDriveMessage] = useState('')
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
+  const attachments = useAttachments()
 
   // Custom Dropdown Menus State (for timing & connectors)
   const [openRepeatId, setOpenRepeatId] = useState<string | null>(null)
   const [openTimeId, setOpenTimeId] = useState<string | null>(null)
   const [connectorMenuOpen, setConnectorMenuOpen] = useState(false)
   const [settingsOpen, setSettingsOpen] = useState(false)
-
-  const fileInputRef = useRef<HTMLInputElement>(null)
 
   const compiled = useMemo(
     () => draftToText(mode === 'describe'
@@ -380,7 +386,19 @@ export default function Builder(props: BuilderProps): React.JSX.Element {
         effectiveTools.push('composio')
       }
 
+      // Attached Drive files need Composio tools for the agent to read them.
+      if (!effectiveTools.includes('composio') && needsComposioTools(attachments.files)) {
+        effectiveTools.push('composio')
+      }
+
       let fullText = promptText
+
+      // Attached files travel as readable references (chips state, not raw text).
+      const attachText = attachmentPromptText(attachments.files)
+      if (attachText) {
+        fullText += ` ${attachText}`
+      }
+
       for (const t of effectiveTools) {
         if (!fullText.toLowerCase().includes(`@${t.toLowerCase()}`)) {
           fullText += ` @${t}`
@@ -408,16 +426,60 @@ export default function Builder(props: BuilderProps): React.JSX.Element {
     setPickerOpen(false)
   }
 
-  function handleLocalFilesClick(): void {
+  async function handleLocalFilesClick(): Promise<void> {
     setAddMenuOpen(false)
-    fileInputRef.current?.click()
+    await attachments.attachLocal()
   }
 
-  function handleFileSelected(e: React.ChangeEvent<HTMLInputElement>): void {
-    const files = e.target.files
-    if (!files || files.length === 0) return
-    const fileNames = Array.from(files).map((f) => f.name).join(', ')
-    setTask((prev) => `${prev ? `${prev} ` : ''}[Attach file(s): ${fileNames}]`)
+  /** Open the Drive picker and load the first page of real Drive files. */
+  async function openDrivePicker(): Promise<void> {
+    setDriveOpen((open) => !open)
+    await loadDriveFiles('')
+  }
+
+  async function loadDriveFiles(query: string): Promise<void> {
+    setDriveState('loading')
+    setDriveMessage('')
+    setDriveFiles(null)
+    try {
+      const res = await window.app.driveListFiles(query)
+      if (res.ok && res.files) {
+        setDriveFiles(res.files)
+        setDriveState('ready')
+      } else if (res.notConnected) {
+        setDriveState('connect')
+        setDriveMessage(res.error ?? 'Connect Google Drive first.')
+      } else {
+        setDriveState('error')
+        setDriveMessage(res.error ?? 'Could not list Google Drive files.')
+      }
+    } catch (err) {
+      setDriveState('error')
+      setDriveMessage(err instanceof Error ? err.message : String(err))
+    }
+  }
+
+  async function connectDrive(): Promise<void> {
+    setDriveState('loading')
+    setDriveMessage('Opening Google sign-in in your browser…')
+    try {
+      const res = await window.app.composioConnect('googledrive')
+      if (res.ok) {
+        setDriveState('connect')
+        setDriveMessage('Complete the sign-in in your browser, then press Refresh.')
+      } else {
+        setDriveState('connect')
+        setDriveMessage(res.error ?? 'Could not start the Google Drive connection.')
+      }
+    } catch (err) {
+      setDriveState('connect')
+      setDriveMessage(err instanceof Error ? err.message : String(err))
+    }
+  }
+
+  function attachDriveFile(file: DriveFile): void {
+    attachments.attachDrive({ id: file.id, name: file.name, mimeType: file.mimeType })
+    setDriveOpen(false)
   }
 
   async function loadRecentTasks(): Promise<void> {
@@ -480,17 +542,8 @@ export default function Builder(props: BuilderProps): React.JSX.Element {
   return (
     <>
       <div className="builder-overlay" role="dialog" aria-modal="true" aria-label="Create automation">
-        {/* Hidden file input for Local files */}
-        <input
-          type="file"
-          ref={fileInputRef}
-          style={{ display: 'none' }}
-          multiple
-          onChange={handleFileSelected}
-        />
-
         {/* Outside-click backdrop shared by the repeat/time/plus/settings dropdowns */}
-        {(openRepeatId !== null || openTimeId !== null || addMenuOpen || settingsOpen) && (
+        {(openRepeatId !== null || openTimeId !== null || addMenuOpen || settingsOpen || driveOpen) && (
           <button
             type="button"
             className="builder-pop-backdrop"
@@ -501,6 +554,7 @@ export default function Builder(props: BuilderProps): React.JSX.Element {
               setOpenTimeId(null)
               setAddMenuOpen(false)
               setSettingsOpen(false)
+              setDriveOpen(false)
             }}
           />
         )}
@@ -754,6 +808,26 @@ export default function Builder(props: BuilderProps): React.JSX.Element {
                       onChange={(e) => setTask(e.currentTarget.value)}
                       placeholder="Describe what Manus should do, e.g. summarize the latest AI news and send me the highlights"
                     />
+                    {attachments.files.length > 0 && (
+                      <div className="builder-attached-files">
+                        {attachments.files.map((file) => (
+                          <div key={file.ref} className="builder-file-chip" data-kind={file.kind}>
+                            <span className="builder-file-name" title={file.ref}>{file.name}</span>
+                            <button
+                              type="button"
+                              className="builder-file-remove"
+                              aria-label={`Remove ${file.name}`}
+                              onClick={() => attachments.remove(file.ref)}
+                            >
+                              <PaperCloseIcon />
+                            </button>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                    {attachments.error && (
+                      <p className="builder-attach-error" role="alert">{attachments.error}</p>
+                    )}
                   </div>
                 </div>
                 </>
@@ -895,14 +969,88 @@ export default function Builder(props: BuilderProps): React.JSX.Element {
                         <button
                           type="button"
                           className="plus-menu-item"
+                          aria-expanded={driveOpen}
                           onClick={() => {
-                            setTask((prev) => `${prev ? `${prev} ` : ''}[Google Drive: search files]`)
-                            setAddMenuOpen(false)
+                            void openDrivePicker()
+                            setSkillsSubmenuOpen(false)
+                            setRecentTasksSubmenuOpen(false)
                           }}
                         >
                           <span className="plus-menu-icon"><PlusDriveIcon /></span>
                           <span className="plus-menu-label">Add from Google Drive files</span>
+                          <span className="plus-menu-arrow"><MenuChevronIcon /></span>
                         </button>
+
+                        {/* Google Drive picker (real files via Composio) */}
+                        {driveOpen && (
+                          <div className="plus-submenu drive-picker" role="dialog" aria-label="Add from Google Drive">
+                            <div className="drive-picker-head">
+                              <button
+                                type="button"
+                                className="drive-picker-back"
+                                aria-label="Close Drive picker"
+                                onClick={() => setDriveOpen(false)}
+                              >
+                                ‹
+                              </button>
+                              <span>Google Drive</span>
+                            </div>
+                            <form
+                              className="drive-picker-search"
+                              onSubmit={(event) => {
+                                event.preventDefault()
+                                void loadDriveFiles(driveQuery)
+                              }}
+                            >
+                              <input
+                                aria-label="Search Google Drive"
+                                placeholder="Search files"
+                                value={driveQuery}
+                                onChange={(e) => setDriveQuery(e.currentTarget.value)}
+                                disabled={driveState === 'loading'}
+                              />
+                              <button type="submit" disabled={driveState === 'loading'}>
+                                {driveState === 'loading' ? 'Loading…' : 'Search'}
+                              </button>
+                            </form>
+                            {driveState === 'connect' && (
+                              <div className="plus-submenu-empty">
+                                {driveMessage && <p role="alert">{driveMessage}</p>}
+                                <button type="button" className="drive-picker-connect" onClick={() => void connectDrive()}>
+                                  Connect Google Drive
+                                </button>
+                                <button type="button" className="drive-picker-refresh" onClick={() => void loadDriveFiles(driveQuery)}>
+                                  Refresh
+                                </button>
+                              </div>
+                            )}
+                            {driveState === 'error' && (
+                              <div className="plus-submenu-empty" role="alert">{driveMessage || 'Could not list files.'}</div>
+                            )}
+                            {driveState === 'ready' && (
+                              <>
+                                {driveFiles && driveFiles.length > 0 ? (
+                                  driveFiles.map((file) => (
+                                    <button
+                                      key={file.id}
+                                      type="button"
+                                      className="drive-picker-item"
+                                      onClick={() => attachDriveFile(file)}
+                                    >
+                                      <span className="drive-picker-name" title={file.name}>{file.name}</span>
+                                      <small title={file.webViewLink ?? file.id}>
+                                        {file.modifiedTime ? `${file.modifiedTime.slice(0, 10)} · ` : ''}
+                                        {file.webViewLink ?? file.id}
+                                      </small>
+                                    </button>
+                                  ))
+                                ) : (
+                                  <div className="plus-submenu-empty">No files match “{driveQuery}”.</div>
+                                )}
+                              </>
+                            )}
+                          </div>
+                        )}
 
                         <button
                           type="button"

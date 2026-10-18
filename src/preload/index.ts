@@ -162,6 +162,23 @@ const api = {
     ipcRenderer.invoke('shell:chat-remove', { id }),
   chatClear: (): Promise<{ ok: boolean; removed?: number; error?: string }> =>
     ipcRenderer.invoke('shell:chat-clear', {}),
+  openFileDialog: (options: { multiple?: boolean }): Promise<{ ok: boolean; canceled?: boolean; filePaths?: string[]; error?: string }> =>
+    ipcRenderer.invoke('dialog:open-file', options),
+  driveStatus: (): Promise<{ ok: boolean; connected?: boolean; detail?: string; error?: string }> =>
+    ipcRenderer.invoke('drive:status').catch((error: unknown) => ({
+      ok: false,
+      error: error instanceof Error ? error.message : String(error)
+    })),
+  driveListFiles: (query = ''): Promise<{
+    ok: boolean
+    files?: Array<{ id: string; name: string; mimeType: string; size?: string; modifiedTime?: string; webViewLink?: string }>
+    notConnected?: boolean
+    error?: string
+  }> =>
+    ipcRenderer.invoke('drive:list', { query }).catch((error: unknown) => ({
+      ok: false,
+      error: error instanceof Error ? error.message : String(error)
+    })),
   openSettingsWindow: (tab?: string) => ipcRenderer.send('settings:show', tab ? { tab } : undefined),
   closeSettings: () => ipcRenderer.send('settings:hide'),
   onSettingsClose: (cb: () => void) => {

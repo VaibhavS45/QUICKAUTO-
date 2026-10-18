@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { AutomationTemplateCards } from './AutomationTemplateCards.js'
 import type { AutomationTemplate } from '../../shared/contracts/automation-templates.js'
 import { activeMention, parseMentionedTools, TOOL_META } from '../../shared/types.js'
+import { attachmentPromptText, useAttachments } from '../lib/attachments.js'
 import { useI18n } from '../i18n/LanguageContext.js'
 
 interface ChatComposerProps {
@@ -37,6 +38,7 @@ export function ChatComposer({
   const [modelsRefresh, setModelsRefresh] = useState(0)
   const textarea = useRef<HTMLTextAreaElement>(null)
   const submitting = useRef(false)
+  const attachments = useAttachments()
   const mention = activeMention(value, caret)
   const suggestions = useMemo(
     () => mention
@@ -113,7 +115,8 @@ export function ChatComposer({
   const modelMissing = model === 'opencode/muse-spark-1.3-contributor-free' && models.length > 0 && !models.some((o) => o.value === model)
 
   async function send(): Promise<void> {
-    const text = value.trim()
+    const base = value.trim()
+    const text = base ? `${base} ${attachmentPromptText(attachments.files)}`.trim() : ''
     if (!text || busy || submitting.current) return
     submitting.current = true
     setError('')
@@ -184,7 +187,37 @@ export function ChatComposer({
             ))}
           </div>
         )}
+        {attachments.error && (
+          <p className="chat-attach-error" role="alert">{attachments.error}</p>
+        )}
+        {attachments.files.length > 0 && (
+          <div className="chat-attach-chips">
+            {attachments.files.map((file) => (
+              <div key={file.ref} className="chat-attach-chip" title={file.ref}>
+                <span className="chat-attach-chip-name">{file.name}</span>
+                <button
+                  type="button"
+                  aria-label={`Remove ${file.name}`}
+                  onClick={() => attachments.remove(file.ref)}
+                >
+                  ×
+                </button>
+              </div>
+            ))}
+          </div>
+        )}
         <div className="chat-composer-toolbar">
+          <button
+            type="button"
+            className="chat-attach-button"
+            aria-label="Attach local files"
+            disabled={busy}
+            onClick={() => void attachments.attachLocal()}
+          >
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+              <path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48" />
+            </svg>
+          </button>
           <label className="chat-agent-picker">
             <span>Engine</span>
             <select aria-label="Engine" value={engine} onChange={(event) => void changeEngine(event.currentTarget.value)}>
@@ -243,7 +276,7 @@ export function ChatComposer({
           <span className="chat-tool-selection" aria-label="Selected tools">
             {selectedTools.filter((id) => id !== 'calendar').map((id) => <span key={id}>{TOOL_META[id].label}</span>)}
           </span>
-          <button type="button" className="chat-send-button" disabled={busy || !value.trim()} onClick={() => void send()}>
+          <button type="button" className="chat-send-button" disabled={busy || (!value.trim() && attachments.files.length === 0)} onClick={() => void send()}>
             {busy ? t('composer.working') : t('composer.send')}
           </button>
         </div>

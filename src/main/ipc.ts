@@ -68,6 +68,10 @@ export const IpcChannels = {
   chatRename: 'shell:chat-rename',
   chatRemove: 'shell:chat-remove',
   chatClear: 'shell:chat-clear',
+  openFileDialog: 'dialog:open-file',
+  /** Google Drive picker through Composio (read-only list; content is fetched tool-side). */
+  driveStatus: 'drive:status',
+  driveListFiles: 'drive:list',
   ...ShellIpcChannels,
   ...SettingsShellChannels
 } as const
@@ -124,6 +128,14 @@ export const RoutineUpdateSchema = z.object({
   enabled: z.boolean().optional()
 })
 
+const OpenFileDialogSchema = z.object({
+  multiple: z.boolean().default(false)
+}).strict()
+
+export const DriveListFilesSchema = z.object({
+  query: z.string().max(120).default('')
+}).strict()
+
 export {
   ChatAppendSchema,
   ChatClearSchema,
@@ -145,3 +157,5 @@ export {
   AppBehaviorSchema,
   AppBehaviorPatchSchema
 }
+
+export { OpenFileDialogSchema }

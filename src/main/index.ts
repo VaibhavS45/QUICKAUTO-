@@ -1,4 +1,4 @@
-import { app, ipcMain, session, Notification, safeStorage, shell } from 'electron'
+import { app, ipcMain, session, Notification, safeStorage, shell, dialog } from 'electron'
 import Store from 'electron-store'
 import { randomUUID } from 'node:crypto'
 import os from 'node:os'
@@ -20,7 +20,9 @@ import {
   SettingsTabRequestSchema,
   ConnectionToolSchema,
   ComposioToolkitSearchSchema,
-  ComposioToolkitConnectSchema
+  ComposioToolkitConnectSchema,
+  DriveListFilesSchema,
+  OpenFileDialogSchema
 } from './ipc.js'
 import { TOOL_IDS, type ToolId } from '../shared/types.js'
 import type { AgentEvent } from '../shared/agent.js'
@@ -43,6 +45,7 @@ import { ComposioProvider, isComposioBudgetGuardedTool } from './connectors/comp
 import { GitHubCliProvider, isZeroCostTool, validateRepoEntry } from './connectors/github-cli.js'
 import { ComposioConnectorProvider, isBudgetGuardedTool } from './connectors/composio.js'
 import { ComposioMarketplace } from './connectors/composio-marketplace.js'
+import { DriveConnectorProvider, DriveService } from './connectors/drive.js'
 import { registerConnectorProvider, getToolsForMentions } from './agent/registry.js'
 import {
   Scheduler,
@@ -195,6 +198,20 @@ const gmailProvider = new ComposioConnectorProvider({
 })
 registerConnectorProvider(gmailProvider)
 registerConnectorProvider(settingsShellRuntime.mcpProvider)
+
+// Google Drive picker + gdrive_read agent tool (read-only, BudgetGuard-metered).
+// Connection itself goes through the existing composio:connect marketplace flow.
+const driveService = new DriveService({
+  getApiKey: () => connectorSettings.getKey(),
+  fallbackApiKey: COMPOSIO_FALLBACK_KEY,
+  getGuard: () => getGuard()
+})
+const driveProvider = new DriveConnectorProvider({
+  getApiKey: () => connectorSettings.getKey(),
+  fallbackApiKey: COMPOSIO_FALLBACK_KEY,
+  getGuard: () => getGuard()
+})
+registerConnectorProvider(driveProvider)
 
 const routineFile = new Store<{ routines: Routine[] }>({ name: 'palette-routines', defaults: { routines: [] } })
 let routineChangeHook = (): void => {}
@@ -746,6 +763,38 @@ function wireIpc(): void {
     return routine
       ? { ok: true as const, routine }
       : { ok: false as const, error: 'Routine not found.' }
+  })
+
+  ipcMain.handle(IpcChannels.openFileDialog, async (_event, payload: unknown) => {
+    const parsed = OpenFileDialogSchema.safeParse(payload)
+    if (!parsed.success) return { ok: false as const, error: 'Invalid file dialog request.' }
+    try {
+      const result = await dialog.showOpenDialog({
+        properties: parsed.data.multiple ? ['openFile', 'multiSelections'] : ['openFile']
+      })
+      if (result.canceled) {
+        return { ok: true as const, canceled: true, filePaths: [] }
+      }
+      return { ok: true as const, canceled: false, filePaths: result.filePaths }
+    } catch (err) {
+      return { ok: false as const, error: err instanceof Error ? err.message : String(err) }
+    }
+  })
+
+  // Google Drive picker (read-only). Connection goes through composio:connect.
+  ipcMain.handle(IpcChannels.driveStatus, async () => {
+    try {
+      const st = await driveService.status()
+      return { ok: true as const, ...st }
+    } catch (err) {
+      return { ok: false as const, error: err instanceof Error ? err.message : String(err) }
+    }
+  })
+
+  ipcMain.handle(IpcChannels.driveListFiles, async (_event, payload: unknown) => {
+    const parsed = DriveListFilesSchema.safeParse(payload)
+    if (!parsed.success) return { ok: false as const, error: 'Invalid Drive list request.' }
+    return driveService.listFiles(parsed.data.query)
   })
 
 }

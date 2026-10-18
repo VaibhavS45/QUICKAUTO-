@@ -3120,3 +3120,203 @@ button.builder-setrow { cursor: pointer; }
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+
+/* Attached files chips */
+.builder-attached-files {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.builder-file-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 28px;
+  padding: 0 8px 0 10px;
+  border-radius: 8px;
+  border: 0.555556px solid rgb(255 255 255 / 10%);
+  background: rgb(255 255 255 / 4%);
+  color: #d1d1d6;
+  font-size: 13px;
+  line-height: 20px;
+  max-width: 240px;
+}
+
+.builder-file-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.builder-file-remove {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+  padding: 0;
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
+  color: #8c8c8c;
+  cursor: pointer;
+  flex-shrink: 0;
+  transition: all 120ms ease;
+}
+
+.builder-file-remove:hover {
+  background: rgb(255 255 255 / 8%);
+  color: #e6e6e6;
+}
+
+.builder-file-remove svg {
+  width: 12px;
+  height: 12px;
+}
+
+.builder-attach-error {
+  margin: 8px 0 0;
+  color: #e87c7c;
+  font-size: 12px;
+}
+
+/* Google Drive picker (opens from the plus menu) */
+.drive-picker {
+  width: 320px;
+}
+
+.drive-picker-head {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 2px 0 8px;
+  color: #e7e7e9;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.drive-picker-back {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  border: 0;
+  border-radius: 6px;
+  color: #8c8c8c;
+  background: transparent;
+  font-size: 16px;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.drive-picker-back:hover {
+  background: rgb(255 255 255 / 8%);
+  color: #e6e6e6;
+}
+
+.drive-picker-search {
+  display: flex;
+  gap: 6px;
+  padding-bottom: 8px;
+}
+
+.drive-picker-search input {
+  flex: 1;
+  min-width: 0;
+  height: 30px;
+  padding: 0 10px;
+  border: 1px solid #333338;
+  border-radius: 8px;
+  color: #e7e7e9;
+  background: rgb(255 255 255 / 4%);
+  font: inherit;
+  font-size: 12px;
+}
+
+.drive-picker-search input::placeholder {
+  color: #8c8c8c;
+}
+
+.drive-picker-search button {
+  height: 30px;
+  padding: 0 12px;
+  border: 1px solid #333338;
+  border-radius: 8px;
+  color: #e7e7e9;
+  background: rgb(255 255 255 / 6%);
+  font: inherit;
+  font-size: 11px;
+  cursor: pointer;
+}
+
+.drive-picker-search button:disabled {
+  color: #8c8c8c;
+  cursor: default;
+}
+
+.drive-picker-item {
+  display: block;
+  width: 100%;
+  padding: 8px 10px;
+  border: 0;
+  border-radius: 8px;
+  color: #e7e7e9;
+  background: transparent;
+  text-align: left;
+  font: inherit;
+  cursor: pointer;
+}
+
+.drive-picker-item:hover {
+  background: rgb(255 255 255 / 8%);
+}
+
+.drive-picker-name {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 13px;
+}
+
+.drive-picker-item small {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: #8c8c8c;
+  font-size: 10px;
+}
+
+.drive-picker-connect,
+.drive-picker-refresh {
+  margin-top: 8px;
+  padding: 6px 12px;
+  border: 1px solid #333338;
+  border-radius: 8px;
+  color: #e7e7e9;
+  background: rgb(255 255 255 / 6%);
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.drive-picker-refresh {
+  margin-left: 8px;
+}
+
+.drive-picker-connect:not(:disabled):hover,
+.drive-picker-refresh:not(:disabled):hover {
+  border-color: #4a4a51;
+  background: #202024;
+}
+
+.plus-submenu-empty p {
+  margin: 0;
+  color: #e87c7c;
+  font-size: 12px;
+}

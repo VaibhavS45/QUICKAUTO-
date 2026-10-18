@@ -1,5 +1,5 @@
 import { tool } from 'ai'
-import { mkdir, readFile, writeFile } from 'node:fs/promises'
+import { mkdir, readFile, stat, writeFile } from 'node:fs/promises'
 import { homedir } from 'node:os'
 import path from 'node:path'
 import { z } from 'zod'
@@ -19,6 +19,9 @@ export const EchoInputSchema = z.object({
   text: z.string().min(1).max(2000)
 })
 
+/** Largest single file read_file may return, in bytes. */
+export const READ_FILE_MAX_BYTES = 512_000
+
 function validateWritePath(filePath: string): string {
   const trimmed = filePath.trim()
   if (!trimmed) return 'Write target path is required.'
@@ -32,6 +35,38 @@ function validateWritePath(filePath: string): string {
     return 'Invalid file path.'
   }
   return ''
+}
+
+function validateReadPath(filePath: string): string {
+  const trimmed = filePath.trim()
+  if (!trimmed) return 'File path is required.'
+  const resolved = path.resolve(trimmed)
+  const allowedRoots = [path.resolve(homedir()), path.resolve(process.cwd()), '/tmp']
+  const ok = allowedRoots.some((root) => resolved === root || resolved.startsWith(`${root}${path.sep}`))
+  if (!ok) {
+    return 'Only files inside your home directory, the current workspace, or /tmp may be read.'
+  }
+  if (resolved.includes('\0')) {
+    return 'Invalid file path.'
+  }
+  return ''
+}
+
+function describeReadError(filePath: string, err: unknown): string {
+  const code = (err as { code?: string })?.code
+  if (code === 'ENOENT') return `File not found: ${filePath}`
+  if (code === 'EACCES' || code === 'EPERM') return `Permission denied: ${filePath}`
+  if (code === 'EISDIR') return `Path is a directory, not a file: ${filePath}`
+  return `Cannot read ${filePath}: ${err instanceof Error ? err.message : String(err)}`
+}
+
+function looksBinary(content: string): boolean {
+  if (content.includes('\0')) return true
+  let replacements = 0
+  for (const ch of content.slice(0, 2000)) {
+    if (ch === '\uFFFD') replacements++
+  }
+  return replacements > 4
 }
 
 export function createBuiltinTools() {
@@ -79,7 +114,44 @@ export function createBuiltinTools() {
     }
   })
 
-  return { echo, echo_write, write_file }
+  const read_file = tool({
+    description:
+      'Safely read a local text file (UTF-8) given its absolute path. Use for files the user attached or referenced. Refuses paths outside your home directory, the current workspace, or /tmp, oversized files, and clearly binary content.',
+    inputSchema: z.object({
+      path: z.string().min(1).max(4096)
+    }),
+    execute: async ({ path: filePath }) => {
+      const error = validateReadPath(filePath)
+      if (error) throw new Error(error)
+      const resolved = path.resolve(filePath)
+      let size = 0
+      try {
+        const info = await stat(resolved)
+        if (!info.isFile()) {
+          throw new Error(`Path is a directory, not a file: ${filePath}`)
+        }
+        size = info.size
+      } catch (err) {
+        if (err instanceof Error && err.message.startsWith('Path is a directory')) throw err
+        throw new Error(describeReadError(filePath, err))
+      }
+      if (size > READ_FILE_MAX_BYTES) {
+        throw new Error(`File too large to read (${size} bytes, limit ${READ_FILE_MAX_BYTES}): ${filePath}`)
+      }
+      let content: string
+      try {
+        content = await readFile(resolved, 'utf8')
+      } catch (err) {
+        throw new Error(describeReadError(filePath, err))
+      }
+      if (looksBinary(content)) {
+        throw new Error(`Cannot read ${filePath}: this looks like a binary or non-UTF-8 file, and the agent only reads text.`)
+      }
+      return { ok: true, path: resolved, size, bytes: Buffer.byteLength(content, 'utf8'), content }
+    }
+  })
+
+  return { echo, echo_write, write_file, read_file }
 }
 
 /** Tools that need an in-app approve/deny card before they may run. */

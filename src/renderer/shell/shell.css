@@ -12,7 +12,7 @@
 
 .shell-drag-strip {
   position: relative;
-  height: 44px;
+  height: 52px;
   box-sizing: border-box;
   display: flex;
   align-items: center;
@@ -20,7 +20,6 @@
   padding: 0 16px 0 80px;
   color: #85858b;
   background: #1a1a1a;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.04);
   -webkit-app-region: drag;
   user-select: none;
 }
@@ -33,74 +32,125 @@
   color: #f0f0f2;
 }
 
-.shell-drag-spacer {
-  flex: 1;
+/* Top bar nav: the pill splits either side of the active view, which stays in
+   its own slot and turns orange. No borders, no glow. */
+.shell-topnav {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  transform: translate(-50%, -50%);
+  -webkit-app-region: no-drag;
+}
+
+.shell-topnav-group {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  box-sizing: border-box;
+  padding: 4px;
+  border-radius: 14px;
+  background: #101010;
+}
+
+.shell-topnav-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  height: 32px;
+  padding: 0 16px;
+  border: 0;
+  border-radius: 11px;
+  color: #8b8b93;
+  background: transparent;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 500;
+  line-height: 1;
+  white-space: nowrap;
+  cursor: pointer;
+  -webkit-app-region: no-drag;
+  transition: color 180ms ease, background-color 200ms ease, transform 200ms ease;
+}
+
+.shell-topnav-item svg {
+  width: 17px;
+  height: 17px;
+  flex: 0 0 auto;
+}
+
+.shell-topnav-item:hover {
+  color: #f0f0f2;
+  background: rgb(255 255 255 / 7%);
+}
+
+.shell-topnav-item.is-active {
+  color: #fff;
+  background: #fc4c00;
+}
+
+.shell-topnav-item.is-active:hover {
+  background: #e04300;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .shell-topnav,
+  .shell-topnav * {
+    transition: none !important;
+  }
+}
+
+.shell-topbar-actions {
+  position: relative;
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 6px;
+  margin-left: auto;
+}
+
+.shell-topbar-actions .shell-profile-button {
+  width: 32px;
+  height: 32px;
+  justify-content: center;
+  padding: 0;
+  border-radius: 50%;
+}
+
+.shell-topbar-actions .shell-notifications-panel {
+  top: calc(100% + 12px);
+  right: 0;
+  bottom: auto;
+  left: auto;
+  width: 340px;
+}
+
+.shell-topbar-actions .shell-profile-menu {
+  top: calc(100% + 12px);
+  right: 0;
+  bottom: auto;
+  left: auto;
+  transform-origin: top right;
+  animation: shell-menu-in 140ms ease both;
+}
+
+@keyframes shell-menu-in {
+  from {
+    opacity: 0;
+    transform: translateY(-4px) scale(0.97);
+  }
 }
 
 .shell-workspace {
   display: flex;
   box-sizing: border-box;
-  height: calc(100vh - 44px);
+  height: calc(100vh - 52px);
   min-height: 0;
   padding: 0;
 }
 
-.shell-sidebar {
-  position: relative;
-  display: flex;
-  flex: 0 0 60px;
-  flex-direction: column;
-  align-items: stretch;
-  min-height: 0;
-  padding: 10px 8px;
-  background: #1a1a1a;
-  border-right: 1px solid rgba(255, 255, 255, 0.04);
-}
-
-.shell-rail-center .shell-nav-item {
-  position: relative;
-}
-
-.shell-rail-center .shell-nav-item::after {
-  position: absolute;
-  z-index: 8;
-  top: 50%;
-  left: calc(100% + 10px);
-  padding: 6px 9px;
-  border: 1px solid #3a3a40;
-  border-radius: 6px;
-  color: #f4f4f5;
-  background: #242428;
-  box-shadow: 0 8px 20px rgb(0 0 0 / 28%);
-  content: attr(data-tooltip);
-  font-size: 11px;
-  font-weight: 500;
-  line-height: 1;
-  opacity: 0;
-  pointer-events: none;
-  transform: translate(2px, -50%);
-  transition: opacity 120ms ease, transform 120ms ease;
-  white-space: nowrap;
-}
-
-.shell-rail-center .shell-nav-item:hover::after,
-.shell-rail-center .shell-nav-item:focus-visible::after {
-  opacity: 1;
-  transform: translate(0, -50%);
-}
-
-.shell-primary-nav {
-  display: grid;
-  gap: 3px;
-}
-
-.shell-rail-center {
-  flex: 1;
-  align-content: center;
-  padding: 12px 0;
-}
-
-.shell-nav-item,
 .shell-profile-button,
 .shell-icon-button {
   display: flex;
@@ -112,82 +162,18 @@
   -webkit-app-region: no-drag;
 }
 
-.shell-nav-item {
-  width: 100%;
-  height: 38px;
-  gap: 11px;
-  padding: 0 10px;
-  border-radius: 6px;
-  text-align: left;
-  transition: background-color 150ms ease, color 150ms ease;
-}
-
-.shell-nav-item {
-  color: #85858e;
-}
-
-.shell-nav-item:hover {
-  color: #f4f4f5;
-  background: rgba(255, 255, 255, 0.06);
-}
-
 .shell-profile-button:hover,
 .shell-icon-button:hover {
   color: #f4f4f5;
   background: rgba(255, 255, 255, 0.06);
 }
 
-.shell-nav-item.is-active {
-  color: #ffffff;
-  background: rgba(255, 255, 255, 0.12);
-  border-radius: 9px;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3), inset 0 1px 0 rgba(255, 255, 255, 0.08);
-}
-
-.shell-nav-item svg,
 .shell-icon-button svg,
 .shell-profile-button svg,
 .shell-home-mark svg {
   width: 20px;
   height: 20px;
   flex: 0 0 auto;
-}
-
-.shell-sidebar-sections {
-  display: grid;
-  align-content: start;
-  grid-template-rows: minmax(0, 1fr);
-  gap: 21px;
-  flex: 1;
-  min-height: 0;
-  overflow: auto;
-  padding: 16px 0 12px;
-}
-
-.shell-sidebar-section h2 {
-  margin: 0;
-  padding: 0 10px;
-  color: #77777f;
-  font-size: 11px;
-  font-weight: 600;
-  letter-spacing: 0.035em;
-}
-
-.shell-sidebar-footer {
-  position: relative;
-  display: grid;
-  gap: 8px;
-  justify-items: center;
-  margin-top: auto;
-  border-top: 1px solid #29292c;
-  padding-top: 12px;
-}
-
-.shell-sidebar-footer .shell-profile-button {
-  width: 34px;
-  height: 34px;
-  justify-content: center;
-  padding: 0;
 }
 
 .shell-profile-button {
@@ -526,33 +512,6 @@
   font-size: 13px;
 }
 
-.is-collapsed .shell-nav-item {
-  justify-content: center;
-  padding: 0;
-}
-
-.is-collapsed .shell-nav-item span,
-.is-collapsed .shell-sidebar-section h2,
-.is-collapsed .shell-profile-name,
-.is-collapsed .shell-profile-button > svg {
-  display: none;
-}
-
-.is-collapsed .shell-sidebar-sections {
-  padding-right: 0;
-  padding-left: 0;
-}
-
-.is-collapsed .shell-profile-button {
-  justify-content: center;
-  padding: 0;
-}
-
-.is-collapsed .shell-footer-actions {
-  justify-content: center;
-  gap: 4px;
-}
-
 /* Floating settings panel: centered card over a blurred shell. Card size
    comes from settings-layout.ts via inline style; the max bounds keep it
    inside small windows. */
@@ -792,24 +751,6 @@
   border-color: #70414a;
   color: #ffdce0;
   background: #572e35;
-}
-
-.is-collapsed .shell-chat-list,
-.is-collapsed .shell-chats-heading button,
-.is-collapsed .shell-chat-actions,
-.is-collapsed .shell-chat-search,
-.is-collapsed .shell-chat-empty,
-.is-collapsed .shell-clear-chats,
-.is-collapsed .shell-confirm-card {
-  display: none;
-}
-
-.is-collapsed .shell-notifications-panel {
-  left: -5px;
-}
-
-.is-collapsed .shell-chats-section {
-  align-items: center;
 }
 
 .shell-content.has-chat-view {
@@ -1670,22 +1611,8 @@
 }
 
 @media (max-width: 760px) {
-  .shell-sidebar {
-    flex-basis: 60px;
-    padding-right: 8px;
-    padding-left: 8px;
-  }
-
-  .shell-sidebar .shell-nav-item {
-    justify-content: center;
-    padding: 0;
-  }
-
-  .shell-sidebar .shell-nav-item span,
-  .shell-sidebar .shell-sidebar-section h2,
-  .shell-sidebar .shell-profile-name,
-  .shell-sidebar .shell-profile-button > svg {
-    display: none;
+  .shell-topnav-item {
+    padding: 0 12px;
   }
 
   .shell-chat-list,
@@ -1727,145 +1654,6 @@
   border: 1px solid rgb(255 255 255 / 8%);
   box-shadow: inset 0 1px 0 rgb(255 255 255 / 5%);
 }
-/* Command palette: top trigger pill + dropdown panel. */
-.shell-palette-trigger {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  flex: 0 1 420px;
-  min-width: 200px;
-  max-width: 420px;
-  height: 32px;
-  margin: 0 auto;
-  padding: 0 6px 0 14px;
-  border: 1px solid rgb(255 255 255 / 12%);
-  border-radius: 8px;
-  color: #a8a8b0;
-  background: #222226;
-  font: inherit;
-  font-size: 12px;
-  cursor: pointer;
-  -webkit-app-region: no-drag;
-}
-
-.shell-palette-trigger span {
-  flex: 1;
-  overflow: hidden;
-  text-align: left;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.shell-palette-trigger kbd {
-  flex: none;
-  padding: 3px 7px;
-  border: 0;
-  border-radius: 4px;
-  color: #8f8f97;
-  background: #26262b;
-  font: inherit;
-  font-size: 10px;
-}
-
-.shell-palette-trigger:hover {
-  color: #a2a2a9;
-  border-color: #2e2e34;
-}
-
-.shell-palette-trigger:focus-visible {
-  outline: 1px solid #4a4a51;
-  outline-offset: 1px;
-}
-
-.shell-palette-overlay {
-  position: fixed;
-  inset: 0;
-  z-index: 60;
-  display: flex;
-  justify-content: center;
-  align-items: flex-start;
-  padding: 96px 16px 16px;
-  background: rgb(0 0 0 / 45%);
-}
-
-.shell-palette {
-  width: min(560px, 100%);
-  overflow: hidden;
-  border: 1px solid rgb(255 255 255 / 10%);
-  border-radius: 12px;
-  background: #242424;
-  box-shadow: inset 0 1px 0 rgb(255 255 255 / 5%), 0 24px 64px rgb(0 0 0 / 55%);
-}
-
-.shell-palette input {
-  width: 100%;
-  box-sizing: border-box;
-  height: 48px;
-  border: 0;
-  border-bottom: 1px solid rgb(255 255 255 / 7%);
-  outline: none;
-  padding: 0 16px;
-  color: #f0f0f2;
-  background: transparent;
-  font: inherit;
-  font-size: 13px;
-}
-
-.shell-palette input::placeholder {
-  color: #63636b;
-}
-
-.shell-palette-list {
-  max-height: 320px;
-  overflow-y: auto;
-  padding: 8px;
-}
-
-.shell-palette-item {
-  display: flex;
-  width: 100%;
-  box-sizing: border-box;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  min-height: 38px;
-  padding: 7px 12px;
-  border: 0;
-  border-radius: 8px;
-  color: #d1d1d6;
-  background: transparent;
-  font: inherit;
-  font-size: 13px;
-  text-align: left;
-  cursor: pointer;
-}
-
-.shell-palette-item span {
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.shell-palette-item small {
-  flex: none;
-  color: #77777f;
-  font-size: 11px;
-}
-
-.shell-palette-item.is-active {
-  color: #fff;
-  background: #2a2a2e;
-}
-
-.shell-palette-empty {
-  margin: 0;
-  padding: 16px;
-  color: #77777f;
-  font-size: 12px;
-  text-align: center;
-}
-
 /* Day mode: light surfaces for the whole shell. Tinted status chips keep
    their hues; text and chrome flip to dark-on-light. */
 .light .shell-frame {
@@ -1875,13 +1663,11 @@
 }
 
 .light .shell-drag-strip,
-.light .shell-sidebar,
 .light .shell-main-pane {
   background: #f4f5f7;
 }
 
 .light .shell-drag-strip {
-  border-bottom-color: rgb(0 0 0 / 8%);
   color: #5b6270;
 }
 
@@ -1892,33 +1678,32 @@
   color: #17191e;
 }
 
-.light .shell-sidebar { border-right-color: rgb(0 0 0 / 8%); }
-.light .shell-sidebar-footer { border-top-color: rgb(0 0 0 / 10%); }
+.light .shell-topnav-group {
+  background: #fff;
+}
 
-.light .shell-nav-item,
+.light .shell-topnav-item {
+  color: #5b6270;
+}
+
+.light .shell-topnav-item:hover {
+  color: #17191e;
+  background: rgb(0 0 0 / 5%);
+}
+
+.light .shell-topnav-item.is-active {
+  color: #fff;
+}
+
 .light .shell-profile-button,
 .light .shell-icon-button {
   color: #4b5260;
 }
 
-.light .shell-nav-item:hover,
 .light .shell-profile-button:hover,
 .light .shell-icon-button:hover {
   color: #17191e;
   background: rgb(0 0 0 / 6%);
-}
-
-.light .shell-nav-item.is-active {
-  color: #17191e;
-  background: rgb(0 0 0 / 8%);
-  box-shadow: 0 1px 3px rgb(0 0 0 / 12%), inset 0 1px 0 rgb(255 255 255 / 60%);
-}
-
-.light .shell-rail-center .shell-nav-item::after {
-  border-color: rgb(0 0 0 / 12%);
-  color: #17191e;
-  background: #fff;
-  box-shadow: 0 8px 20px rgb(0 0 0 / 14%);
 }
 
 .light .shell-avatar,
@@ -2158,38 +1943,5 @@
   color: #23262d;
   background: #eef0f4;
 }
-
-.light .shell-palette-trigger {
-  border-color: rgb(0 0 0 / 12%);
-  color: #4b5260;
-  background: #fff;
-}
-
-.light .shell-palette-trigger kbd {
-  color: #5b6270;
-  background: #eef0f4;
-}
-
-.light .shell-palette-trigger:hover {
-  color: #3a3f47;
-  border-color: rgb(0 0 0 / 18%);
-}
-
-.light .shell-palette {
-  border-color: rgb(0 0 0 / 10%);
-  background: #fff;
-  box-shadow: inset 0 1px 0 rgb(255 255 255 / 60%), 0 24px 64px rgb(0 0 0 / 20%);
-}
-
-.light .shell-palette input {
-  border-bottom-color: rgb(0 0 0 / 8%);
-  color: #17191e;
-}
-
-.light .shell-palette input::placeholder { color: #8a919d; }
-.light .shell-palette-item { color: #3a3f47; }
-.light .shell-palette-item small { color: #6f7785; }
-.light .shell-palette-item.is-active { color: #17191e; background: #e8eaee; }
-.light .shell-palette-empty { color: #6f7785; }
 
 .light .shell-template-status-error { color: #8f2f38; }

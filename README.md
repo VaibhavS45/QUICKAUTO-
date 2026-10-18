@@ -13,6 +13,10 @@ npx electron ./out/main -- --no-sandbox   # --no-sandbox only needed as root / i
 ```
 
 Dev mode: `npm run dev`. Typecheck: `npm run typecheck`.
+Browser preview: `npm run web` serves the same renderer at <http://localhost:5173>
+with no Electron backend. `src/renderer/browser-preview.ts` stubs `window.app`
+with mock data so the UI can be clicked through; real model calls, connectors,
+and secrets stay in the Electron app.
 Unit tests: `npm test`. E2E smoke: `npm run test:e2e` (build first).
 Installers: `npm run dist` (electron-builder: AppImage + deb, dmg, nsis).
 

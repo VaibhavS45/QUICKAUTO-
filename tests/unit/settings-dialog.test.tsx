@@ -13,7 +13,8 @@ describe('settings dialog pages', () => {
     expect(markup).toContain('Stay on in background')
     expect(markup).toContain('scheduled routines')
     expect(markup).toContain('Keyboard shortcuts')
-    expect(markup).toContain('command palette')
+    expect(markup).toContain('Open settings')
+    expect(markup).not.toContain('command palette')
     expect(markup).not.toContain('aria-label="Language"')
   })
 

@@ -27,6 +27,13 @@ export const AUTOMATION_TABS: RailTab[] = [
 
 export type AutomationTabId = RailTab['id']
 
+/** Splits nav around the active id, so the pill breaks on both sides of it. */
+export function splitNav<T extends { id: string }>(items: T[], activeId: string): { before: T[]; after: T[] } {
+  const index = items.findIndex((item) => item.id === activeId)
+  if (index < 0) return { before: [], after: items }
+  return { before: items.slice(0, index), after: items.slice(index + 1) }
+}
+
 export function parseAutomationTab(value: unknown): AutomationTabId | undefined {
   return value === 'updates' || value === 'manage' || value === 'canvas' ? value : undefined
 }

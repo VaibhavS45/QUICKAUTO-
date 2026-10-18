@@ -9,6 +9,7 @@
   "scripts": {
     "postinstall": "node node_modules/electron/install.js",
     "dev": "node scripts/build-preload.mjs && electron-vite dev",
+    "web": "vite --config vite.web.config.ts",
     "build": "electron-vite build && node scripts/build-preload.mjs",
     "typecheck": "tsc --noEmit -p tsconfig.json",
     "lint": "eslint .",

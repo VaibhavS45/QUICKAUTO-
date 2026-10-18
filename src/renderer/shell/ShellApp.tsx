@@ -5,14 +5,13 @@ import type { AgentEvent } from '../../shared/agent.js'
 import type { AppNotification } from '../../shared/contracts/notifications.js'
 import { parseMentionedTools } from '../../shared/types.js'
 import { ChatView } from './ChatView.js'
-import { CommandPalette, type PaletteItem } from './CommandPalette.js'
 import { HomeView } from './HomeView.js'
 import { ProfileMenu } from './ProfileMenu.js'
 import { createChatRunState, reduceChatRun, resolveChatApproval, type ChatRunState } from './chat-state.js'
 import { getFeatureRegistry } from './registry.js'
 import { FeatureContent } from './FeatureHost.js'
 import type { AutomationTemplate } from '../../shared/contracts/automation-templates.js'
-import { AUTOMATION_TABS, PRIMARY_NAV, ShellRouter, parseAutomationTab } from './nav.js'
+import { AUTOMATION_TABS, PRIMARY_NAV, ShellRouter, parseAutomationTab, splitNav } from './nav.js'
 import SettingsApp from '../settings/SettingsDialog.js'
 import { useI18n } from '../i18n/LanguageContext.js'
 import type { UiKey } from '../i18n/strings.js'
@@ -95,7 +94,6 @@ export default function ShellApp(): React.JSX.Element {
   const [notifications, setNotifications] = useState<AppNotification[]>([])
   const [dashboardError, setDashboardError] = useState('')
   const [threads, setThreads] = useState<ChatThread[]>([])
-  const [paletteOpen, setPaletteOpen] = useState(false)
   const [chatError, setChatError] = useState('')
   const [chatLoading, setChatLoading] = useState(true)
   const [run, setRun] = useState<ChatRunState | null>(null)
@@ -208,9 +206,6 @@ export default function ShellApp(): React.JSX.Element {
       } else if (event.key === ',') {
         event.preventDefault()
         window.app.openSettingsWindow()
-      } else if (event.key.toLowerCase() === 'k') {
-        event.preventDefault()
-        setPaletteOpen((open) => !open)
       }
     }
     window.addEventListener('keydown', onKeyDown)
@@ -364,137 +359,117 @@ export default function ShellApp(): React.JSX.Element {
     setNotifications((current) => current.filter((item) => item.id !== id))
   }
 
-  const paletteItems: PaletteItem[] = useMemo(() => [
-    { id: 'cmd-new-chat', title: t('palette.newChat'), hint: '⌘N', run: () => navigate('home') },
-    { id: 'cmd-automations', title: t('palette.goAutomations'), hint: t('shell.manage'), run: () => navigate('automations') },
-    { id: 'cmd-settings', title: t('palette.openSettings'), hint: '⌘,', run: () => window.app.openSettingsWindow() },
-    { id: 'cmd-connectors', title: t('palette.openConnectors'), hint: t('shell.settings'), run: () => window.app.openSettingsWindow('connectors') },
-    { id: 'cmd-agents', title: t('palette.openAgents'), hint: t('shell.settings'), run: () => window.app.openSettingsWindow('agents') },
-    ...threads.slice(0, 8).map((thread) => ({
-      id: `chat-${thread.id}`,
-      title: thread.title || 'Untitled chat',
-      hint: t('palette.chatHint'),
-      run: () => navigate('chat', { chatId: thread.id })
-    }))
-  ], [router, threads, t])
+  const automationTab = parseAutomationTab(route.params['automationTab']) ?? 'manage'
+  const isCanvasView = route.view === 'automations' && automationTab === 'canvas'
 
-  const isCanvasView =
-    route.view === 'automations' &&
-    (parseAutomationTab(route.params['automationTab']) ?? 'manage') === 'canvas'
+  // Top bar nav. The pill splits around the active entry, which turns orange
+  // in place (see .shell-topnav in shell.css).
+  const navItems = [
+    ...PRIMARY_NAV.map((item) => ({
+      id: item.id,
+      label: t(`shell.${item.id === 'home' ? 'automate' : item.id}` as UiKey),
+      icon: 'automation',
+      active: route.view === item.view,
+      run: () => navigate(item.view)
+    })),
+    ...AUTOMATION_TABS.map((tab) => ({
+      id: tab.id,
+      label: t(`shell.${tab.id}` as UiKey),
+      icon: tab.icon,
+      active: route.view === 'automations' && automationTab === tab.id,
+      run: () => navigate('automations', { automationTab: tab.id })
+    }))
+  ]
+  const activeNav = navItems.find((item) => item.active) ?? navItems[0]
+  // The pill splits either side of the active view, which keeps its own slot.
+  const { before: beforeActive, after: afterActive } = splitNav(navItems, activeNav.id)
+
+  function renderItem(item: typeof navItems[number]): React.JSX.Element {
+    const active = item.id === activeNav.id
+    return (
+      <button
+        key={item.id}
+        type="button"
+        className={`shell-topnav-item${active ? ' is-active' : ''}`}
+        aria-current={active ? 'page' : undefined}
+        title={item.label}
+        aria-label={item.label}
+        onClick={item.run}
+      >
+        <Icon name={item.icon} />
+        <span>{item.label}</span>
+      </button>
+    )
+  }
 
   return (
-    <main className="shell-frame is-collapsed">
+    <main className="shell-frame">
       <header className="shell-drag-strip" aria-label={t('shell.windowBar')}>
         <span className="shell-brand">Palette</span>
-        <button
-          type="button"
-          className="shell-palette-trigger"
-          aria-label={t('shell.openPalette')}
-          title={t('shell.paletteHint')}
-          onClick={() => setPaletteOpen(true)}
-        >
-          <span>{t('shell.searchPlaceholder')}</span>
-          <kbd>⌘K</kbd>
-        </button>
-        <span className="shell-drag-spacer" aria-hidden="true" />
+        <nav className="shell-topnav" aria-label={t('shell.mainNav')}>
+          {beforeActive.length > 0 && <div className="shell-topnav-group">{beforeActive.map(renderItem)}</div>}
+          {renderItem(activeNav)}
+          {afterActive.length > 0 && <div className="shell-topnav-group">{afterActive.map(renderItem)}</div>}
+        </nav>
+        <div className="shell-topbar-actions">
+          <button
+            type="button"
+            className="shell-icon-button shell-notifications-button"
+            aria-label={`${t('shell.notifications')}${unreadCount ? ` (${unreadCount} ${t('shell.unread')})` : ''}`}
+            aria-expanded={notificationsOpen}
+            title={t('shell.notifications')}
+            onClick={() => setNotificationsOpen((open) => !open)}
+          >
+            <Icon name="bell" />
+            {unreadCount > 0 && <span className="shell-notification-badge">{unreadCount > 99 ? '99+' : unreadCount}</span>}
+          </button>
+          <button
+            type="button"
+            className="shell-profile-button"
+            aria-label={`${t('shell.accountMenuFor')} ${displayName(profile, t('shell.defaultProfile'))}`}
+            aria-expanded={profileMenuOpen}
+            aria-haspopup="menu"
+            title={t('shell.profile')}
+            onClick={() => {
+              setProfileMenuOpen((open) => !open)
+              setNotificationsOpen(false)
+            }}
+          >
+            <span className="shell-avatar">{initials || 'L'}</span>
+          </button>
+          <ProfileMenu
+            open={profileMenuOpen}
+            name={displayName(profile, t('shell.defaultProfile'))}
+            email={profile.email.trim()}
+            initials={initials}
+            onClose={() => setProfileMenuOpen(false)}
+            onOpenSettings={(tab) => window.app.openSettingsWindow(tab)}
+          />
+          {notificationsOpen && (
+            <section className="shell-notifications-panel" aria-label={t('shell.notifications')}>
+              <header>
+                <strong>{t('shell.notifications')}</strong>
+                {unreadCount > 0 && <button type="button" onClick={() => void readAllNotifications()}>{t('shell.markAllRead')}</button>}
+              </header>
+              {notifications.length ? (
+                <div className="shell-notifications-list">
+                  {notifications.map((notification) => (
+                    <article key={notification.id} className={`shell-notification${notification.read ? '' : ' is-unread'}`}>
+                      <button type="button" className="shell-notification-body" onClick={() => void readNotification(notification)}>
+                        <span>{notification.title}</span>
+                        {notification.body && <small>{notification.body}</small>}
+                        <time>{new Date(notification.createdAt).toLocaleString()}</time>
+                      </button>
+                      <button type="button" className="shell-notification-dismiss" aria-label={`${t('shell.dismiss')} ${notification.title}`} onClick={() => void dismissNotification(notification.id)}>×</button>
+                    </article>
+                  ))}
+                </div>
+              ) : <p className="shell-notifications-empty">{t('shell.emptyNotifs')}</p>}
+            </section>
+          )}
+        </div>
       </header>
       <div className="shell-workspace">
-        <aside className="shell-sidebar" aria-label={t('shell.mainNav')}>
-          <nav className="shell-primary-nav">
-            {PRIMARY_NAV.map((item) => (
-              <button
-                key={item.id}
-                type="button"
-                className={`shell-nav-item${route.view === item.view ? ' is-active' : ''}`}
-                aria-current={route.view === item.view ? 'page' : undefined}
-                aria-label={t(`shell.${item.id === 'home' ? 'automate' : item.id}` as UiKey)}
-                title={t(`shell.${item.id === 'home' ? 'automate' : item.id}` as UiKey)}
-                onClick={() => navigate(item.view)}
-              >
-                <Icon name="automation" />
-                <span>{t(`shell.${item.id === 'home' ? 'automate' : item.id}` as UiKey)}</span>
-              </button>
-            ))}
-          </nav>
-          <nav className="shell-primary-nav shell-rail-center" aria-label={t('shell.automationViews')}>
-            {AUTOMATION_TABS.map((tab) => {
-              const active = route.view === 'automations' && (parseAutomationTab(route.params['automationTab']) ?? 'manage') === tab.id
-              const label = t(`shell.${tab.id}` as UiKey)
-              return (
-                <button
-                  key={tab.id}
-                  type="button"
-                  className={`shell-nav-item${active ? ' is-active' : ''}`}
-                  aria-current={active ? 'page' : undefined}
-                  aria-label={label}
-                  title={label}
-                  data-tooltip={label}
-                  onClick={() => navigate('automations', { automationTab: tab.id })}
-                >
-                  <Icon name={tab.icon} />
-                  <span>{label}</span>
-                </button>
-              )
-            })}
-          </nav>
-          <footer className="shell-sidebar-footer">
-            <button
-              type="button"
-              className="shell-icon-button shell-notifications-button"
-              aria-label={`${t('shell.notifications')}${unreadCount ? ` (${unreadCount} ${t('shell.unread')})` : ''}`}
-              aria-expanded={notificationsOpen}
-              title={t('shell.notifications')}
-              onClick={() => setNotificationsOpen((open) => !open)}
-            >
-              <Icon name="bell" />
-              {unreadCount > 0 && <span className="shell-notification-badge">{unreadCount > 99 ? '99+' : unreadCount}</span>}
-            </button>
-            <button
-              type="button"
-              className="shell-profile-button"
-              aria-label={`${t('shell.accountMenuFor')} ${displayName(profile, t('shell.defaultProfile'))}`}
-              aria-expanded={profileMenuOpen}
-              aria-haspopup="menu"
-              title={t('shell.profile')}
-              onClick={() => {
-                setProfileMenuOpen((open) => !open)
-                setNotificationsOpen(false)
-              }}
-            >
-              <span className="shell-avatar">{initials || 'L'}</span>
-            </button>
-            <ProfileMenu
-              open={profileMenuOpen}
-              name={displayName(profile, t('shell.defaultProfile'))}
-              email={profile.email.trim()}
-              initials={initials}
-              onClose={() => setProfileMenuOpen(false)}
-              onOpenSettings={(tab) => window.app.openSettingsWindow(tab)}
-            />
-            {notificationsOpen && (
-              <section className="shell-notifications-panel" aria-label={t('shell.notifications')}>
-                <header>
-                  <strong>{t('shell.notifications')}</strong>
-                  {unreadCount > 0 && <button type="button" onClick={() => void readAllNotifications()}>{t('shell.markAllRead')}</button>}
-                </header>
-                {notifications.length ? (
-                  <div className="shell-notifications-list">
-                    {notifications.map((notification) => (
-                      <article key={notification.id} className={`shell-notification${notification.read ? '' : ' is-unread'}`}>
-                        <button type="button" className="shell-notification-body" onClick={() => void readNotification(notification)}>
-                          <span>{notification.title}</span>
-                          {notification.body && <small>{notification.body}</small>}
-                          <time>{new Date(notification.createdAt).toLocaleString()}</time>
-                        </button>
-                        <button type="button" className="shell-notification-dismiss" aria-label={`${t('shell.dismiss')} ${notification.title}`} onClick={() => void dismissNotification(notification.id)}>×</button>
-                      </article>
-                    ))}
-                  </div>
-                ) : <p className="shell-notifications-empty">{t('shell.emptyNotifs')}</p>}
-              </section>
-            )}
-          </footer>
-        </aside>
         <section className="shell-main-pane">
           {(chatError || dashboardError) && (
             <div className="shell-chat-error" role="alert">
@@ -531,7 +506,6 @@ export default function ShellApp(): React.JSX.Element {
           </div>
         </section>
       </div>
-      <CommandPalette open={paletteOpen} items={paletteItems} onClose={() => setPaletteOpen(false)} />
       {settings !== null && (
         <div
           className="shell-settings-overlay"

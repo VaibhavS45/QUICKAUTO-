@@ -4,6 +4,8 @@ import SettingsApp from './settings/SettingsDialog'
 import ShellApp from './shell/ShellApp'
 import { LanguageProvider } from './i18n/LanguageContext'
 import { applyTheme } from './settings/theme'
+// No-op under Electron (preload already defined window.app); stubs it for `npm run web`.
+import './browser-preview.js'
 import './styles.css'
 
 /** Single renderer entry; app and settings share hash-based routing. */

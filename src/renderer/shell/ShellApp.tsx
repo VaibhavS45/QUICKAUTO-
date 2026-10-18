@@ -416,7 +416,6 @@ export default function ShellApp(): React.JSX.Element {
   return (
     <main className="shell-frame">
       <header className="shell-drag-strip" aria-label={t('shell.windowBar')}>
-        <span className="shell-brand">Palette</span>
         <nav className="shell-topnav" aria-label={t('shell.mainNav')}>
           {beforeActive.length > 0 && <div className="shell-topnav-group">{beforeActive.map(renderItem)}</div>}
           {renderItem(activeNav)}

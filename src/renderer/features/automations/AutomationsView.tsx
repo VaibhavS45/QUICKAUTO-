@@ -25,7 +25,7 @@ import Builder from './builder.js'
 import CanvasDescribeBar from './canvas-describe.js'
 import StartChoice, { type StartKind } from './start-choice.js'
 import WeekCalendar from './week-calendar.js'
-import { UpdatesFeed } from '../../shell/UpdatesFeed.js'
+import { UpdatesStream } from '../../shell/UpdatesStream.js'
 import './automations.css'
 
 interface Routine {
@@ -854,7 +854,7 @@ export default function AutomationsView(props: FeatureProps): React.JSX.Element 
       {error && <p className="automations-error" role="alert">{error}</p>}
 
       {!loading && !error && tab === 'updates' && (
-        <UpdatesFeed shell={props.shell} />
+        <UpdatesStream shell={props.shell} />
       )}
 
       {!loading && !error && tab === 'manage' && view === 'list' && (

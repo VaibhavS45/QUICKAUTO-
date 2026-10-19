@@ -17,6 +17,18 @@ function memoryRuns(): { records: unknown[]; storage: { load: () => unknown; sav
   }
 }
 
+function memoryRunLogs(): { storage: { load: () => unknown; save: (records: unknown[]) => void } } {
+  const state: { records: unknown[] } = { records: [] }
+  return {
+    storage: {
+      load: () => state.records,
+      save: (records) => {
+        state.records.splice(0, state.records.length, ...records)
+      }
+    }
+  }
+}
+
 describe('schedule-service', () => {
   it('buckets items by the local day, orders them, and computes progress', () => {
     const key = localDateKey(new Date(2026, 9, 10, 12))
@@ -55,7 +67,7 @@ describe('schedule-service', () => {
       repeat: 'daily',
       enabled: true,
       createdAt: now
-    }], runs.storage, () => now)
+    }], runs.storage, memoryRunLogs().storage, () => now)
     const notifications: number[] = []
     service.onChange(() => notifications.push(1))
     const today = await service.today()
@@ -75,7 +87,7 @@ describe('schedule-service', () => {
   })
 
   it('rejects invalid dates and limits recent-task requests', async () => {
-    const service = new ScheduleService(() => [], memoryRuns().storage)
+    const service = new ScheduleService(() => [], memoryRuns().storage, memoryRunLogs().storage)
     await expect(service.today('2026-13-40')).rejects.toThrow('Invalid local schedule date')
     for (let i = 0; i < 55; i++) service.recordRun({
       id: `r-${i}`,
@@ -88,7 +100,7 @@ describe('schedule-service', () => {
   })
 
   it('validates schedule IPC payloads and returns real source data', async () => {
-    const service = new ScheduleService(() => [], memoryRuns().storage)
+    const service = new ScheduleService(() => [], memoryRuns().storage, memoryRunLogs().storage)
     const handlers = new Map<string, (_event: unknown, payload?: unknown) => unknown>()
     registerScheduleIpc({ handle: (channel, listener) => { handlers.set(channel, listener) } }, service)
     expect(await handlers.get(IpcChannels.scheduleToday)!(null, { date: 'yesterday' })).toMatchObject({ ok: false })

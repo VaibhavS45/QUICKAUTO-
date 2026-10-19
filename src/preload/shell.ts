@@ -1,9 +1,11 @@
 import { ipcRenderer } from 'electron'
 import type { AppNotification } from '../shared/contracts/notifications.js'
+import type { RunLogRecord } from '../shared/contracts/schedule.js'
 import type { RunRecord, TodaySchedule } from '../shared/contracts/schedule.js'
 import type { AgentProfile } from '../main/agent/agent-store.js'
 import type { McpServerConfig, McpServerPublic } from '../main/shell/mcp-registry.js'
 import type { Plugin } from '../main/shell/plugin-registry.js'
+import type { UpdatesListRequest } from '../shared/contracts/schedule.js'
 
 export const shellApi = {
   scheduleToday: (date?: string): Promise<{ ok: boolean; schedule?: TodaySchedule; error?: string }> =>
@@ -17,6 +19,28 @@ export const shellApi = {
       ipcRenderer.removeListener('shell:schedule-changed', fn)
     }
   },
+  updatesList: (request?: UpdatesListRequest): Promise<{ ok: boolean; logs?: RunLogRecord[]; nextCursor?: string; error?: string }> =>
+    ipcRenderer.invoke('updates:list', request ?? {}).catch((error: unknown) => ({
+      ok: false,
+      error: error instanceof Error ? error.message : String(error)
+    })),
+  updatesStream: (): Promise<{ ok: boolean; error?: string }> =>
+    ipcRenderer.invoke('updates:stream', {}).catch((error: unknown) => ({
+      ok: false,
+      error: error instanceof Error ? error.message : String(error)
+    })),
+  onUpdatesChanged: (cb: () => void) => {
+    const fn = (): void => cb()
+    ipcRenderer.on('shell:updates-changed', fn)
+    return () => {
+      ipcRenderer.removeListener('shell:updates-changed', fn)
+    }
+  },
+  getRunLog: (runId: string): Promise<{ ok: boolean; log?: RunLogRecord; error?: string }> =>
+    ipcRenderer.invoke('updates:get-run-log', { runId }).catch((error: unknown) => ({
+      ok: false,
+      error: error instanceof Error ? error.message : String(error)
+    })),
   notificationsList: (): Promise<{ ok: boolean; notifications?: AppNotification[]; error?: string }> =>
     ipcRenderer.invoke('shell:notifications-list', {}),
   notificationCreate: (

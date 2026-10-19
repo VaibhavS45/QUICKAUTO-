@@ -1,10 +1,10 @@
 import { addDaysKey, localDayKey, routineOccursOn } from './dates.js'
 
 export const HOUR_FIRST = 6
-export const HOUR_LAST = 11
+export const HOUR_LAST = 22
 export const ROW_H = 106
 export const GUTTER = 64
-export const DAY_HEADER_H = 68
+export const DAY_HEADER_H = 34
 export const BOTTOM_PAD = 20
 export const CARD_GAP_X = 8
 export const CARD_GAP_Y = 7

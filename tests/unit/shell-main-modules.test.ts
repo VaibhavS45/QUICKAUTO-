@@ -44,6 +44,7 @@ describe('shell main-process contract modules', () => {
       'agentRemove',
       'agentUpdate',
       'agentsList',
+      'getRunLog',
       'mcpList',
       'mcpRemove',
       'mcpStart',
@@ -56,10 +57,13 @@ describe('shell main-process contract modules', () => {
       'notificationsReadAll',
       'onNotificationsChanged',
       'onScheduleChanged',
+      'onUpdatesChanged',
       'pluginEnable',
       'pluginsList',
       'recentTasks',
-      'scheduleToday'
+      'scheduleToday',
+      'updatesList',
+      'updatesStream'
     ])
   })
 })

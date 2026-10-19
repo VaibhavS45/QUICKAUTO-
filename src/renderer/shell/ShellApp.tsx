@@ -270,7 +270,11 @@ export default function ShellApp(): React.JSX.Element {
     navigate,
     openCalendarWindow: () => {},
     openSettings: (tab) => window.app.openSettingsWindow(tab),
-    notify: (notification) => window.dispatchEvent(new CustomEvent('app:notification', { detail: notification }))
+    notify: (notification) => window.dispatchEvent(new CustomEvent('app:notification', { detail: notification })),
+    updatesList: (request) => window.app.updatesList(request),
+    updatesStream: () => window.app.updatesStream(),
+    onUpdatesChanged: (cb) => window.app.onUpdatesChanged(cb),
+    getRunLog: (runId) => window.app.getRunLog(runId)
   }
   const initials = displayName(profile, t('shell.defaultProfile')).split(/\s+/).slice(0, 2).map((part) => part[0]?.toUpperCase()).join('')
 

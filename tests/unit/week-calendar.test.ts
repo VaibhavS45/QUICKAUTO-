@@ -34,7 +34,7 @@ describe('week calendar slots', () => {
 
   it('clamps card hours into the visible range', () => {
     expect(slotHourFor(new Date(2026, 7, 25, 3, 30).getTime())).toBe(6)
-    expect(slotHourFor(new Date(2026, 7, 25, 17, 0).getTime())).toBe(10)
+    expect(slotHourFor(new Date(2026, 7, 25, 17, 0).getTime())).toBe(17)
     expect(slotHourFor(tuesday0800)).toBe(8)
   })
 
@@ -117,7 +117,7 @@ describe('week calendar geometry', () => {
   it('maps pointer coordinates back to a clamped slot', () => {
     const width = 1192
     expect(slotFromPoint(10, 10, width)).toEqual({ day: 0, hour: 6 })
-    expect(slotFromPoint(1180, 700, width)).toEqual({ day: 6, hour: 10 })
+    expect(slotFromPoint(1180, 700, width)).toEqual({ day: 6, hour: 11 })
   })
 
   it('fans cards out around the center without leaving the pile', () => {

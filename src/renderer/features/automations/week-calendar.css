@@ -68,6 +68,8 @@
 .wc-grid {
   position: relative;
   flex: 1;
+  overflow-y: auto;
+  overflow-x: hidden;
 }
 
 .wc-colsep {
@@ -98,34 +100,36 @@
 }
 
 .wc-dayheader {
-  position: absolute;
+  position: sticky;
   top: 0;
-  padding: 8px 0 0 12px;
+  padding: 6px 0 0 12px;
   display: flex;
-  flex-direction: column;
-  gap: 3px;
-  height: 68px;
+  flex-direction: row;
+  align-items: baseline;
+  gap: 6px;
+  height: 34px;
   z-index: 30;
   background: linear-gradient(#131316 70%, rgb(19 19 22 / 0%));
 }
 
 .wc-dayname {
-  font-size: 9.5px;
+  font-size: 11px;
   font-weight: 600;
   letter-spacing: 0.06em;
   color: #77777f;
 }
 
 .wc-daynum {
-  font-size: 15px;
+  font-size: 14px;
   font-weight: 550;
   color: #e7e7e9;
-  width: 24px;
-  height: 24px;
+  width: auto;
+  height: auto;
   display: flex;
   align-items: center;
   justify-content: center;
   border-radius: 999px;
+  padding: 1px 6px;
 }
 
 .wc-daynum.is-today {
@@ -174,6 +178,8 @@
   position: absolute;
   top: 0;
   left: 0;
+  width: 148px;
+  height: 94px;
   will-change: transform;
   touch-action: none;
   cursor: grab;
@@ -185,6 +191,8 @@
   background-color: rgb(52 189 144 / 0.82);
   border-radius: 14px;
   display: flex;
+  overflow: hidden;
+  box-sizing: border-box;
   transition: box-shadow 0.18s ease, filter 0.18s ease, background-color 0.18s ease;
 }
 

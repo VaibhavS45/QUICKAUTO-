@@ -2,7 +2,7 @@ import type { BrowserWindow, IpcMain } from 'electron'
 import Store from 'electron-store'
 import type { AppNotification } from '../../shared/contracts/notifications.js'
 import type { AgentEvent } from '../../shared/agent.js'
-import type { RunRecord } from '../../shared/contracts/schedule.js'
+import type { RunLogRecord, RunLogRawStorage, RunRecord } from '../../shared/contracts/schedule.js'
 import { IpcChannels } from '../ipc.js'
 import type { Routine } from '../agent/scheduler.js'
 import { configureNotificationStorage, notify, type NotificationStorage } from './notifications.js'
@@ -27,6 +27,21 @@ class ElectronRunRecordStore implements RunRecordStorage {
   }
 }
 
+class ElectronRunLogStore implements RunLogRawStorage {
+  private readonly store = new Store<{ 'run-logs': unknown[] }>({
+    name: 'palette-shell',
+    defaults: { 'run-logs': [] }
+  })
+
+  load(): unknown {
+    return this.store.get('run-logs', [])
+  }
+
+  save(records: RunLogRecord[]): void {
+    this.store.set('run-logs', records)
+  }
+}
+
 class ElectronNotificationStore implements NotificationStorage {
   private readonly store = new Store<{ notifications: unknown[] }>({
     name: 'palette-notifications',
@@ -48,6 +63,25 @@ export interface ShellRuntime {
   observeRunEvent(event: AgentEvent): void
   observeRunFailure(runId: string, message: string): void
   finishRun(runId: string): { status: RunStatus; summary?: string }
+  /** Run-log (activity feed) write path. */
+  startRunLog(fields: {
+    taskId: string
+    taskTitle: string
+    sourceType: RunLogRecord['sourceType']
+    scheduledFor?: number
+    startedAt?: number
+    agentRunId?: string
+  }): string
+  appendRunLogStep(runId: string, step: { tool: string; input?: unknown; outputPreview?: string }): void
+  finishRunLog(runId: string, patch: {
+    status?: RunLogRecord['status']
+    finishedAt?: number
+    summary?: string
+    error?: string
+    currentStep?: string
+  }): void
+  getRunLog(runId: string): RunLogRecord | null
+  onRunLogChange(cb: () => void): () => void
   scheduleChanged(): void
   notify(input: Parameters<typeof notify>[0]): AppNotification
   notificationsChanged(): void
@@ -60,9 +94,10 @@ export function createShellRuntime(
   markRoutineRan: (id: string, status: string) => void
 ): ShellRuntime {
   const runs = new ElectronRunRecordStore()
+  const runLogs = new ElectronRunLogStore()
   const notificationStore = new ElectronNotificationStore()
   configureNotificationStorage(notificationStore)
-  const scheduleService = new ScheduleService(getRoutines, runs)
+  const scheduleService = new ScheduleService(getRoutines, runs, runLogs)
   const activeRecords = new Map<string, RunRecord>()
   const send = (channel: string): void => {
     const window = getWindow()
@@ -72,6 +107,7 @@ export function createShellRuntime(
   registerScheduleIpc(ipc, scheduleService)
   registerNotificationIpc(ipc, { changed: () => send(IpcChannels.notificationsChanged) })
   scheduleService.onChange(() => send(IpcChannels.scheduleChanged))
+  scheduleService.onRunLogChange(() => send(IpcChannels.updatesChanged))
 
   return {
     scheduleService,
@@ -127,6 +163,27 @@ export function createShellRuntime(
       }
       return { status: record.status, ...(record.summary ? { summary: record.summary } : {}) }
     },
+    // ---- Run-log write path ----
+    startRunLog: ({ taskId, taskTitle, sourceType, scheduledFor, startedAt = Date.now(), agentRunId }) => {
+      const logRunId = agentRunId ?? `${Date.now()}-${Math.floor(Math.random() * 1e6)}`
+      scheduleService.recordRunLog({
+        taskId,
+        taskTitle,
+        sourceType,
+        scheduledFor,
+        startedAt,
+        status: 'running'
+      }, logRunId)
+      return logRunId
+    },
+    appendRunLogStep: (runId, step) => {
+      scheduleService.appendRunLogStep(runId, step)
+    },
+    finishRunLog: (runId, patch) => {
+      scheduleService.finishRunLog(runId, patch)
+    },
+    getRunLog: (runId) => scheduleService.getRunLog(runId),
+    onRunLogChange: (cb) => scheduleService.onRunLogChange(cb),
     scheduleChanged: () => scheduleService.changed(),
     notify,
     notificationsChanged: () => send(IpcChannels.notificationsChanged)

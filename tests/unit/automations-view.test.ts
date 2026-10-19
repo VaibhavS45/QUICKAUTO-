@@ -9,7 +9,11 @@ const shell: ShellApi = {
   navigate: () => {},
   openCalendarWindow: () => {},
   openSettings: () => {},
-  notify: () => {}
+  notify: () => {},
+  updatesList: async () => ({ ok: true, logs: [], nextCursor: undefined }),
+  updatesStream: async () => ({ ok: true }),
+  onUpdatesChanged: () => () => {},
+  getRunLog: async () => ({ ok: true, log: undefined })
 }
 
 vi.stubGlobal('window', {})
@@ -59,6 +63,13 @@ describe('AutomationsView', () => {
     expect(html).toContain('List')
     expect(html).toContain('Calendar')
     expect(html).toContain('Create')
+  })
+
+  it('updates tab shows the calendar only, without the list view toggle', () => {
+    const html = renderToStaticMarkup(createElement(AutomationsView, { shell, initialAutomationTab: 'updates' }))
+    expect(html).toContain('Updates')
+    expect(html).not.toContain('aria-label="List"')
+    expect(html).not.toContain('automations-view-toggle')
   })
 
   it('renders the Zap-style canvas chain', () => {

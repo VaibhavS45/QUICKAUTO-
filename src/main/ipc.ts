@@ -3,6 +3,7 @@ import {
   AgentApprovalResponseSchema,
   AgentRunRequestSchema
 } from '../shared/agent.js'
+import { UpdatesListRequestSchema, UpdatesListResponseSchema } from '../shared/contracts/schedule.js'
 import { ModelSettingsSchema } from './settings/model-settings.js'
 import { AgentProviderSchema } from './agent/agent-provider.js'
 import { ProfileSettingsSchema } from './agent/profile-settings.js'
@@ -45,6 +46,9 @@ export const IpcChannels = {
   routineRemove: 'routine:remove',
   routineToggle: 'routine:toggle',
   routineUpdate: 'routine:update',
+  updatesList: 'updates:list',
+  updatesStream: 'updates:stream',
+  updatesGetRunLog: 'updates:get-run-log',
   getProfile: 'settings:get-profile',
   setProfile: 'settings:set-profile',
   getAppBehavior: 'app:get-behavior',
@@ -159,3 +163,9 @@ export {
 }
 
 export { OpenFileDialogSchema }
+
+export { UpdatesListRequestSchema, UpdatesListResponseSchema }
+
+export const RunLogIdSchema = z.object({
+  runId: z.string().min(1).max(128)
+}).strict()

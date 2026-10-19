@@ -9,7 +9,11 @@ const shell = {
   navigate: vi.fn(),
   openCalendarWindow: () => {},
   openSettings: vi.fn(),
-  notify: vi.fn()
+  notify: vi.fn(),
+  updatesList: async () => ({ ok: true, logs: [], nextCursor: undefined }),
+  updatesStream: async () => ({ ok: true }),
+  onUpdatesChanged: () => () => {},
+  getRunLog: async () => ({ ok: true, log: undefined })
 }
 
 describe('home view', () => {

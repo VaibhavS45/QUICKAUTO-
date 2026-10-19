@@ -25,6 +25,7 @@ import Builder from './builder.js'
 import CanvasDescribeBar from './canvas-describe.js'
 import StartChoice, { type StartKind } from './start-choice.js'
 import WeekCalendar from './week-calendar.js'
+import { UpdatesFeed } from '../../shell/UpdatesFeed.js'
 import './automations.css'
 
 interface Routine {
@@ -488,7 +489,7 @@ export default function AutomationsView(props: FeatureProps): React.JSX.Element 
       if (created) {
         setTab('manage')
         setView('list')
-        setRoutinePageId(created.id)
+        setSelection({ kind: 'routine', routine: created })
       }
       return null
     } catch (reason) {
@@ -709,7 +710,7 @@ export default function AutomationsView(props: FeatureProps): React.JSX.Element 
     return () => el.removeEventListener('wheel', onWheel)
   }, [tab])
 
-  const detail = selection === null ? null : (
+  const detail = (selection === null || tab === 'updates') ? null : (
     <aside className="automations-detail" aria-label="Automation details">
       <button type="button" className="automations-detail-close" aria-label="Close details" onClick={() => setSelection(null)}>×</button>
       {selection.kind === 'run' && (
@@ -765,7 +766,6 @@ export default function AutomationsView(props: FeatureProps): React.JSX.Element 
 
   const creating = choiceOpen || builderOpen
   const [runId, setRunId] = useState(props.focusRunId ?? '')
-  const [routinePageId, setRoutinePageId] = useState('')
   const openedRunId = useRef('')
   useEffect(() => {
     if (!props.focusRunId || openedRunId.current === props.focusRunId) return
@@ -821,51 +821,21 @@ export default function AutomationsView(props: FeatureProps): React.JSX.Element 
     )
   }
 
-  if (routinePageId) {
-    const routine = routines.find((candidate) => candidate.id === routinePageId)
-    if (!routine) {
-      return (
-        <section className="automations" aria-label="Automation details">
-          <AutomationBreadcrumb current="Unavailable" onParentClick={() => setRoutinePageId('')} />
-          <p className="automations-empty">This automation is no longer available.</p>
-        </section>
-      )
-    }
-    return (
-      <section className="automations" aria-label="Automation details">
-        <AutomationBreadcrumb current={routineTitle(routine.prompt)} onParentClick={() => setRoutinePageId('')} />
-        <div className="automations-routine">
-          <ManageDetail
-            routine={routine}
-            runs={runs}
-            onToggle={(target) => void toggleRoutine(target)}
-            onRemove={(target) => void removeRoutine(target)}
-            onSelectRun={(selected) => setRunId(selected.id)}
-          />
-          <RoutineRail
-            routine={routine}
-            engine={engine}
-            connected={connected}
-            onOpenConnectors={() => props.shell.openSettings('connectors')}
-          />
-        </div>
-      </section>
-    )
-  }
-
   return (
     <section className={`automations${tab === 'canvas' ? ' is-canvas-mode' : ''}`} aria-label="Automations">
       {tab !== 'canvas' && <div className="automations-toolbar">
         <h1 className="automations-toolbar-title">{tab === 'manage' ? 'Manage' : 'Updates'}</h1>
         <div className="automations-actions">
-          <div className="automations-view-toggle" role="tablist" aria-label={tab === 'updates' ? 'Updates view' : 'Manage view'}>
-            <button type="button" role="tab" aria-selected={view === 'list'} aria-label="List" title="List" onClick={() => setView('list')}>
-              <ListIcon />
-            </button>
-            <button type="button" role="tab" aria-selected={view === 'calendar'} aria-label="Calendar" title="Calendar" onClick={() => setView('calendar')}>
-              <CalendarIcon />
-            </button>
-          </div>
+          {tab === 'manage' && (
+            <div className="automations-view-toggle" role="tablist" aria-label="Manage view">
+              <button type="button" role="tab" aria-selected={view === 'list'} aria-label="List" title="List" onClick={() => setView('list')}>
+                <ListIcon />
+              </button>
+              <button type="button" role="tab" aria-selected={view === 'calendar'} aria-label="Calendar" title="Calendar" onClick={() => setView('calendar')}>
+                <CalendarIcon />
+              </button>
+            </div>
+          )}
           <button
             type="button"
             className={`automations-filter${activeOnly ? ' is-on' : ''}`}
@@ -883,31 +853,8 @@ export default function AutomationsView(props: FeatureProps): React.JSX.Element 
       {loading && <p className="automations-empty">Loading automations…</p>}
       {error && <p className="automations-error" role="alert">{error}</p>}
 
-      {!loading && !error && tab === 'updates' && view === 'list' && (
-        <div className="automations-body">
-          <div className="automations-main">
-            <UpdatesList runs={runs} todayKey={todayKey} onSelect={(run) => setSelection({ kind: 'run', run })} />
-          </div>
-          {detail}
-        </div>
-      )}
-
-      {!loading && !error && tab === 'updates' && view === 'calendar' && (
-        <div className="automations-calendar">
-          <WeekCalendar
-            events={runs.map((run) => ({
-              id: run.id,
-              title: routineTitle(run.title),
-              meta: `${timeLabel(run.endedAt ?? run.startedAt)} · ${run.status.replaceAll('_', ' ')}`,
-              at: run.endedAt ?? run.startedAt,
-              status: run.status
-            }))}
-            onOpen={(id) => {
-              const run = runs.find((candidate) => candidate.id === id)
-              if (run) setSelection({ kind: 'run', run })
-            }}
-          />
-        </div>
+      {!loading && !error && tab === 'updates' && (
+        <UpdatesFeed shell={props.shell} />
       )}
 
       {!loading && !error && tab === 'manage' && view === 'list' && (
@@ -923,7 +870,7 @@ export default function AutomationsView(props: FeatureProps): React.JSX.Element 
                   role="option"
                   aria-selected={selected}
                   className={`manage-row${selected ? ' is-active' : ''}`}
-                  onClick={() => setRoutinePageId(routine.id)}
+                  onClick={() => setSelection({ kind: 'routine', routine })}
                 >
                   <span className="manage-row-top">
                     <span className="manage-row-icon" aria-hidden="true">⟁</span>
@@ -971,7 +918,10 @@ export default function AutomationsView(props: FeatureProps): React.JSX.Element 
               enabled: routine.enabled,
               tools: routine.tools
             }))}
-            onOpen={(id) => setRoutinePageId(id)}
+            onOpen={(id) => {
+              const routine = visibleRoutines.find((candidate) => candidate.id === id)
+              if (routine) setSelection({ kind: 'routine', routine })
+            }}
           />
         </div>
       )}

@@ -9,7 +9,6 @@ import {
   HOUR_LAST,
   ROW_H,
   fanPlacement,
-  gridHeight,
   moveToTopOfSlot,
   parseSlotKey,
   slotAnchor,
@@ -423,7 +422,6 @@ export default function WeekCalendar({ events, onOpen }: Props): React.JSX.Eleme
     }, 140)
   }, [])
 
-  const gridH = gridHeight()
   const colW = width ? (width - GUTTER) / 7 : 0
   const nowFrac = (now.getHours() * 60 + now.getMinutes()) / 60
   const isCurrentWeek = days.some((d) => d.key === todayKey)
@@ -461,7 +459,7 @@ export default function WeekCalendar({ events, onOpen }: Props): React.JSX.Eleme
           </span>
         )}
       </div>
-      <div ref={gridRef} className="wc-grid" style={{ height: gridH }}>
+      <div ref={gridRef} className="wc-grid">
         {colW > 0 &&
           Array.from({ length: 6 }, (_, i) => i + 1).map((i) => (
             <div key={`sep${i}`} className="wc-colsep" style={{ left: GUTTER + i * colW - 0.5 }} />

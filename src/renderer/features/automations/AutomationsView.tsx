@@ -404,6 +404,15 @@ export default function AutomationsView(props: FeatureProps): React.JSX.Element 
     setError('')
   }, [tomorrowKey])
 
+  const onReschedule = useCallback(async (id: string, runAt: number): Promise<void> => {
+    const res = await window.app.routineUpdate(id, { runAt })
+    if (!res.ok) {
+      setError(res.error || 'Could not reschedule.')
+      throw new Error(res.error || 'Could not reschedule.')
+    }
+    await refresh()
+  }, [refresh, setError])
+
   useEffect(() => {
     let active = true
     setLoading(true)
@@ -922,6 +931,7 @@ export default function AutomationsView(props: FeatureProps): React.JSX.Element 
               const routine = visibleRoutines.find((candidate) => candidate.id === id)
               if (routine) setSelection({ kind: 'routine', routine })
             }}
+            onReschedule={onReschedule}
           />
         </div>
       )}

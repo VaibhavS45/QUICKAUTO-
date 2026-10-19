@@ -68,8 +68,15 @@
 .wc-grid {
   position: relative;
   flex: 1;
+  min-height: 0;
   overflow-y: auto;
   overflow-x: hidden;
+}
+
+/* One content box every layer anchors to: full-day height so the columns,
+   hour lines, labels, events and drop targets all share the same bottom. */
+.wc-content {
+  position: relative;
 }
 
 .wc-colsep {

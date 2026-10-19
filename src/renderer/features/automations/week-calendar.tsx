@@ -8,9 +8,14 @@ import {
   HOUR_FIRST,
   HOUR_LAST,
   ROW_H,
+  edgeScrollDelta,
   fanPlacement,
+  gridHeight,
+  hourLabel,
+  hourLabelFull,
   moveToTopOfSlot,
   parseSlotKey,
+  runAtForSlot,
   slotAnchor,
   slotFromPoint,
   slotKey,
@@ -99,6 +104,7 @@ interface Layout {
 export interface Props {
   events: WeekEvent[]
   onOpen(id: string): void
+  onReschedule?(id: string, runAt: number): void | Promise<void>
 }
 
 function sim(value: number): Sim {
@@ -121,7 +127,7 @@ function stepSim(s: Sim, dt: number): void {
   s.value += s.v * dt
 }
 
-export default function WeekCalendar({ events, onOpen }: Props): React.JSX.Element {
+export default function WeekCalendar({ events, onOpen, onReschedule }: Props): React.JSX.Element {
   const [weekStart, setWeekStart] = useState(() => weekStartFor(new Date()))
   const [now, setNow] = useState(() => new Date())
   const days = useMemo(() => weekDays(weekStart), [weekStart])
@@ -143,6 +149,7 @@ export default function WeekCalendar({ events, onOpen }: Props): React.JSX.Eleme
   const sims = useRef(new Map<string, CardSim>())
   const groupsRef = useRef(new Map<string, string[]>())
   const hoverTimer = useRef(0)
+  const didInitialScroll = useRef(false)
   const wakeRef = useRef<() => void>(() => {})
   const gridRef = useRef<HTMLDivElement>(null)
 
@@ -342,15 +349,17 @@ export default function WeekCalendar({ events, onOpen }: Props): React.JSX.Eleme
     (event: React.PointerEvent, id: string): void => {
       if (event.button !== 0) return
       event.preventDefault()
-      const rect = gridRef.current?.getBoundingClientRect()
+      const grid = gridRef.current
+      const rect = grid?.getBoundingClientRect()
       const slot = slotsRef.current[id]
-      if (!rect || !slot) return
+      if (!grid || !rect || !slot) return
       const a = slotAnchor(slot.day, slot.hour, rect.width)
+      // Pointer position in content coordinates (the grid scrolls vertically).
       const px = event.clientX - rect.left
-      const py = event.clientY - rect.top
+      const cy = event.clientY - rect.top + grid.scrollTop
       const offX = Math.min(a.w, Math.max(0, px - a.x))
-      const offY = Math.min(a.h, Math.max(0, py - a.y))
-      const d: DragState = { id, x: px - offX, y: py - offY, slot, rot: 0, moved: 0 }
+      const offY = Math.min(a.h, Math.max(0, cy - a.y))
+      const d: DragState = { id, x: px - offX, y: cy - offY, slot, rot: 0, moved: 0 }
       dragRef.current = d
       setDrag({ ...d })
       setFan(null)
@@ -359,26 +368,58 @@ export default function WeekCalendar({ events, onOpen }: Props): React.JSX.Eleme
       let lastT = performance.now()
       let lastX = event.clientX
       let lastY = event.clientY
+      let relY = event.clientY - rect.top
       let rotTimer = 0
+
+      const applyPointer = (clientX: number, clientY: number): void => {
+        const cur = dragRef.current
+        const current = gridRef.current
+        if (!cur || !current) return
+        const rect2 = current.getBoundingClientRect()
+        const relX = clientX - rect2.left
+        relY = clientY - rect2.top
+        const contentY = relY + current.scrollTop
+        cur.x = relX - offX
+        cur.y = contentY - offY
+        cur.slot = slotFromPoint(relX, contentY, rect2.width)
+        setDrag({ ...cur })
+      }
+
+      // While the drag pointer sits near the top/bottom edge, keep scrolling
+      // the grid and re-apply the pointer position so the card follows.
+      let raf = 0
+      const tick = (): void => {
+        raf = 0
+        const cur = dragRef.current
+        const current = gridRef.current
+        if (!cur || !current) return
+        const rect2 = current.getBoundingClientRect()
+        const delta = edgeScrollDelta(relY, rect2.height)
+        if (delta === 0) {
+          raf = window.requestAnimationFrame(tick)
+          return
+        }
+        const max = current.scrollHeight - current.clientHeight
+        const next = Math.min(max, Math.max(0, current.scrollTop + delta))
+        if (next !== current.scrollTop) {
+          current.scrollTop = next
+          applyPointer(lastX, lastY)
+        }
+        raf = window.requestAnimationFrame(tick)
+      }
+      raf = window.requestAnimationFrame(tick)
 
       const move = (e: PointerEvent): void => {
         const cur = dragRef.current
         if (!cur) return
-        const rect2 = gridRef.current?.getBoundingClientRect()
-        if (!rect2) return
         const t = performance.now()
         vel = vel * 0.65 + ((e.clientX - lastX) / Math.max(8, t - lastT)) * 0.35
         lastT = t
         cur.moved += Math.abs(e.clientX - lastX) + Math.abs(e.clientY - lastY)
         lastX = e.clientX
         lastY = e.clientY
-        const relX = e.clientX - rect2.left
-        const relY = e.clientY - rect2.top
-        cur.x = relX - offX
-        cur.y = relY - offY
         cur.rot = Math.min(10, Math.max(-10, vel * 9))
-        cur.slot = slotFromPoint(relX, relY, rect2.width)
-        setDrag({ ...cur })
+        applyPointer(e.clientX, e.clientY)
         window.clearTimeout(rotTimer)
         rotTimer = window.setTimeout(() => {
           const c = dragRef.current
@@ -387,10 +428,12 @@ export default function WeekCalendar({ events, onOpen }: Props): React.JSX.Eleme
           setDrag({ ...c })
         }, 80)
       }
-      const up = (): void => {
+      const up = async (): Promise<void> => {
         window.removeEventListener('pointermove', move)
         window.removeEventListener('pointerup', up)
         window.clearTimeout(rotTimer)
+        if (raf) window.cancelAnimationFrame(raf)
+        raf = 0
         const c = dragRef.current
         dragRef.current = null
         setDrag(null)
@@ -399,13 +442,24 @@ export default function WeekCalendar({ events, onOpen }: Props): React.JSX.Eleme
           onOpen(c.id)
           return
         }
+        const previousSlot = slots[c.id]
+        const previousOrder = order
+        const original = events.find((e) => e.id === c.id)
+        const runAt = original ? runAtForSlot(c.slot, days, original.at) : null
         setSlots((prev) => ({ ...prev, [c.id]: c.slot }))
         setOrder((prev) => moveToTopOfSlot(prev, c.id, c.slot, { ...slotsRef.current, [c.id]: c.slot }))
+        if (runAt === null || !onReschedule) return
+        try {
+          await onReschedule(c.id, runAt)
+        } catch {
+          setSlots((prev) => ({ ...prev, [c.id]: previousSlot }))
+          setOrder(previousOrder)
+        }
       }
       window.addEventListener('pointermove', move)
       window.addEventListener('pointerup', up)
     },
-    [onOpen]
+    [onOpen, onReschedule, slots, order, events, days]
   )
 
   const onStackEnter = useCallback((key: string): void => {
@@ -427,6 +481,17 @@ export default function WeekCalendar({ events, onOpen }: Props): React.JSX.Eleme
   const isCurrentWeek = days.some((d) => d.key === todayKey)
   const showNow = isCurrentWeek && nowFrac >= HOUR_FIRST && nowFrac <= HOUR_LAST
   const nowY = DAY_HEADER_H + (nowFrac - HOUR_FIRST) * ROW_H
+
+  // Open on the current hour of the current week so the day is not stuck at midnight.
+  useEffect(() => {
+    if (width <= 0 || didInitialScroll.current) return
+    didInitialScroll.current = true
+    if (!isCurrentWeek) return
+    const grid = gridRef.current
+    if (!grid) return
+    const target = DAY_HEADER_H + (nowFrac - HOUR_FIRST) * ROW_H - grid.clientHeight * 0.33
+    grid.scrollTop = Math.max(0, Math.min(grid.scrollHeight - grid.clientHeight, target))
+  }, [width, isCurrentWeek, nowFrac])
 
   const tooltip = useMemo(() => {
     if (!hoverStack || drag || !width) return null
@@ -460,94 +525,88 @@ export default function WeekCalendar({ events, onOpen }: Props): React.JSX.Eleme
         )}
       </div>
       <div ref={gridRef} className="wc-grid">
-        {colW > 0 &&
-          Array.from({ length: 6 }, (_, i) => i + 1).map((i) => (
-            <div key={`sep${i}`} className="wc-colsep" style={{ left: GUTTER + i * colW - 0.5 }} />
-          ))}
-        {days.map((d, i) => (
-          <div key={d.key} className="wc-dayheader" style={{ left: GUTTER + i * colW, width: colW }}>
-            <span className="wc-dayname">{d.date.toLocaleDateString([], { weekday: 'short' }).toUpperCase()}</span>
-            <span className={`wc-daynum${d.key === todayKey ? ' is-today' : ''}`}>{d.date.getDate()}</span>
-          </div>
-        ))}
-        {Array.from({ length: HOUR_LAST - HOUR_FIRST + 1 }, (_, i) => {
-          const hour = HOUR_FIRST + i
-          const y = DAY_HEADER_H + i * ROW_H
-          return (
-            <div key={`h${hour}`}>
-              <div className="wc-hourline" style={{ top: y }} />
-              <span className="wc-hourlabel" style={{ top: y - 6 }}>{hourFace(hour)}</span>
+        <div className="wc-content" style={{ height: gridHeight() }}>
+          {colW > 0 &&
+            Array.from({ length: 6 }, (_, i) => i + 1).map((i) => (
+              <div key={`sep${i}`} className="wc-colsep" style={{ left: GUTTER + i * colW - 0.5 }} />
+            ))}
+          {days.map((d, i) => (
+            <div key={d.key} className="wc-dayheader" style={{ left: GUTTER + i * colW, width: colW }}>
+              <span className="wc-dayname">{d.date.toLocaleDateString([], { weekday: 'short' }).toUpperCase()}</span>
+              <span className={`wc-daynum${d.key === todayKey ? ' is-today' : ''}`}>{d.date.getDate()}</span>
             </div>
-          )
-        })}
-        {showNow && (
-          <>
-            <span className="wc-nowpill" style={{ top: nowY - 10 }}>
-              {`${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`}
-            </span>
-            <div className="wc-nowline" style={{ top: nowY }} />
-          </>
-        )}
-        {mapping.cards.map((card) => {
-          const slot = slots[card.id]
-          const skey = slot ? slotKey(slot) : ''
-          const stack = layoutRef.current.groups.get(skey) ?? []
-          const depth = stack.indexOf(card.id)
-          const count = stack.length
-          const dragging = drag?.id === card.id
-          const Icon = ICONS[card.icon]
-          return (
-            <button
-              key={card.id}
-              type="button"
-              ref={(el) => {
-                if (el) cardEls.current.set(card.id, el)
-                else cardEls.current.delete(card.id)
-              }}
-              data-wc-card={card.id}
-              className={`wc-card${dragging ? ' is-drag' : ''}`}
-              onPointerDown={(e) => beginDrag(e, card.id)}
-              onPointerEnter={() => {
-                if (!dragRef.current && count > 1) onStackEnter(skey)
-              }}
-              onPointerLeave={() => {
-                if (count > 1) onStackLeave()
-              }}
-              aria-label={`${card.title}${slot ? `, ${days[slot.day]?.date.toLocaleDateString([], { weekday: 'long' }) ?? ''} ${hourFaceFull(slot.hour)}` : ''}`}
-            >
-              <span className="wc-card-inner">
-                <span className="wc-card-top">
-                  <Icon size={15} strokeWidth={2} color="rgba(30,30,36,0.65)" aria-hidden />
-                  <span className="wc-card-dots" aria-hidden>•••</span>
-                </span>
-                <span className="wc-card-meta">{card.meta}</span>
-                <span className="wc-card-title">{card.title}</span>
+          ))}
+          {Array.from({ length: HOUR_LAST - HOUR_FIRST + 1 }, (_, i) => {
+            const hour = HOUR_FIRST + i
+            const y = DAY_HEADER_H + i * ROW_H
+            return (
+              <div key={`h${hour}`}>
+                <div className="wc-hourline" style={{ top: y }} />
+                <span className="wc-hourlabel" style={{ top: y - 6 }}>{hourLabel(hour)}</span>
+              </div>
+            )
+          })}
+          {showNow && (
+            <>
+              <span className="wc-nowpill" style={{ top: nowY - 10 }}>
+                {`${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`}
               </span>
-              {count > 1 && depth === count - 1 && !dragging && fan !== skey && (
-                <span className="wc-hiddenbadge">{count - 1} hidden</span>
-              )}
-              {dragging && drag && (
-                <span className="wc-draglabel">
-                  <span>{`${days[drag.slot.day]?.date.toLocaleDateString([], { weekday: 'short' }) ?? ''} ${hourFaceFull(drag.slot.hour)}`}</span>
+              <div className="wc-nowline" style={{ top: nowY }} />
+            </>
+          )}
+          {mapping.cards.map((card) => {
+            const slot = slots[card.id]
+            const skey = slot ? slotKey(slot) : ''
+            const stack = layoutRef.current.groups.get(skey) ?? []
+            const depth = stack.indexOf(card.id)
+            const count = stack.length
+            const dragging = drag?.id === card.id
+            const Icon = ICONS[card.icon]
+            return (
+              <button
+                key={card.id}
+                type="button"
+                ref={(el) => {
+                  if (el) cardEls.current.set(card.id, el)
+                  else cardEls.current.delete(card.id)
+                }}
+                data-wc-card={card.id}
+                className={`wc-card${dragging ? ' is-drag' : ''}`}
+                onPointerDown={(e) => beginDrag(e, card.id)}
+                onPointerEnter={() => {
+                  if (!dragRef.current && count > 1) onStackEnter(skey)
+                }}
+                onPointerLeave={() => {
+                  if (count > 1) onStackLeave()
+                }}
+                aria-label={`${card.title}${slot ? `, ${days[slot.day]?.date.toLocaleDateString([], { weekday: 'long' }) ?? ''} ${hourLabelFull(slot.hour)}` : ''}`}
+              >
+                <span className="wc-card-inner">
+                  <span className="wc-card-top">
+                    <Icon size={15} strokeWidth={2} color="rgba(30,30,36,0.65)" aria-hidden />
+                    <span className="wc-card-dots" aria-hidden>•••</span>
+                  </span>
+                  <span className="wc-card-meta">{card.meta}</span>
+                  <span className="wc-card-title">{card.title}</span>
                 </span>
-              )}
-            </button>
-          )
-        })}
-        {tooltip && (
-          <span className="wc-tooltip" style={{ left: tooltip.x, top: tooltip.y }}>{tooltip.text}</span>
-        )}
+                {count > 1 && depth === count - 1 && !dragging && fan !== skey && (
+                  <span className="wc-hiddenbadge">{count - 1} hidden</span>
+                )}
+                {dragging && drag && (
+                  <span className="wc-draglabel">
+                    <span>{`${days[drag.slot.day]?.date.toLocaleDateString([], { weekday: 'short' }) ?? ''} ${hourLabelFull(drag.slot.hour)}`}</span>
+                  </span>
+                )}
+              </button>
+            )
+          })}
+          {tooltip && (
+            <span className="wc-tooltip" style={{ left: tooltip.x, top: tooltip.y }}>{tooltip.text}</span>
+          )}
+        </div>
       </div>
     </div>
   )
-}
-
-function hourFace(hour: number): string {
-  return `${((hour + 11) % 12) + 1} AM`
-}
-
-function hourFaceFull(hour: number): string {
-  return `${((hour + 11) % 12) + 1}:00 AM`
 }
 
 function weekTag(days: { date: Date }[]): string {

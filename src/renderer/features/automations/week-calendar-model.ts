@@ -1,7 +1,7 @@
 import { addDaysKey, localDayKey, routineOccursOn } from './dates.js'
 
-export const HOUR_FIRST = 6
-export const HOUR_LAST = 22
+export const HOUR_FIRST = 0
+export const HOUR_LAST = 24
 export const ROW_H = 106
 export const GUTTER = 64
 export const DAY_HEADER_H = 34
@@ -59,6 +59,30 @@ export function weekDays(startKey: string): WeekDay[] {
 
 export function clampHour(hour: number): number {
   return Math.min(HOUR_LAST - 1, Math.max(HOUR_FIRST, hour))
+}
+
+const face12 = (hour: number): number => {
+  const face = hour % 12
+  return face === 0 ? 12 : face
+}
+
+/** Whole-day clock labels: midnight is 12 AM, noon is 12 PM; the closing
+ *  boundary line (hour 24) reads the next midnight, 12 AM. */
+export function hourLabel(hour: number): string {
+  return `${face12(hour)} ${hour % 24 < 12 ? 'AM' : 'PM'}`
+}
+
+export function hourLabelFull(hour: number): string {
+  return `${face12(hour)}:00 ${hour % 24 < 12 ? 'AM' : 'PM'}`
+}
+
+/** Vertical scroll speed (px/frame) while a pointer drags near the top or
+ *  bottom edge of a scroll viewport; 0 keeps the scroll position untouched. */
+export function edgeScrollDelta(relY: number, viewportHeight: number, edge = 48, maxStep = 10): number {
+  if (relY < edge) return -Math.ceil((Math.max(0, edge - relY) / edge) * maxStep)
+  const toBottom = viewportHeight - relY
+  if (toBottom < edge) return Math.ceil((Math.max(0, edge - toBottom) / edge) * maxStep)
+  return 0
 }
 
 export function slotHourFor(at: number): number {
@@ -186,6 +210,19 @@ export function slotFromPoint(relX: number, relY: number, width: number): Slot {
     hour:
       clampValue(Math.floor((relY - DAY_HEADER_H) / ROW_H), 0, HOUR_LAST - HOUR_FIRST - 1) + HOUR_FIRST
   }
+}
+
+const MS_PER_HOUR = 3600_000
+
+/** Computes the new runAt for a routine dragged onto a slot within the current
+ * week view. The dragged hour/day wins; minutes and seconds are preserved from
+ * the routine's existing runAt so dragging only moves the slot, not the time. */
+export function runAtForSlot(slot: Slot, days: WeekDay[], originalAt: number): number {
+  const day = days[slot.day]
+  if (!day) return originalAt
+  const original = new Date(originalAt)
+  const base = day.date.getTime() + clampHour(slot.hour) * MS_PER_HOUR
+  return base + original.getMinutes() * 60_000 + original.getSeconds() * 1000 + original.getMilliseconds()
 }
 
 export function gridHeight(): number {

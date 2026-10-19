@@ -3,9 +3,19 @@ import { createElement } from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
 import WeekCalendar from '../../src/renderer/features/automations/week-calendar.js'
 import {
+  BOTTOM_PAD,
+  DAY_HEADER_H,
+  HOUR_FIRST,
+  HOUR_LAST,
+  ROW_H,
+  edgeScrollDelta,
   fanPlacement,
+  gridHeight,
+  hourLabel,
+  hourLabelFull,
   moveToTopOfSlot,
   parseSlotKey,
+  runAtForSlot,
   slotAnchor,
   slotFromPoint,
   slotHourFor,
@@ -33,9 +43,37 @@ describe('week calendar slots', () => {
   })
 
   it('clamps card hours into the visible range', () => {
-    expect(slotHourFor(new Date(2026, 7, 25, 3, 30).getTime())).toBe(6)
+    expect(slotHourFor(new Date(2026, 7, 25, 3, 30).getTime())).toBe(3)
     expect(slotHourFor(new Date(2026, 7, 25, 17, 0).getTime())).toBe(17)
     expect(slotHourFor(tuesday0800)).toBe(8)
+  })
+
+  it('labels every hour with the right AM/PM face', () => {
+    expect(hourLabel(0)).toBe('12 AM')
+    expect(hourLabel(6)).toBe('6 AM')
+    expect(hourLabel(11)).toBe('11 AM')
+    expect(hourLabel(12)).toBe('12 PM')
+    expect(hourLabel(13)).toBe('1 PM')
+    expect(hourLabel(17)).toBe('5 PM')
+    expect(hourLabel(23)).toBe('11 PM')
+    expect(hourLabelFull(15)).toBe('3:00 PM')
+    expect(hourLabelFull(7)).toBe('7:00 AM')
+    expect(hourLabelFull(24)).toBe('12:00 AM')
+  })
+
+  it('spans the full day: 24 rows plus header and bottom pad', () => {
+    expect(HOUR_FIRST).toBe(0)
+    expect(HOUR_LAST).toBe(24)
+    expect(gridHeight()).toBe(DAY_HEADER_H + 24 * ROW_H + BOTTOM_PAD)
+    expect(gridHeight()).toBe(2598)
+  })
+
+  it('scrolls toward edges while dragging and holds position in the middle', () => {
+    expect(edgeScrollDelta(300, 600)).toBe(0)
+    expect(edgeScrollDelta(0, 600)).toBe(-10)
+    expect(edgeScrollDelta(10, 600)).toBe(-8)
+    expect(edgeScrollDelta(590, 600)).toBe(8)
+    expect(edgeScrollDelta(600, 600)).toBe(10)
   })
 
   it('maps daily routines onto the first weekday and weekly ones on lucky days inside the week', () => {
@@ -116,8 +154,8 @@ describe('week calendar geometry', () => {
 
   it('maps pointer coordinates back to a clamped slot', () => {
     const width = 1192
-    expect(slotFromPoint(10, 10, width)).toEqual({ day: 0, hour: 6 })
-    expect(slotFromPoint(1180, 700, width)).toEqual({ day: 6, hour: 11 })
+    expect(slotFromPoint(10, 10, width)).toEqual({ day: 0, hour: 0 })
+    expect(slotFromPoint(1180, 700, width)).toEqual({ day: 6, hour: 6 })
   })
 
   it('fans cards out around the center without leaving the pile', () => {
@@ -128,6 +166,31 @@ describe('week calendar geometry', () => {
       expect(Math.abs(place.x)).toBeLessThanOrEqual(130)
       expect(Math.abs(place.y)).toBeLessThanOrEqual(130)
     }
+  })
+})
+
+describe('runAtForSlot', () => {
+  const weekStart = weekStartFor(new Date(2026, 7, 26)) // Sunday 2026-08-23
+  const days = weekDays(weekStart)
+  const tuesday0830 = new Date(2026, 7, 25, 8, 30).getTime() // 2026-08-25 08:30
+
+  it('moves the routine to the dragged day and hour while preserving minutes', () => {
+    const friday1030 = runAtForSlot({ day: 5, hour: 10 }, days, tuesday0830)
+    const d = new Date(friday1030)
+    expect(d.getDay()).toBe(days[5].date.getDay())
+    expect(d.getHours()).toBe(10)
+    expect(d.getMinutes()).toBe(30)
+  })
+
+  it('clamps the dragged hour into the visible range', () => {
+    const late = runAtForSlot({ day: 0, hour: 25 }, days, tuesday0830)
+    expect(new Date(late).getHours()).toBe(23)
+    const early = runAtForSlot({ day: 0, hour: -3 }, days, tuesday0830)
+    expect(new Date(early).getHours()).toBe(0)
+  })
+
+  it('falls back to the original runAt when the slot day is out of range', () => {
+    expect(runAtForSlot({ day: 99, hour: 8 }, days, tuesday0830)).toBe(tuesday0830)
   })
 })
 

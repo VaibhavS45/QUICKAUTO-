@@ -382,16 +382,6 @@
   text-align: center;
 }
 
-.shell-menu-backdrop {
-  position: fixed;
-  inset: 0;
-  z-index: 3;
-  border: 0;
-  padding: 0;
-  background: transparent;
-  cursor: default;
-}
-
 .shell-profile-menu {
   position: absolute;
   z-index: 4;

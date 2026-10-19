@@ -24,7 +24,6 @@ export function ProfileMenu({ open, name, email, initials, onClose, onOpenSettin
   if (!open) return null
   return (
     <>
-      <button type="button" className="shell-menu-backdrop" aria-label={t('shell.closeProfileMenu')} onClick={onClose} />
       <div className="shell-profile-menu" role="menu" aria-label={t('shell.profile')}>
         <div className="shell-profile-menu-head">
           <span className="shell-avatar">{initials || 'L'}</span>

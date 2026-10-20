@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { FeatureProps } from '../../contracts/feature.js'
 import type { RunRecord, ScheduleItem } from '../../../shared/contracts/schedule.js'
-import { addDaysKey, dayLabel, localDayKey, pastDayLabel, routineTitle, timeLabel } from './dates.js'
+import type { AutomationCreate } from '../../../shared/contracts/automations.js'
+import { addDaysKey, localDayKey, pastDayLabel, routineTitle, timeLabel } from './dates.js'
 import {
   NODE_H,
   NODE_W,
@@ -18,14 +19,10 @@ import {
   type CanvasKind,
   type CanvasStep
 } from './canvas-steps.js'
-import { blankDraft, blankTrigger, templateToDraft, type BuilderDraft } from './builder-compile.js'
-import { toolDisplayLabel, requirementState } from '../../shell/template-requirements.js'
-import { parseAutomationTab } from '../../shell/nav.js'
-import Builder from './builder.js'
+import { parseAutomationCreate, parseAutomationTab, type AutomationTabId } from '../../shell/nav.js'
 import CanvasDescribeBar from './canvas-describe.js'
-import StartChoice, { type StartKind } from './start-choice.js'
-import WeekCalendar from './week-calendar.js'
-import { UpdatesStream } from '../../shell/UpdatesStream.js'
+import ScheduledTasks from './ScheduledTasks.js'
+import { ConfirmDialog } from './ConfirmDialog.js'
 import './automations.css'
 
 interface Routine {
@@ -37,11 +34,6 @@ interface Routine {
   enabled: boolean
   lastStatus?: string
 }
-
-type Selection =
-  | { kind: 'schedule'; item: ScheduleItem }
-  | { kind: 'run'; run: RunRecord }
-  | { kind: 'routine'; routine: Routine }
 
 interface ZapStep {
   kind: 'trigger' | 'action' | 'gmail'
@@ -60,23 +52,6 @@ export const CANVAS_KINDS: { kind: CanvasKind; label: string; hint: string }[] =
 
 function errorText(reason: unknown): string {
   return reason instanceof Error ? reason.message : String(reason)
-}
-
-function ListIcon(): React.JSX.Element {
-  return (
-    <svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.6" aria-hidden="true">
-      <path d="M2 4h12M2 8h12M2 12h12" strokeLinecap="round" />
-    </svg>
-  )
-}
-
-function CalendarIcon(): React.JSX.Element {
-  return (
-    <svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.4" aria-hidden="true">
-      <rect x="2" y="3" width="12" height="11" rx="1.5" />
-      <path d="M2 6.5h12M5.5 1.5v3M10.5 1.5v3" strokeLinecap="round" />
-    </svg>
-  )
 }
 
 function FilterIcon(): React.JSX.Element {
@@ -145,7 +120,9 @@ export function RunDetailPage({ run, runs, onSelect, onBack }: {
 }): React.JSX.Element {
   return (
     <section className="automations" aria-label="Run details">
-      <AutomationBreadcrumb parent="Updates" current={routineTitle(run.title)} onParentClick={onBack} />
+      <div className="automations-crumbbar">
+        <button type="button" className="automations-backlink" onClick={onBack}>← Back</button>
+      </div>
       <div className="automations-run">
         <article className="automations-run-main" aria-label={routineTitle(run.title)}>
           <p className="automations-detail-kicker">
@@ -176,149 +153,11 @@ export function RunDetailPage({ run, runs, onSelect, onBack }: {
   )
 }
 
-export function routineKindLabel(routine: Routine): string {
-  return routine.tools.length > 1 ? 'Advanced' : 'Scheduled'
-}
-
-function AutomationBreadcrumb({ parent = 'Manage', current, onParentClick }: {
-  parent?: string
-  current: string
-  onParentClick(): void
-}): React.JSX.Element {
-  return (
-    <nav className="automation-breadcrumb" aria-label="Breadcrumb">
-      <button type="button" onClick={onParentClick}>{parent}</button>
-      <span aria-hidden="true">/</span>
-      <strong>{current}</strong>
-    </nav>
-  )
-}
-
-const ENGINE_LABELS: Record<string, string> = {
-  builtin: 'Built-in',
-  opencode: 'OpenCode',
-  pi: 'pi'
-}
-
-export function RoutineRail({ routine, engine, connected, onOpenConnectors }: {
-  routine: Routine
-  engine: string
-  connected: Readonly<Record<string, boolean | undefined>>
-  onOpenConnectors(): void
-}): React.JSX.Element {
-  return (
-    <aside className="manage-rail" aria-label="Automation configuration">
-      <section>
-        <h4>Agent</h4>
-        <p className="rail-group"><span>Model</span></p>
-        <p className="rail-row"><span>{ENGINE_LABELS[engine] ?? (engine || 'Not set')}</span></p>
-      </section>
-      <section>
-        <p className="rail-group"><span>Connectors</span><span>{routine.tools.length}</span></p>
-        {routine.tools.map((id) => {
-          const state = requirementState(id, connected)
-          return (
-            <p className="rail-row" key={id}>
-              <span>{toolDisplayLabel(id)}</span>
-              <span className={`rail-mark is-${state}`} title={state === 'ready' ? 'Connected' : state === 'connect' ? 'Needs connection' : 'Status unavailable'}>
-                {state === 'ready' ? '✓' : state === 'connect' ? '!' : '·'}
-              </span>
-            </p>
-          )
-        })}
-        <button type="button" className="rail-view-all" onClick={onOpenConnectors}>
-          <span>View all</span><span aria-hidden="true">›</span>
-        </button>
-      </section>
-    </aside>
-  )
-}
-
-export function ManageDetail({ routine, runs, onToggle, onRemove, onSelectRun }: {
-  routine: Routine
-  runs: RunRecord[]
-  onToggle(routine: Routine): void
-  onRemove(routine: Routine): void
-  onSelectRun(run: RunRecord): void
-}): React.JSX.Element {
-  const [menuOpen, setMenuOpen] = useState(false)
-  const [section, setSection] = useState<'details' | 'history'>('details')
-  const history = runs.filter((run) => run.routineId === routine.id)
-  return (
-    <div className="manage-detail">
-      <div className="md-top">
-        <span className="md-icon" aria-hidden="true">⟁</span>
-        <span className={`automations-status is-${routine.enabled ? 'active' : 'paused'}`}>
-          <span className={`automations-dot ${routine.enabled ? 'is-succeeded' : 'is-cancelled'}`} />{routine.enabled ? 'Active' : 'Paused'}
-        </span>
-        <div className="md-menu-wrap">
-          <button
-            type="button"
-            aria-label={`Options for ${routineTitle(routine.prompt)}`}
-            aria-expanded={menuOpen}
-            onClick={() => setMenuOpen((open) => !open)}
-          >
-            …
-          </button>
-          {menuOpen && (
-            <div className="automations-menu" role="menu">
-              <button type="button" role="menuitem" onClick={() => { setMenuOpen(false); onToggle(routine) }}>
-                {routine.enabled ? 'Pause' : 'Resume'}
-              </button>
-              <button type="button" role="menuitem" onClick={() => { setMenuOpen(false); onRemove(routine) }}>Delete</button>
-            </div>
-          )}
-        </div>
-      </div>
-      <p className="md-kind">{routineKindLabel(routine)}</p>
-      <h3>{routineTitle(routine.prompt)}</h3>
-      <p className="md-desc">{routine.prompt}</p>
-      <div className="md-tabs" role="tablist" aria-label={`${routineTitle(routine.prompt)} sections`}>
-        <button type="button" role="tab" aria-selected={section === 'details'} onClick={() => setSection('details')}>Details</button>
-        <button type="button" role="tab" aria-selected={section === 'history'} onClick={() => setSection('history')}>History</button>
-      </div>
-      {section === 'details' ? (
-        <>
-          <h4>Title</h4>
-          <p className="md-field">{routineTitle(routine.prompt)}</p>
-          <h4>When</h4>
-          <p className="md-field">Repeat {routine.repeat} at {timeLabel(routine.runAt)}</p>
-          <h4>The agent will</h4>
-          <p className="md-field">{routine.prompt}</p>
-          <details className="md-advanced">
-            <summary>
-              <span><strong>Advanced settings</strong><small>Repeat, tools, and last status.</small></span>
-            </summary>
-            <dl>
-              <div><dt>Repeat</dt><dd>{routine.repeat}</dd></div>
-              <div><dt>Runs at</dt><dd>{timeLabel(routine.runAt)}</dd></div>
-              <div><dt>Tools</dt><dd>{routine.tools.length ? routine.tools.map((t) => `@${t}`).join(' ') : 'none'}</dd></div>
-              {routine.lastStatus && <div><dt>Last status</dt><dd>{routine.lastStatus}</dd></div>}
-            </dl>
-          </details>
-        </>
-      ) : (
-        <>
-          <h4>History</h4>
-          {history.length === 0 && <p className="md-desc">No runs yet.</p>}
-          {history.map((run) => (
-            <button key={run.id} type="button" className="automations-history" onClick={() => onSelectRun(run)}>
-              <span className={`automations-dot is-${run.status}`} />
-              <span>
-                <strong>{new Date(run.endedAt ?? run.startedAt).toLocaleString()}</strong>
-                <small>{run.status.replaceAll('_', ' ')}</small>
-              </span>
-            </button>
-          ))}
-        </>
-      )}
-    </div>
-  )
-}
-
 export default function AutomationsView(props: FeatureProps): React.JSX.Element {
-  const [tab, setTab] = useState<'updates' | 'manage' | 'canvas'>(() => parseAutomationTab(props.initialAutomationTab) ?? 'manage')
-  const [view, setView] = useState<'list' | 'calendar'>('list')
+  // The tab and the open run are route-owned: a top-nav click replaces the
+  // route params, so it always lands on the section the user picked.
+  const tab = parseAutomationTab(props.initialAutomationTab) ?? 'manage'
+  const createKind = parseAutomationCreate(props.initialStartKind)
   const [routines, setRoutines] = useState<Routine[]>([])
   const [runs, setRuns] = useState<RunRecord[]>([])
   const [todayItems, setTodayItems] = useState<ScheduleItem[]>([])
@@ -342,54 +181,20 @@ export default function AutomationsView(props: FeatureProps): React.JSX.Element 
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const [activeOnly, setActiveOnly] = useState(false)
-  const [builderOpen, setBuilderOpen] = useState(false)
-  const [choiceOpen, setChoiceOpen] = useState(false)
+  const [manageDirty, setManageDirty] = useState(false)
+  const [pendingTab, setPendingTab] = useState<AutomationTabId | null>(null)
   const [canvasDescribe, setCanvasDescribe] = useState(false)
   const [canvasPrompt, setCanvasPrompt] = useState('')
   const [canvasBusy, setCanvasBusy] = useState(false)
   const [canvasError, setCanvasError] = useState('')
-  const [builderInitial, setBuilderInitial] = useState<BuilderDraft>(() => blankDraft())
-  const [gmailConnected, setGmailConnected] = useState<boolean | undefined>(undefined)
 
-  useEffect(() => {
-    if (!builderOpen) return
-    let active = true
-    window.app.connectionStatus('gmail')
-      .then((res) => {
-        if (active) setGmailConnected(res.ok ? res.connected : undefined)
-      })
-      .catch(() => {})
-    return () => {
-      active = false
-    }
-  }, [builderOpen])
-  const [selection, setSelection] = useState<Selection | null>(null)
-  const [engine, setEngine] = useState('')
-  const [connected, setConnected] = useState<Record<string, boolean | undefined>>({})
-
-  useEffect(() => {
-    let live = true
-    void Promise.all([window.app.getAgentProvider(), window.app.getConnector(), window.app.connectionStatus('gmail')])
-      .then(([provider, connector, gmail]) => {
-        if (!live) return
-        if (provider.ok && provider.provider) setEngine(provider.provider)
-        const statuses: Record<string, boolean | undefined> = {}
-        for (const service of connector.services ?? []) statuses[service.id] = service.connected
-        statuses.gmail = gmail.ok ? gmail.connected : undefined
-        setConnected(statuses)
-      })
-      .catch(() => {})
-    return () => {
-      live = false
-    }
-  }, [])
 
   const tomorrowKey = addDaysKey(todayKey, 1)
 
   const refresh = useCallback(async (): Promise<void> => {
     const [routineRes, runsRes, todayRes, tomorrowRes] = await Promise.all([
       window.app.routineList(),
-      window.app.recentTasks(20),
+      window.app.recentTasks(50),
       window.app.scheduleToday(),
       window.app.scheduleToday(tomorrowKey)
     ])
@@ -403,15 +208,6 @@ export default function AutomationsView(props: FeatureProps): React.JSX.Element 
     setTomorrowItems(tomorrowRes.schedule.items)
     setError('')
   }, [tomorrowKey])
-
-  const onReschedule = useCallback(async (id: string, runAt: number): Promise<void> => {
-    const res = await window.app.routineUpdate(id, { runAt })
-    if (!res.ok) {
-      setError(res.error || 'Could not reschedule.')
-      throw new Error(res.error || 'Could not reschedule.')
-    }
-    await refresh()
-  }, [refresh, setError])
 
   useEffect(() => {
     let active = true
@@ -432,74 +228,49 @@ export default function AutomationsView(props: FeatureProps): React.JSX.Element 
     }
   }, [refresh])
 
-  const openedTemplate = useRef<string>('')
-  const openedStartKind = useRef<string>('')
+  // "Advanced" starts describe an automation on the canvas instead of the builder.
   useEffect(() => {
-    if (!props.initialTemplate || openedTemplate.current === props.initialTemplate.id) return
-    openedTemplate.current = props.initialTemplate.id
-    setBuilderInitial(templateToDraft(props.initialTemplate))
-    setBuilderOpen(true)
-  }, [props.initialTemplate])
+    if (createKind !== 'advanced') return
+    props.shell.navigate('automations', { automationTab: 'canvas' })
+    setCanvasDescribe(true)
+  }, [createKind, props.shell])
 
+  // Route-driven tab switches ask before dropping unsaved edits.
+  const routeTab = useRef(tab)
   useEffect(() => {
-    if (!props.initialStartKind || openedStartKind.current === props.initialStartKind) return
-    openedStartKind.current = props.initialStartKind
-    if (props.initialStartKind === 'schedule') setBuilderInitial({ ...blankDraft(), mode: 'manual', triggers: [blankTrigger('schedule')] })
-    else if (props.initialStartKind === 'triggered') setBuilderInitial({ ...blankDraft(), mode: 'manual', triggers: [] })
-    else if (props.initialStartKind === 'advanced') {
-      setTab('canvas')
-      setCanvasDescribe(true)
-      return
+    if (routeTab.current === tab) return
+    const next = tab
+    routeTab.current = next
+    if (manageDirty && next !== 'manage') {
+      setPendingTab(next)
+      props.shell.navigate('automations', { automationTab: 'manage' })
     }
-    else return
-    setBuilderOpen(true)
-  }, [props.initialStartKind])
-
-  useEffect(() => {
-    const next = parseAutomationTab(props.initialAutomationTab)
-    if (next) setTab(next)
-  }, [props.initialAutomationTab])
+  }, [tab, manageDirty, props.shell])
 
   useEffect(() => {
     if (!props.focusId || routines.length === 0) return
-    const item =
-      todayItems.find((candidate) => candidate.routineId === props.focusId) ??
-      tomorrowItems.find((candidate) => candidate.routineId === props.focusId)
-    if (item) {
-      setTab('manage')
-      setSelection({ kind: 'schedule', item })
+    const known =
+      routines.some((routine) => routine.id === props.focusId) ||
+      todayItems.some((item) => item.routineId === props.focusId) ||
+      tomorrowItems.some((item) => item.routineId === props.focusId)
+    if (!known) return
+    if (tab !== 'manage') {
+      props.shell.navigate('automations', { automationTab: 'manage', focusId: props.focusId })
     }
-  }, [props.focusId, routines.length, todayItems, tomorrowItems])
+  }, [props.focusId, routines, todayItems, tomorrowItems, tab, props.shell])
 
-  function pickStart(kind: StartKind): void {
-    setChoiceOpen(false)
-    if (kind === 'advanced') {
-      setTab('canvas')
-      setCanvasDescribe(true)
-      return
-    }
-    if (kind === 'schedule') setBuilderInitial({ ...blankDraft(), mode: 'manual', triggers: [blankTrigger('schedule')] })
-    else setBuilderInitial({ ...blankDraft(), mode: 'manual', triggers: [] })
-    setBuilderOpen(true)
+  /** "+ Create" belongs to the Automate section, not to Manage. */
+  function goCreate(): void {
+    props.shell.navigate('home', { startKind: 'choice' })
   }
 
-  function closeCreate(): void {
-    setChoiceOpen(false)
-    setBuilderOpen(false)
-  }
-
-  async function submitBuilder(text: string): Promise<string | null> {
+  async function submitBuilder(create: AutomationCreate, target: AutomationTabId = 'manage'): Promise<string | null> {
     try {
-      const result = await window.app.routineCreate(text)
-      if (!result.ok) throw new Error(result.error || 'Could not create the automation.')
-      setBuilderOpen(false)
+      const result = await window.app.automationsCreate(create)
+      if (!result.ok || !result.automation) throw new Error(result.error || 'Could not create the automation.')
       await refresh()
-      const created = (result as { routine?: Routine }).routine
-      if (created) {
-        setTab('manage')
-        setView('list')
-        setSelection({ kind: 'routine', routine: created })
-      }
+      // Dropping the create param closes the overlay and lands on the target tab.
+      props.shell.navigate('automations', { automationTab: target, focusId: result.automation.id })
       return null
     } catch (reason) {
       return errorText(reason)
@@ -512,42 +283,24 @@ export default function AutomationsView(props: FeatureProps): React.JSX.Element 
     setCanvasBusy(true)
     setCanvasError('')
     try {
-      const failure = await submitBuilder(text)
+      const failure = await submitBuilder({
+        kind: 'advanced',
+        title: text.slice(0, 60),
+        prompt: text,
+        autoApprove: false,
+        runMode: 'separate_task',
+        agent: '',
+        connectors: []
+      }, 'canvas')
       if (failure) {
         setCanvasError(failure)
         return
       }
       setCanvasPrompt('')
       setCanvasDescribe(false)
-      setTab('canvas')
     } finally {
       setCanvasBusy(false)
     }
-  }
-
-  async function toggleRoutine(routine: Routine): Promise<void> {
-    try {
-      const result = await window.app.routineToggle(routine.id, !routine.enabled)
-      if (!result.ok) throw new Error(result.error || 'Could not update the automation.')
-      await refresh()
-    } catch (reason) {
-      setError(errorText(reason))
-    }
-  }
-
-  async function removeRoutine(routine: Routine): Promise<void> {
-    try {
-      const result = await window.app.routineRemove(routine.id)
-      if (!result.ok) throw new Error(result.error || 'Could not delete the automation.')
-      if (selection?.kind === 'routine' && selection.routine.id === routine.id) setSelection(null)
-      await refresh()
-    } catch (reason) {
-      setError(errorText(reason))
-    }
-  }
-
-  function runForRoutine(routineId: string): RunRecord | undefined {
-    return runs.find((run) => run.routineId === routineId)
   }
 
   const visibleRoutines = (activeOnly ? routines.filter((routine) => routine.enabled) : routines).sort((a, b) => {
@@ -559,7 +312,6 @@ export default function AutomationsView(props: FeatureProps): React.JSX.Element 
   })
 
   const canvasRoutine =
-    (selection?.kind === 'routine' ? selection.routine : undefined) ??
     visibleRoutines.find((r) => r.id === props.focusId) ??
     visibleRoutines[0]
   const canvasRoutineKey = canvasRoutine?.id ?? 'blank'
@@ -719,87 +471,9 @@ export default function AutomationsView(props: FeatureProps): React.JSX.Element 
     return () => el.removeEventListener('wheel', onWheel)
   }, [tab])
 
-  const detail = (selection === null || tab === 'updates') ? null : (
-    <aside className="automations-detail" aria-label="Automation details">
-      <button type="button" className="automations-detail-close" aria-label="Close details" onClick={() => setSelection(null)}>×</button>
-      {selection.kind === 'run' && (
-        <>
-          <p className="automations-detail-kicker">Output · {new Date(selection.run.startedAt).toLocaleString()}</p>
-          <h3>{selection.run.title}</h3>
-          <p className={`automations-status is-${selection.run.status}`}>{selection.run.status.replaceAll('_', ' ')}</p>
-          <p className="automations-detail-body">{selection.run.summary || 'No output recorded yet.'}</p>
-        </>
-      )}
-      {selection.kind === 'schedule' && (
-        <>
-          <p className="automations-detail-kicker">{dayLabel(localDayKey(new Date(selection.item.at)), todayKey)} · {timeLabel(selection.item.at)}</p>
-          <h3>{routineTitle(selection.item.title)}</h3>
-          <p className={`automations-status is-${selection.item.status}`}>{selection.item.status}</p>
-          {selection.item.routineId && runForRoutine(selection.item.routineId) && (
-            <>
-              <h4>Latest output</h4>
-              <p className="automations-detail-body">{runForRoutine(selection.item.routineId!)?.summary || 'No output recorded yet.'}</p>
-            </>
-          )}
-        </>
-      )}
-      {selection.kind === 'routine' && (
-        <>
-          <p className="automations-detail-kicker">{selection.routine.enabled ? 'Active' : 'Paused'} · {selection.routine.repeat} · {timeLabel(selection.routine.runAt)}</p>
-          <h3>{routineTitle(selection.routine.prompt)}</h3>
-          <p className="automations-detail-body">{selection.routine.prompt}</p>
-          {selection.routine.lastStatus && <p className="automations-detail-meta">Last status: {selection.routine.lastStatus}</p>}
-          <div className="automations-detail-row">
-            <button type="button" onClick={() => void toggleRoutine(selection.routine)}>
-              {selection.routine.enabled ? 'Pause' : 'Resume'}
-            </button>
-            <button type="button" onClick={() => void removeRoutine(selection.routine)}>Delete</button>
-          </div>
-          <h4>History</h4>
-          {runs.filter((run) => run.routineId === selection.routine.id).length === 0 && (
-            <p className="automations-detail-body">No runs yet.</p>
-          )}
-          {runs.filter((run) => run.routineId === selection.routine.id).map((run) => (
-            <button key={run.id} type="button" className="automations-history" onClick={() => setSelection({ kind: 'run', run })}>
-              <span className={`automations-dot is-${run.status}`} />
-              <span>
-                <strong>{new Date(run.endedAt ?? run.startedAt).toLocaleString()}</strong>
-                <small>{run.status.replaceAll('_', ' ')}</small>
-              </span>
-            </button>
-          ))}
-        </>
-      )}
-    </aside>
-  )
-
-  const creating = choiceOpen || builderOpen
-  const [runId, setRunId] = useState(props.focusRunId ?? '')
-  const openedRunId = useRef('')
-  useEffect(() => {
-    if (!props.focusRunId || openedRunId.current === props.focusRunId) return
-    openedRunId.current = props.focusRunId
-    setRunId(props.focusRunId)
-  }, [props.focusRunId])
-
-  if (creating) {
-    return (
-      <section className="automations is-creating" aria-label="Create automation">
-        <AutomationBreadcrumb current="Schedule" onParentClick={closeCreate} />
-        {choiceOpen && !builderOpen && (
-          <StartChoice onPick={pickStart} onClose={closeCreate} />
-        )}
-        {builderOpen && (
-          <Builder
-            initial={builderInitial}
-            gmailConnected={gmailConnected}
-            onConnect={() => props.shell.openSettings('connectors')}
-            onClose={closeCreate}
-            onSubmit={submitBuilder}
-          />
-        )}
-      </section>
-    )
+  const runId = props.focusRunId ?? ''
+  const goUpdates = (): void => {
+    props.shell.navigate('automations', { automationTab: 'updates' })
   }
 
   if (runId) {
@@ -807,7 +481,9 @@ export default function AutomationsView(props: FeatureProps): React.JSX.Element 
     if (loading) {
       return (
         <section className="automations" aria-label="Run details">
-          <AutomationBreadcrumb parent="Updates" current="Loading" onParentClick={() => setRunId('')} />
+          <div className="automations-crumbbar">
+            <button type="button" className="automations-backlink" onClick={goUpdates}>← Back</button>
+          </div>
           <p className="automations-empty">Loading run…</p>
         </section>
       )
@@ -815,7 +491,9 @@ export default function AutomationsView(props: FeatureProps): React.JSX.Element 
     if (!run) {
       return (
         <section className="automations" aria-label="Run details">
-          <AutomationBreadcrumb parent="Updates" current="Unavailable" onParentClick={() => setRunId('')} />
+          <div className="automations-crumbbar">
+            <button type="button" className="automations-backlink" onClick={goUpdates}>← Back</button>
+          </div>
           <p className="automations-empty">This run is no longer available.</p>
         </section>
       )
@@ -824,8 +502,8 @@ export default function AutomationsView(props: FeatureProps): React.JSX.Element 
       <RunDetailPage
         run={run}
         runs={runs}
-        onSelect={(next) => setRunId(next.id)}
-        onBack={() => setRunId('')}
+        onSelect={(next) => props.shell.navigate('automations', { automationTab: 'updates', focusRunId: next.id })}
+        onBack={goUpdates}
       />
     )
   }
@@ -835,16 +513,6 @@ export default function AutomationsView(props: FeatureProps): React.JSX.Element 
       {tab !== 'canvas' && <div className="automations-toolbar">
         <h1 className="automations-toolbar-title">{tab === 'manage' ? 'Manage' : 'Updates'}</h1>
         <div className="automations-actions">
-          {tab === 'manage' && (
-            <div className="automations-view-toggle" role="tablist" aria-label="Manage view">
-              <button type="button" role="tab" aria-selected={view === 'list'} aria-label="List" title="List" onClick={() => setView('list')}>
-                <ListIcon />
-              </button>
-              <button type="button" role="tab" aria-selected={view === 'calendar'} aria-label="Calendar" title="Calendar" onClick={() => setView('calendar')}>
-                <CalendarIcon />
-              </button>
-            </div>
-          )}
           <button
             type="button"
             className={`automations-filter${activeOnly ? ' is-on' : ''}`}
@@ -855,7 +523,7 @@ export default function AutomationsView(props: FeatureProps): React.JSX.Element 
           >
             <FilterIcon />
           </button>
-          <button type="button" className="automations-create-btn" onClick={() => setChoiceOpen(true)}>+ Create</button>
+          <button type="button" className="automations-create-btn" onClick={goCreate}>+ Create</button>
         </div>
       </div>}
 
@@ -863,75 +531,23 @@ export default function AutomationsView(props: FeatureProps): React.JSX.Element 
       {error && <p className="automations-error" role="alert">{error}</p>}
 
       {!loading && !error && tab === 'updates' && (
-        <UpdatesStream shell={props.shell} />
-      )}
-
-      {!loading && !error && tab === 'manage' && view === 'list' && (
-        <div className={`automations-body manage-layout${selection?.kind === 'routine' ? ' has-selection' : ''}`}>
-          <div className="manage-list" role="listbox" aria-label="Automations">
-            {visibleRoutines.length === 0 && <p className="automations-empty">No automations yet. Use Create to add one.</p>}
-            {visibleRoutines.map((routine) => {
-              const selected = selection?.kind === 'routine' && selection.routine.id === routine.id
-              return (
-                <button
-                  key={routine.id}
-                  type="button"
-                  role="option"
-                  aria-selected={selected}
-                  className={`manage-row${selected ? ' is-active' : ''}`}
-                  onClick={() => setSelection({ kind: 'routine', routine })}
-                >
-                  <span className="manage-row-top">
-                    <span className="manage-row-icon" aria-hidden="true">⟁</span>
-                    <span className={`automations-status is-${routine.enabled ? 'active' : 'paused'}`}>
-                      <span className={`automations-dot ${routine.enabled ? 'is-succeeded' : 'is-cancelled'}`} aria-hidden="true" />
-                      {routine.enabled ? 'Active' : 'Paused'}
-                    </span>
-                  </span>
-                  <span className="manage-row-kind">{routineKindLabel(routine)} automation</span>
-                  <strong>{routineTitle(routine.prompt)}</strong>
-                  <span className="manage-row-desc">{routine.prompt}</span>
-                </button>
-              )
-            })}
-          </div>
-          {selection?.kind === 'routine' ? (
-            <>
-              <ManageDetail
-                routine={selection.routine}
-                runs={runs}
-                onToggle={(routine) => void toggleRoutine(routine)}
-                onRemove={(routine) => void removeRoutine(routine)}
-                onSelectRun={(run) => setSelection({ kind: 'run', run })}
-              />
-              <RoutineRail
-                routine={selection.routine}
-                engine={engine}
-                connected={connected}
-                onOpenConnectors={() => props.shell.openSettings('connectors')}
-              />
-            </>
-          ) : detail}
+        <div className="automations-body updates-body">
+          <UpdatesList
+            runs={runs}
+            todayKey={todayKey}
+            onSelect={(run) => props.shell.navigate('automations', { automationTab: 'updates', focusRunId: run.id })}
+          />
         </div>
       )}
 
-      {!loading && !error && tab === 'manage' && view === 'calendar' && (
-        <div className="automations-calendar">
-          <WeekCalendar
-            events={visibleRoutines.map((routine) => ({
-              id: routine.id,
-              title: routineTitle(routine.prompt),
-              meta: `${timeLabel(routine.runAt)} · ${routine.repeat} · ${routine.enabled ? 'active' : 'paused'}`,
-              at: routine.runAt,
-              repeat: routine.repeat,
-              enabled: routine.enabled,
-              tools: routine.tools
-            }))}
-            onOpen={(id) => {
-              const routine = visibleRoutines.find((candidate) => candidate.id === id)
-              if (routine) setSelection({ kind: 'routine', routine })
-            }}
-            onReschedule={onReschedule}
+      {!loading && !error && tab === 'manage' && (
+        <div className="automations-body manage-body">
+          <ScheduledTasks
+            onlyActive={activeOnly}
+            focusAutomationId={props.focusId}
+            onCreate={goCreate}
+            onOpenRun={(runId) => props.shell.navigate('automations', { automationTab: 'updates', focusRunId: runId })}
+            onDirtyChange={setManageDirty}
           />
         </div>
       )}
@@ -1115,6 +731,21 @@ export default function AutomationsView(props: FeatureProps): React.JSX.Element 
           </div>
 
         </div>
+      )}
+
+      {pendingTab && (
+        <ConfirmDialog
+          title="Leave without saving?"
+          body="This automation has unsaved changes."
+          confirmLabel="Leave"
+          onCancel={() => setPendingTab(null)}
+          onConfirm={() => {
+            const target = pendingTab
+            setPendingTab(null)
+            setManageDirty(false)
+            props.shell.navigate('automations', { automationTab: target })
+          }}
+        />
       )}
     </section>
   )

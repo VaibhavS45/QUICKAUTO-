@@ -197,6 +197,22 @@ export default function ShellApp(): React.JSX.Element {
     }
   }, [profileMenuOpen, notificationsOpen])
 
+  const navigate = useCallback((view: string, params: Record<string, unknown> = {}): void => {
+    const apply = () => flushSync(() => {
+      router.navigate(view, params)
+      setChatError('')
+      setNotificationsOpen(false)
+      setProfileMenuOpen(false)
+    })
+    // Router updates state synchronously via its subscribe(setRoute), so
+    // flushSync commits the new DOM inside the transition snapshot.
+    if (document.startViewTransition && !window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+      document.startViewTransition(apply)
+    } else {
+      apply()
+    }
+  }, [router])
+
   useEffect(() => {
     const unsubscribe = router.subscribe(setRoute)
     const onKeyDown = (event: KeyboardEvent): void => {
@@ -214,7 +230,7 @@ export default function ShellApp(): React.JSX.Element {
       unsubscribe()
       window.removeEventListener('keydown', onKeyDown)
     }
-  }, [router])
+  }, [router, navigate])
 
   const handleAgentEvent = useCallback((event: AgentEvent): void => {
     if (!runIdRef.current) {
@@ -250,23 +266,7 @@ export default function ShellApp(): React.JSX.Element {
 
   useEffect(() => window.app.onAgentEvent(handleAgentEvent), [handleAgentEvent])
 
-  function navigate(view: string, params: Record<string, unknown> = {}): void {
-    const apply = () => flushSync(() => {
-      router.navigate(view, params)
-      setChatError('')
-      setNotificationsOpen(false)
-      setProfileMenuOpen(false)
-    })
-    // Router updates state synchronously via its subscribe(setRoute), so
-    // flushSync commits the new DOM inside the transition snapshot.
-    if (document.startViewTransition && !window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
-      document.startViewTransition(apply)
-    } else {
-      apply()
-    }
-  }
-
-  const shellApi: ShellApi = {
+  const shellApi = useMemo<ShellApi>(() => ({
     navigate,
     openCalendarWindow: () => {},
     openSettings: (tab) => window.app.openSettingsWindow(tab),
@@ -275,7 +275,7 @@ export default function ShellApp(): React.JSX.Element {
     updatesStream: () => window.app.updatesStream(),
     onUpdatesChanged: (cb) => window.app.onUpdatesChanged(cb),
     getRunLog: (runId) => window.app.getRunLog(runId)
-  }
+  }), [navigate])
   const initials = displayName(profile, t('shell.defaultProfile')).split(/\s+/).slice(0, 2).map((part) => part[0]?.toUpperCase()).join('')
 
   async function sendMessage(text: string): Promise<boolean> {
@@ -511,14 +511,14 @@ export default function ShellApp(): React.JSX.Element {
                     onOpenSettings={() => window.app.openSettingsWindow('agents')}
                     onOpenConnections={() => window.app.openSettingsWindow('connectors')}
                     onOpenAutomations={() => navigate('automations')}
-                    onSelectTemplate={(template: AutomationTemplate) => navigate('automations', { templateId: template.id })}
+                    onSelectTemplate={(template: AutomationTemplate) => navigate('home', { templateId: template.id })}
                   />
                 </>
               ) : (
                 <p className="shell-empty-state">{chatLoading ? t('shell.loadingChats') : t('shell.chatGone')}</p>
               )
             ) : (
-              <HomeView shell={shellApi} />
+              <HomeView shell={shellApi} params={route.params} />
             )}
           </div>
         </section>

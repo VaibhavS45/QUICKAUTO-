@@ -17,19 +17,6 @@ describe('start choice', () => {
     expect(html).toContain('<svg')
   })
 
-  it('renders the describe form for advanced automations', () => {
-    const html = renderToStaticMarkup(
-      createElement(Builder, {
-        initial: { ...blankDraft(), mode: 'describe', describe: 'At 6pm ping me' },
-        gmailConnected: true,
-        onConnect: () => {},
-        onClose: () => {},
-        onSubmit: async () => null
-      })
-    )
-    expect(html).toContain('Describe when the automation should run')
-  })
-
   it('renders the event trigger form for triggered tasks', () => {
     const html = renderToStaticMarkup(
       createElement(Builder, {
@@ -45,7 +32,7 @@ describe('start choice', () => {
     expect(html).toContain('a new conversation is started')
   })
 
-  it('renders the schedule pills first and Add Trigger when empty', () => {
+  it('renders the schedule pills first and Add Trigger next to them', () => {
     const scheduled = renderToStaticMarkup(
       createElement(Builder, {
         initial: blankDraft(),
@@ -58,17 +45,9 @@ describe('start choice', () => {
     expect(scheduled).toContain('When')
     expect(scheduled).toContain('Daily')
     expect(scheduled).toContain('AM 9:00')
-    const empty = renderToStaticMarkup(
-      createElement(Builder, {
-        initial: { ...blankDraft(), triggers: [] },
-        gmailConnected: true,
-        onConnect: () => {},
-        onClose: () => {},
-        onSubmit: async () => null
-      })
-    )
-    expect(empty).toContain('When this happens')
-    expect(empty).toContain('Add Trigger')
+    // The schedule row and the trigger button live together: adding an event
+    // never hides the time.
+    expect(scheduled).toContain('Add Trigger')
   })
 
   it('shows a single task box with a working add menu', () => {
@@ -92,13 +71,23 @@ describe('start choice', () => {
 
   it('renders the automation settings menu rows', () => {
     const html = renderToStaticMarkup(
-      createElement(BuilderSettingsMenu, { onPickConnectors: () => {}, onPickAgent: () => {} })
+      createElement(BuilderSettingsMenu, {
+        agent: '',
+        agents: [],
+        onAgent: () => {},
+        connectorOptions: [],
+        connectors: [],
+        onConnectors: () => {},
+        onConnectApps: () => {},
+        expiresAt: '',
+        onExpiresAt: () => {}
+      })
     )
     for (const label of ['Confirmations', 'Run in', 'Agent', 'Connectors', 'Project', 'Cloud computer', 'Local folder', 'Expiration date']) {
       expect(html).toContain(label)
     }
-    expect(html).toContain('Approval required')
+    expect(html).toContain('Writes blocked')
     expect(html).toContain('Separate task')
-    expect(html).toContain('Manus 2.0')
+    expect(html).toContain('Scheduled runs are read-only')
   })
 })

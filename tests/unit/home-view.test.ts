@@ -25,6 +25,18 @@ describe('home view', () => {
     expect(html).toContain('No updates yet')
     expect(html).not.toContain('<textarea')
   })
+
+  it('opens the create flow from the route, with its own breadcrumb', () => {
+    const choice = renderToStaticMarkup(createElement(HomeView, { shell, params: { startKind: 'choice' } }))
+    expect(choice).toContain('Choose how it starts')
+    expect(choice).toContain('New automation')
+    const builder = renderToStaticMarkup(createElement(HomeView, { shell, params: { startKind: 'schedule' } }))
+    expect(builder).toContain('Schedule automation')
+    expect(builder).toContain('Manus will')
+    const home = renderToStaticMarkup(createElement(HomeView, { shell }))
+    expect(home).not.toContain('Schedule automation')
+    expect(home).not.toContain('New automation')
+  })
 })
 
 describe('start deep link', () => {

@@ -3,7 +3,7 @@ import { renderToStaticMarkup } from 'react-dom/server'
 import { describe, expect, it } from 'vitest'
 import ShellApp from '../../src/renderer/shell/ShellApp.js'
 import { createFeatureProps } from '../../src/renderer/shell/FeatureHost.js'
-import { AUTOMATION_TABS, PRIMARY_NAV, parseAutomationTab, splitNav } from '../../src/renderer/shell/nav.js'
+import { AUTOMATION_TABS, PRIMARY_NAV, parseAutomationCreate, parseAutomationTab, splitNav } from '../../src/renderer/shell/nav.js'
 import type { ShellApi } from '../../src/renderer/contracts/feature.js'
 
 const shell: ShellApi = {
@@ -74,5 +74,13 @@ describe('top bar nav', () => {
     expect(parseAutomationTab('canvas')).toBe('canvas')
     expect(parseAutomationTab('nope')).toBe(undefined)
     expect(createFeatureProps(shell, { automationTab: 'updates' }).initialAutomationTab).toBe('updates')
+  })
+
+  it('parses the create-flow steps carried by the route', () => {
+    expect(parseAutomationCreate('choice')).toBe('choice')
+    expect(parseAutomationCreate('schedule')).toBe('schedule')
+    expect(parseAutomationCreate('triggered')).toBe('triggered')
+    expect(parseAutomationCreate('advanced')).toBe('advanced')
+    expect(parseAutomationCreate('nope')).toBe(undefined)
   })
 })

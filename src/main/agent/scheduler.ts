@@ -9,7 +9,7 @@ import { TOOL_IDS, parseMentionedTools, type ToolId } from '../../shared/types.j
  * the tray so timers can fire (see index.ts window-all-closed).
  */
 
-export const RepeatSchema = z.enum(['once', 'daily', 'weekdays'])
+export const RepeatSchema = z.enum(['once', 'daily', 'weekdays', 'weekly', 'monthly'])
 export type Repeat = z.infer<typeof RepeatSchema>
 
 export const RoutineSchema = z.object({
@@ -21,7 +21,17 @@ export const RoutineSchema = z.object({
   enabled: z.boolean(),
   createdAt: z.number().int(),
   lastRunAt: z.number().int().optional(),
-  lastStatus: z.string().max(200).optional()
+  lastStatus: z.string().max(200).optional(),
+  // Scheduled Tasks fields (additive; older routines simply lack them).
+  /** Display title, stored apart from the prompt. */
+  title: z.string().max(200).optional(),
+  kind: z.enum(['schedule', 'advanced']).optional(),
+  /** 0 = Sunday. Used by repeat "weekly". */
+  weekdays: z.array(z.number().int().min(0).max(6)).max(7).optional(),
+  autoApprove: z.boolean().optional(),
+  runMode: z.enum(['separate_task', 'same_task']).optional(),
+  agent: z.string().max(120).optional(),
+  expiresAt: z.number().int().optional()
 })
 export type Routine = z.infer<typeof RoutineSchema>
 
@@ -112,6 +122,28 @@ export function nextFire(r: Routine, nowMs: number): number | null {
   cand.setHours(at.getHours(), at.getMinutes(), 0, 0)
   if (cand.getTime() <= nowMs) cand.setDate(cand.getDate() + 1)
   if (r.repeat === 'daily') return cand.getTime()
+  if (r.repeat === 'weekly') {
+    // Weekly repeats on the picked weekdays (0 = Sunday); defaults to the
+    // weekday of the stored time.
+    const days = r.weekdays?.length ? r.weekdays : [at.getDay()]
+    for (let i = 0; i < 8; i += 1) {
+      if (days.includes(cand.getDay())) return cand.getTime()
+      cand.setDate(cand.getDate() + 1)
+    }
+    return cand.getTime()
+  }
+  if (r.repeat === 'monthly') {
+    // Same day-of-month every month, clamped to short months.
+    const base = new Date(nowMs)
+    const day = at.getDate()
+    for (let i = 0; i < 14; i += 1) {
+      const probe = new Date(base.getFullYear(), base.getMonth() + i, 1, at.getHours(), at.getMinutes(), 0, 0)
+      const lastDay = new Date(probe.getFullYear(), probe.getMonth() + 1, 0).getDate()
+      const next = new Date(probe.getFullYear(), probe.getMonth(), Math.min(day, lastDay), at.getHours(), at.getMinutes(), 0, 0)
+      if (next.getTime() > nowMs) return next.getTime()
+    }
+    return null
+  }
   // weekdays: skip Sat/Sun.
   while (cand.getDay() === 0 || cand.getDay() === 6) cand.setDate(cand.getDate() + 1)
   return cand.getTime()
@@ -186,18 +218,48 @@ export class Scheduler {
     return { ...r }
   }
 
-  update(id: string, patch: { prompt?: string; repeat?: Repeat; runAt?: number; tools?: string[]; enabled?: boolean }): Routine | null {
+  update(id: string, patch: {
+    prompt?: string
+    title?: string
+    kind?: 'schedule' | 'advanced'
+    repeat?: Repeat
+    weekdays?: number[]
+    runAt?: number
+    tools?: string[]
+    enabled?: boolean
+    autoApprove?: boolean
+    runMode?: 'separate_task' | 'same_task'
+    agent?: string
+    expiresAt?: number | null
+  }): Routine | null {
     const r = this.routines.find((x) => x.id === id)
     if (!r) return null
     if (typeof patch.prompt === 'string' && patch.prompt.trim()) r.prompt = patch.prompt.trim()
+    if (typeof patch.title === 'string' && patch.title.trim()) r.title = patch.title.trim()
+    if (patch.kind) r.kind = patch.kind
     if (patch.repeat) r.repeat = patch.repeat
+    if (Array.isArray(patch.weekdays)) r.weekdays = patch.weekdays
     if (typeof patch.runAt === 'number' && patch.runAt > 0) r.runAt = patch.runAt
     if (Array.isArray(patch.tools)) r.tools = patch.tools
     if (typeof patch.enabled === 'boolean') r.enabled = patch.enabled
+    if (typeof patch.autoApprove === 'boolean') r.autoApprove = patch.autoApprove
+    if (patch.runMode) r.runMode = patch.runMode
+    if (typeof patch.agent === 'string') r.agent = patch.agent
+    if (patch.expiresAt === null) r.expiresAt = undefined
+    else if (typeof patch.expiresAt === 'number') r.expiresAt = patch.expiresAt
     this.persist()
     if (r.enabled) this.arm(r)
     else this.disarm(id)
     return { ...r }
+  }
+
+  /** Add a fully-formed routine (Scheduled Tasks creates these directly). */
+  add(routine: Routine): Routine {
+    const parsed = RoutineSchema.parse(routine)
+    this.routines.push(parsed)
+    this.persist()
+    if (parsed.enabled) this.arm(parsed)
+    return { ...parsed }
   }
 
   markRan(id: string, status: string, atMs?: number): void {

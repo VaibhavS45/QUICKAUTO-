@@ -38,6 +38,13 @@ export function parseAutomationTab(value: unknown): AutomationTabId | undefined 
   return value === 'updates' || value === 'manage' || value === 'canvas' ? value : undefined
 }
 
+/** Steps of the create flow, driven by the `startKind` route param. */
+export type AutomationCreateKind = 'choice' | 'schedule' | 'triggered' | 'advanced'
+
+export function parseAutomationCreate(value: unknown): AutomationCreateKind | undefined {
+  return value === 'choice' || value === 'schedule' || value === 'triggered' || value === 'advanced' ? value : undefined
+}
+
 export const SIDEBAR_SECTIONS = ['Chats'] as const
 
 export const FORBIDDEN_LABELS = [

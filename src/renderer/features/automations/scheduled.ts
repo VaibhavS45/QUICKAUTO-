@@ -60,7 +60,7 @@ export function automationMeta(automation: Automation): string {
     case 'weekly':
       return `Schedule · Repeat weekly on ${weekdayText(schedule.weekdays)} at ${schedule.time}`
     case 'monthly':
-      return `Schedule · Repeat monthly at ${schedule.time}`
+      return `Schedule · Repeat monthly on day ${schedule.dayOfMonth ?? 1} at ${schedule.time}`
   }
 }
 

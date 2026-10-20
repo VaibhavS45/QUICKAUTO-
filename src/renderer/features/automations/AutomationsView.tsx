@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { FeatureProps } from '../../contracts/feature.js'
 import type { RunRecord, ScheduleItem } from '../../../shared/contracts/schedule.js'
-import type { AutomationCreate } from '../../../shared/contracts/automations.js'
+import type { Automation } from '../../../shared/contracts/automations.js'
 import { addDaysKey, localDayKey, pastDayLabel, routineTitle, timeLabel } from './dates.js'
 import {
   NODE_H,
@@ -9,6 +9,7 @@ import {
   WORLD,
   blankStep,
   canvasStepsForRoutine,
+  canvasToPatch,
   edgePath,
   insertCanvasStep,
   moveCanvasStep,
@@ -159,6 +160,7 @@ export default function AutomationsView(props: FeatureProps): React.JSX.Element 
   const tab = parseAutomationTab(props.initialAutomationTab) ?? 'manage'
   const createKind = parseAutomationCreate(props.initialStartKind)
   const [routines, setRoutines] = useState<Routine[]>([])
+  const [automations, setAutomations] = useState<Automation[]>([])
   const [runs, setRuns] = useState<RunRecord[]>([])
   const [todayItems, setTodayItems] = useState<ScheduleItem[]>([])
   const [tomorrowItems, setTomorrowItems] = useState<ScheduleItem[]>([])
@@ -182,6 +184,7 @@ export default function AutomationsView(props: FeatureProps): React.JSX.Element 
   const [error, setError] = useState('')
   const [activeOnly, setActiveOnly] = useState(false)
   const [manageDirty, setManageDirty] = useState(false)
+  const [manageSelectedId, setManageSelectedId] = useState('')
   const [pendingTab, setPendingTab] = useState<AutomationTabId | null>(null)
   const [canvasDescribe, setCanvasDescribe] = useState(false)
   const [canvasPrompt, setCanvasPrompt] = useState('')
@@ -192,17 +195,19 @@ export default function AutomationsView(props: FeatureProps): React.JSX.Element 
   const tomorrowKey = addDaysKey(todayKey, 1)
 
   const refresh = useCallback(async (): Promise<void> => {
-    const [routineRes, runsRes, todayRes, tomorrowRes] = await Promise.all([
+    const [routineRes, runsRes, todayRes, tomorrowRes, automationsRes] = await Promise.all([
       window.app.routineList(),
       window.app.recentTasks(50),
       window.app.scheduleToday(),
-      window.app.scheduleToday(tomorrowKey)
+      window.app.scheduleToday(tomorrowKey),
+      window.app.automationsList()
     ])
     if (!routineRes.ok) throw new Error('Could not load automations.')
     if (!runsRes.ok || !runsRes.runs) throw new Error(runsRes.error || 'Could not load outputs.')
     if (!todayRes.ok || !todayRes.schedule) throw new Error(todayRes.error || 'Could not load today’s schedule.')
     if (!tomorrowRes.ok || !tomorrowRes.schedule) throw new Error(tomorrowRes.error || 'Could not load tomorrow’s schedule.')
     setRoutines(routineRes.routines as Routine[])
+    if (automationsRes.ok && automationsRes.automations) setAutomations(automationsRes.automations)
     setRuns(runsRes.runs)
     setTodayItems(todayRes.schedule.items)
     setTomorrowItems(tomorrowRes.schedule.items)
@@ -247,6 +252,16 @@ export default function AutomationsView(props: FeatureProps): React.JSX.Element 
     }
   }, [tab, manageDirty, props.shell])
 
+  // The open automation belongs to the Manage section: leaving it closes the detail.
+  useEffect(() => {
+    if (tab !== 'manage') setManageSelectedId('')
+  }, [tab])
+
+  // The detail page owns the top row: the Manage title, filter and Create button
+  // would only repeat what the breadcrumb already says.
+  const manageDetailOpen = tab === 'manage' && manageSelectedId !== '' &&
+    automations.some((automation) => automation.id === manageSelectedId)
+
   useEffect(() => {
     if (!props.focusId || routines.length === 0) return
     const known =
@@ -264,38 +279,25 @@ export default function AutomationsView(props: FeatureProps): React.JSX.Element 
     props.shell.navigate('home', { startKind: 'choice' })
   }
 
-  async function submitBuilder(create: AutomationCreate, target: AutomationTabId = 'manage'): Promise<string | null> {
-    try {
-      const result = await window.app.automationsCreate(create)
-      if (!result.ok || !result.automation) throw new Error(result.error || 'Could not create the automation.')
-      await refresh()
-      // Dropping the create param closes the overlay and lands on the target tab.
-      props.shell.navigate('automations', { automationTab: target, focusId: result.automation.id })
-      return null
-    } catch (reason) {
-      return errorText(reason)
-    }
-  }
-
+  /**
+   * The canvas takes free text, so it goes through the prose path: the
+   * scheduler reads the time and the @tools out of the sentence and stores a
+   * routine the automation view reads back.
+   */
   async function submitCanvasDescribe(): Promise<void> {
     const text = canvasPrompt.trim()
     if (!text || canvasBusy) return
     setCanvasBusy(true)
     setCanvasError('')
     try {
-      const failure = await submitBuilder({
-        kind: 'advanced',
-        title: text.slice(0, 60),
-        prompt: text,
-        autoApprove: false,
-        runMode: 'separate_task',
-        agent: '',
-        connectors: []
-      }, 'canvas')
-      if (failure) {
-        setCanvasError(failure)
+      const res = await window.app.routineCreate(text)
+      if (!res.ok) {
+        setCanvasError(res.error || 'Could not create the automation.')
         return
       }
+      await refresh()
+      const id = (res as { routine?: { id?: string } }).routine?.id
+      if (id) props.shell.navigate('automations', { automationTab: 'canvas', focusId: id })
       setCanvasPrompt('')
       setCanvasDescribe(false)
     } finally {
@@ -303,18 +305,19 @@ export default function AutomationsView(props: FeatureProps): React.JSX.Element 
     }
   }
 
-  const visibleRoutines = (activeOnly ? routines.filter((routine) => routine.enabled) : routines).sort((a, b) => {
-    if (props.focusId) {
-      if (a.id === props.focusId) return -1
-      if (b.id === props.focusId) return 1
+  // The canvas shows the same automation the Manage list edits.
+  const canvasAutomation =
+    automations.find((automation) => automation.id === props.focusId) ??
+    automations[0]
+  const canvasRoutine = canvasAutomation
+    ? {
+      prompt: canvasAutomation.prompt ?? canvasAutomation.title,
+      tools: canvasAutomation.connectors,
+      runAt: canvasAutomation.nextRunAt ? new Date(canvasAutomation.nextRunAt).getTime() : Date.now(),
+      repeat: canvasAutomation.schedule?.type ?? 'daily'
     }
-    return Number(b.enabled) - Number(a.enabled) || a.runAt - b.runAt
-  })
-
-  const canvasRoutine =
-    visibleRoutines.find((r) => r.id === props.focusId) ??
-    visibleRoutines[0]
-  const canvasRoutineKey = canvasRoutine?.id ?? 'blank'
+    : undefined
+  const canvasRoutineKey = canvasAutomation?.id ?? 'blank'
 
   useEffect(() => {
     if (canvasRoutineKey !== canvasKey) {
@@ -355,7 +358,26 @@ export default function AutomationsView(props: FeatureProps): React.JSX.Element 
       : editKind === 'filter' ? 'Filter'
       : editKind === 'delay' ? 'Delay'
       : editTitle.trim() || 'Action'
-    setCanvasSteps((steps) => updateCanvasStep(steps, selectedStep.id, { kind: editKind, title, subtitle: editEvent.trim() || blankStep(editKind).subtitle }))
+    const next = updateCanvasStep(canvasSteps, selectedStep.id, {
+      kind: editKind,
+      title,
+      subtitle: editEvent.trim() || blankStep(editKind).subtitle
+    })
+    setCanvasSteps(next)
+    void persistCanvas(next)
+  }
+
+  /** Write the edited nodes back onto the automation they came from. */
+  async function persistCanvas(steps: CanvasStep[]): Promise<void> {
+    if (!canvasAutomation) return
+    const patch = canvasToPatch(steps, canvasAutomation)
+    if (Object.keys(patch).length === 0) return
+    const res = await window.app.automationsUpdate(canvasAutomation.id, patch)
+    if (!res.ok || !res.automation) {
+      setError(res.error || 'Could not save the automation.')
+      return
+    }
+    setAutomations((list) => list.map((item) => (item.id === res.automation!.id ? res.automation! : item)))
   }
 
   const stepsRef = useRef(canvasSteps)
@@ -510,7 +532,7 @@ export default function AutomationsView(props: FeatureProps): React.JSX.Element 
 
   return (
     <section className={`automations${tab === 'canvas' ? ' is-canvas-mode' : ''}`} aria-label="Automations">
-      {tab !== 'canvas' && <div className="automations-toolbar">
+      {tab !== 'canvas' && !manageDetailOpen && <div className="automations-toolbar">
         <h1 className="automations-toolbar-title">{tab === 'manage' ? 'Manage' : 'Updates'}</h1>
         <div className="automations-actions">
           <button
@@ -545,6 +567,8 @@ export default function AutomationsView(props: FeatureProps): React.JSX.Element 
           <ScheduledTasks
             onlyActive={activeOnly}
             focusAutomationId={props.focusId}
+            selectedId={manageSelectedId}
+            onSelect={setManageSelectedId}
             onCreate={goCreate}
             onOpenRun={(runId) => props.shell.navigate('automations', { automationTab: 'updates', focusRunId: runId })}
             onDirtyChange={setManageDirty}

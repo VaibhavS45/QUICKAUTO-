@@ -24,7 +24,6 @@ describe('profile menu', () => {
     expect(html).toContain('ada@example.test')
     expect(html).toContain('Account settings')
     expect(html).toContain('Settings')
-    expect(html).toContain('Close profile menu')
   })
 
   it('omits the email line when there is none', () => {

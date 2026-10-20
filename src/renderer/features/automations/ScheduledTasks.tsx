@@ -11,17 +11,19 @@ import './scheduled.css'
  * Scheduled Tasks: the card grid, the detail/edit page and the shared
  * "⋯" actions menu.
  */
-export default function ScheduledTasks({ onCreate, onOpenRun, onDirtyChange, onlyActive = false, focusAutomationId = '' }: {
+export default function ScheduledTasks({ onCreate, onOpenRun, onDirtyChange, onSelect, selectedId = '', onlyActive = false, focusAutomationId = '' }: {
   onCreate(): void
   onOpenRun(runId: string): void
   onDirtyChange(dirty: boolean): void
+  /** The owner keeps the open automation: the section hides its title row for it. */
+  onSelect(id: string): void
+  selectedId?: string
   onlyActive?: boolean
   focusAutomationId?: string
 }): React.JSX.Element {
   const [automations, setAutomations] = useState<Automation[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
-  const [selectedId, setSelectedId] = useState('')
   const [focusSchedule, setFocusSchedule] = useState(0)
   const [dirty, setDirty] = useState(false)
   const [leaving, setLeaving] = useState(false)
@@ -54,8 +56,10 @@ export default function ScheduledTasks({ onCreate, onOpenRun, onDirtyChange, onl
 
   useEffect(() => {
     if (!focusAutomationId) return
-    setSelectedId(focusAutomationId)
-  }, [focusAutomationId])
+    // Only a real automation opens the detail: a stale route id leaves the list.
+    if (!automations.some((automation) => automation.id === focusAutomationId)) return
+    onSelect(focusAutomationId)
+  }, [automations, focusAutomationId, onSelect])
 
   const selected = automations.find((automation) => automation.id === selectedId) ?? null
   const visible = onlyActive ? automations.filter((automation) => automation.status === 'active') : automations
@@ -96,7 +100,7 @@ export default function ScheduledTasks({ onCreate, onOpenRun, onDirtyChange, onl
       })()
     },
     editSchedule: (automation: Automation) => {
-      setSelectedId(automation.id)
+      onSelect(automation.id)
       setFocusSchedule((value) => value + 1)
     },
     remove: (automation: Automation) => {
@@ -107,18 +111,18 @@ export default function ScheduledTasks({ onCreate, onOpenRun, onDirtyChange, onl
           return
         }
         setAutomations((list) => list.filter((item) => item.id !== automation.id))
-        if (selectedId === automation.id) setSelectedId('')
+        if (selectedId === automation.id) onSelect('')
         push({ message: 'Automation deleted.' })
       })()
     }
-  }), [onOpenRun, push, selectedId])
+  }), [onOpenRun, onSelect, push, selectedId])
 
   function leaveDetail(): void {
     if (dirty) {
       setLeaving(true)
       return
     }
-    setSelectedId('')
+    onSelect('')
   }
 
   return (
@@ -149,7 +153,7 @@ export default function ScheduledTasks({ onCreate, onOpenRun, onDirtyChange, onl
                 <AutomationCard
                   key={automation.id}
                   automation={automation}
-                  onOpen={() => setSelectedId(automation.id)}
+                  onOpen={() => onSelect(automation.id)}
                 />
               ))}
             </div>
@@ -165,7 +169,7 @@ export default function ScheduledTasks({ onCreate, onOpenRun, onDirtyChange, onl
           onConfirm={() => {
             setLeaving(false)
             setDirty(false)
-            setSelectedId('')
+            onSelect('')
           }}
         />
       )}

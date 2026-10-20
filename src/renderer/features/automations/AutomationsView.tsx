@@ -21,6 +21,7 @@ import {
   type CanvasStep
 } from './canvas-steps.js'
 import { parseAutomationCreate, parseAutomationTab, type AutomationTabId } from '../../shell/nav.js'
+import { useBreadcrumbs, type BreadcrumbItem } from '../../components/layout/Breadcrumbs.js'
 import CanvasDescribeBar from './canvas-describe.js'
 import ScheduledTasks from './ScheduledTasks.js'
 import { ConfirmDialog } from './ConfirmDialog.js'
@@ -154,6 +155,17 @@ export function RunDetailPage({ run, runs, onSelect, onBack }: {
   )
 }
 
+/**
+ * The trail of the automations view. The app shell renders it, once, top left.
+ * The Updates section shows none: it is a feed, not a place in the tree.
+ */
+export function automationsTrail(tab: AutomationTabId, title: string | null): string[] {
+  if (tab === 'updates') return []
+  if (tab === 'canvas') return ['Canvas']
+  if (title !== null) return ['Automations', title]
+  return ['Manage']
+}
+
 export default function AutomationsView(props: FeatureProps): React.JSX.Element {
   // The tab and the open run are route-owned: a top-nav click replaces the
   // route params, so it always lands on the section the user picked.
@@ -186,6 +198,7 @@ export default function AutomationsView(props: FeatureProps): React.JSX.Element 
   const [manageDirty, setManageDirty] = useState(false)
   const [manageSelectedId, setManageSelectedId] = useState('')
   const [pendingTab, setPendingTab] = useState<AutomationTabId | null>(null)
+  const [pendingLeave, setPendingLeave] = useState(false)
   const [canvasDescribe, setCanvasDescribe] = useState(false)
   const [canvasPrompt, setCanvasPrompt] = useState('')
   const [canvasBusy, setCanvasBusy] = useState(false)
@@ -257,10 +270,32 @@ export default function AutomationsView(props: FeatureProps): React.JSX.Element 
     if (tab !== 'manage') setManageSelectedId('')
   }, [tab])
 
-  // The detail page owns the top row: the Manage title, filter and Create button
-  // would only repeat what the breadcrumb already says.
+  // The detail page owns the top row: the filter and Create button would
+  // only repeat what the breadcrumb already says.
   const manageDetailOpen = tab === 'manage' && manageSelectedId !== '' &&
     automations.some((automation) => automation.id === manageSelectedId)
+
+  // Leaving the open automation asks before dropping unsaved edits. The flag
+  // lives in a ref so the breadcrumb's click handler stays stable.
+  const manageDirtyRef = useRef(manageDirty)
+  manageDirtyRef.current = manageDirty
+  const closeDetail = useCallback((): void => {
+    if (manageDirtyRef.current) {
+      setPendingLeave(true)
+      return
+    }
+    setManageSelectedId('')
+  }, [])
+
+  // The trail of this screen. The app shell renders it, once, top left.
+  const selectedAutomation = manageDetailOpen
+    ? automations.find((automation) => automation.id === manageSelectedId) ?? null
+    : null
+  const trailLabels = automationsTrail(tab, selectedAutomation ? selectedAutomation.title : null)
+  const trail = trailLabels.map((label, index): BreadcrumbItem => (
+    index === 0 && trailLabels.length > 1 ? { label, onClick: closeDetail } : { label }
+  ))
+  useBreadcrumbs(trail)
 
   useEffect(() => {
     if (!props.focusId || routines.length === 0) return
@@ -532,22 +567,23 @@ export default function AutomationsView(props: FeatureProps): React.JSX.Element 
 
   return (
     <section className={`automations${tab === 'canvas' ? ' is-canvas-mode' : ''}`} aria-label="Automations">
-      {tab !== 'canvas' && !manageDetailOpen && <div className="automations-toolbar">
-        <h1 className="automations-toolbar-title">{tab === 'manage' ? 'Manage' : 'Updates'}</h1>
-        <div className="automations-actions">
-          <button
-            type="button"
-            className={`automations-filter${activeOnly ? ' is-on' : ''}`}
-            aria-label={activeOnly ? 'Show all' : 'Filter active only'}
-            aria-pressed={activeOnly}
-            title={activeOnly ? 'Show all' : 'Show active only'}
-            onClick={() => setActiveOnly((value) => !value)}
-          >
-            <FilterIcon />
-          </button>
-          <button type="button" className="automations-create-btn" onClick={goCreate}>+ Create</button>
+      {tab === 'manage' && !manageDetailOpen && (
+        <div className="automations-toolbar">
+          <div className="automations-actions">
+            <button
+              type="button"
+              className={`automations-filter${activeOnly ? ' is-on' : ''}`}
+              aria-label={activeOnly ? 'Show all' : 'Filter active only'}
+              aria-pressed={activeOnly}
+              title={activeOnly ? 'Show all' : 'Show active only'}
+              onClick={() => setActiveOnly((value) => !value)}
+            >
+              <FilterIcon />
+            </button>
+            <button type="button" className="automations-create-btn" onClick={goCreate}>+ Create</button>
+          </div>
         </div>
-      </div>}
+      )}
 
       {loading && <p className="automations-empty">Loading automations…</p>}
       {error && <p className="automations-error" role="alert">{error}</p>}
@@ -768,6 +804,19 @@ export default function AutomationsView(props: FeatureProps): React.JSX.Element 
             setPendingTab(null)
             setManageDirty(false)
             props.shell.navigate('automations', { automationTab: target })
+          }}
+        />
+      )}
+      {pendingLeave && (
+        <ConfirmDialog
+          title="Leave without saving?"
+          body="This automation has unsaved changes."
+          confirmLabel="Leave"
+          onCancel={() => setPendingLeave(false)}
+          onConfirm={() => {
+            setPendingLeave(false)
+            setManageDirty(false)
+            setManageSelectedId('')
           }}
         />
       )}

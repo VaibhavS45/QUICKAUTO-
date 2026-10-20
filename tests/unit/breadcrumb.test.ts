@@ -1,34 +1,31 @@
 import { createElement } from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { describe, expect, it } from 'vitest'
-import { Breadcrumb, BreadcrumbItem, BreadcrumbList, BreadcrumbPage, BreadcrumbSeparator } from '../../src/renderer/components/ui/breadcrumb.js'
+import { Breadcrumbs } from '../../src/renderer/components/layout/Breadcrumbs.js'
 
-describe('breadcrumb', () => {
-  it('renders the trail with a chevron separator and the current page', () => {
-    const html = renderToStaticMarkup(createElement(
-      Breadcrumb,
-      { className: 'automations-crumbbar' },
-      createElement(
-        BreadcrumbList,
-        null,
-        createElement(BreadcrumbItem, null, 'Schedule automation'),
-        createElement(BreadcrumbSeparator, null),
-        createElement(BreadcrumbItem, null, createElement(BreadcrumbPage, null, 'Inbox digest'))
-      )
-    ))
-    expect(html).toContain('aria-label="breadcrumb"')
-    expect(html).toContain('automations-crumbbar')
-    expect(html).toContain('Schedule automation')
+describe('global breadcrumb', () => {
+  it('renders the trail with a "/" separator and the current page marked', () => {
+    const html = renderToStaticMarkup(createElement(Breadcrumbs, {
+      items: [{ label: 'Automations' }, { label: 'Say hello' }]
+    }))
+    expect(html).toContain('aria-label="Breadcrumb"')
+    expect(html).toContain('Automations')
+    expect(html).toContain('Say hello')
+    expect(html).toContain('/')
     expect(html).toContain('aria-current="page"')
-    expect(html).toContain('lucide-chevron-right')
   })
 
-  it('keeps crumbs as plain text, not buttons', () => {
-    const html = renderToStaticMarkup(createElement(
-      Breadcrumb,
-      null,
-      createElement(BreadcrumbList, null, createElement(BreadcrumbItem, null, 'Schedule automation'))
-    ))
-    expect(html).not.toContain('<button')
+  it('keeps the last item as plain text and the parents as buttons', () => {
+    const html = renderToStaticMarkup(createElement(Breadcrumbs, {
+      items: [{ label: 'Automations', onClick: () => {} }, { label: 'Say hello' }]
+    }))
+    expect(html).toContain('<button')
+    expect(html).toMatch(/aria-current="page"[^>]*>Say hello</)
+    expect(html).not.toMatch(/aria-current="page"[^>]*>Automations</)
+  })
+
+  it('renders nothing without a trail', () => {
+    const html = renderToStaticMarkup(createElement(Breadcrumbs, { items: [] }))
+    expect(html).not.toContain('aria-label="Breadcrumb"')
   })
 })

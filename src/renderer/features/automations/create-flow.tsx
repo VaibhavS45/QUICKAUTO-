@@ -1,19 +1,10 @@
 import { useEffect, useMemo, useState } from 'react'
 import type { AutomationCreate } from '../../../shared/contracts/automations.js'
 import type { AutomationTemplate } from '../../../shared/contracts/automation-templates.js'
-import { Breadcrumb, BreadcrumbItem, BreadcrumbList, BreadcrumbPage } from '../../components/ui/breadcrumb.js'
 import type { AutomationCreateKind } from '../../shell/nav.js'
 import { blankDraft, templateToDraft, type BuilderDraft } from './builder-compile.js'
 import Builder from './builder.js'
 import StartChoice, { type StartKind } from './start-choice.js'
-
-/** What the create flow is called in its breadcrumb. */
-export const CREATE_CRUMB: Record<AutomationCreateKind, string> = {
-  choice: 'New automation',
-  schedule: 'Schedule automation',
-  triggered: 'Trigger',
-  advanced: 'Advanced automation'
-}
 
 /**
  * The create flow: pick how it starts, then fill the builder. It belongs to
@@ -29,9 +20,13 @@ export function CreateFlow({ kind, template, onPick, onClose, onCreated, onConne
 }): React.JSX.Element {
   const [gmailConnected, setGmailConnected] = useState<boolean | undefined>(undefined)
   const builderMode = kind === 'schedule' || kind === 'triggered' || template !== undefined
-  // Every automation runs on a schedule, so the builder always opens with the
-  // time row; a triggered task adds its app event on top of it.
-  const initial = useMemo<BuilderDraft>(() => (template ? templateToDraft(template) : blankDraft()), [template])
+  // A schedule starts on the clock, a triggered task starts on an app event.
+  // The builder shows one or the other, never both in the same "When" box.
+  const initial = useMemo<BuilderDraft>(() => {
+    if (template) return templateToDraft(template)
+    const draft = blankDraft()
+    return kind === 'triggered' ? { ...draft, triggers: [] } : draft
+  }, [template, kind])
 
   useEffect(() => {
     if (!builderMode) return
@@ -48,15 +43,6 @@ export function CreateFlow({ kind, template, onPick, onClose, onCreated, onConne
 
   return (
     <>
-      <div className="automations-crumbbar">
-        <Breadcrumb>
-          <BreadcrumbList>
-            <BreadcrumbItem>
-              <BreadcrumbPage>{template ? template.title : CREATE_CRUMB[kind]}</BreadcrumbPage>
-            </BreadcrumbItem>
-          </BreadcrumbList>
-        </Breadcrumb>
-      </div>
       {kind === 'choice' && <StartChoice onPick={onPick} onClose={onClose} />}
       {builderMode && (
         <Builder

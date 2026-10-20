@@ -32,7 +32,7 @@ describe('start choice', () => {
     expect(html).toContain('a new conversation is started')
   })
 
-  it('renders the schedule pills first and Add Trigger next to them', () => {
+  it('keeps the schedule and the trigger apart', () => {
     const scheduled = renderToStaticMarkup(
       createElement(Builder, {
         initial: blankDraft(),
@@ -45,9 +45,21 @@ describe('start choice', () => {
     expect(scheduled).toContain('When')
     expect(scheduled).toContain('Daily')
     expect(scheduled).toContain('AM 9:00')
-    // The schedule row and the trigger button live together: adding an event
-    // never hides the time.
-    expect(scheduled).toContain('Add Trigger')
+    // A schedule starts on the clock: no trigger button next to the time.
+    expect(scheduled).not.toContain('Add Trigger')
+
+    const triggered = renderToStaticMarkup(
+      createElement(Builder, {
+        initial: { ...blankDraft(), triggers: [] },
+        gmailConnected: true,
+        onConnect: () => {},
+        onClose: () => {},
+        onSubmit: async () => null
+      })
+    )
+    expect(triggered).toContain('When this happens')
+    expect(triggered).toContain('+ Add Trigger')
+    expect(triggered).not.toContain('AM 9:00')
   })
 
   it('shows a single task box with a working add menu', () => {

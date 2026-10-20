@@ -5,7 +5,6 @@ import type { RunRecord } from '../../../shared/contracts/schedule.js'
 import type { AgentProfile } from '../../../main/agent/agent-store.js'
 import { AutomationActionsMenu } from './AutomationActionsMenu.js'
 import { ConnectorPicker } from './ConnectorPicker.js'
-import { Breadcrumb, BreadcrumbItem, BreadcrumbLink, BreadcrumbList, BreadcrumbPage, BreadcrumbSeparator } from '../../components/ui/breadcrumb.js'
 import {
   WEEKDAY_LABELS,
   draftFrom,
@@ -37,10 +36,9 @@ function SettingRow({ label, description, children }: {
 }
 
 /** Detail / edit page for one Scheduled Task. */
-export function AutomationDetail({ automation, focusSchedule = 0, onBack, onSaved, onToast, onOpenRun, onDirtyChange }: {
+export function AutomationDetail({ automation, focusSchedule = 0, onSaved, onToast, onOpenRun, onDirtyChange }: {
   automation: Automation
   focusSchedule?: number
-  onBack(): void
   onSaved(next: Automation): void
   onToast(message: string): void
   onOpenRun(runId: string): void
@@ -162,19 +160,6 @@ export function AutomationDetail({ automation, focusSchedule = 0, onBack, onSave
 
   return (
     <section className="st-detail" aria-label={`${automation.title} details`}>
-      <div className="automations-crumbbar is-inline">
-        <Breadcrumb>
-          <BreadcrumbList>
-            <BreadcrumbItem>
-              <BreadcrumbLink href="#app" onClick={(event) => { event.preventDefault(); onBack() }}>Manage</BreadcrumbLink>
-            </BreadcrumbItem>
-            <BreadcrumbSeparator />
-            <BreadcrumbItem>
-              <BreadcrumbPage>{automation.title}</BreadcrumbPage>
-            </BreadcrumbItem>
-          </BreadcrumbList>
-        </Breadcrumb>
-      </div>
       <header className="st-detail-head">
         <span className="st-icon-tile is-small" aria-hidden="true">{icon}</span>
         <div className="st-detail-headings">

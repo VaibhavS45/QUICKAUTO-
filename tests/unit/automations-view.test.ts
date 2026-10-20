@@ -2,7 +2,7 @@ import { createElement } from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { describe, expect, it, vi } from 'vitest'
 import { addDaysKey, dayLabel, localDayKey, monthGrid, monthLabel, pastDayLabel, routineOccursOn, routineTitle } from '../../src/renderer/features/automations/dates.js'
-import AutomationsView, { UpdatesList, stepsForRoutine } from '../../src/renderer/features/automations/AutomationsView.js'
+import AutomationsView, { UpdatesList, automationsTrail, stepsForRoutine } from '../../src/renderer/features/automations/AutomationsView.js'
 import type { ShellApi } from '../../src/renderer/contracts/feature.js'
 
 const shell: ShellApi = {
@@ -63,9 +63,9 @@ describe('AutomationsView', () => {
     expect(html).toContain('Create')
   })
 
-  it('updates tab shows the calendar only, without the list view toggle', () => {
+  it('updates tab shows the run feed only, without the section toolbar', () => {
     const html = renderToStaticMarkup(createElement(AutomationsView, { shell, initialAutomationTab: 'updates' }))
-    expect(html).toContain('Updates')
+    expect(html).not.toContain('automations-toolbar')
     expect(html).not.toContain('aria-label="List"')
     expect(html).not.toContain('automations-view-toggle')
   })
@@ -93,12 +93,18 @@ describe('AutomationsView', () => {
 
   it('takes the section from the route so a top-nav click lands on it', () => {
     const updates = renderToStaticMarkup(createElement(AutomationsView, { shell, initialAutomationTab: 'updates' }))
-    expect(updates).toContain('Updates')
+    expect(updates).not.toContain('automations-toolbar')
     const canvas = renderToStaticMarkup(createElement(AutomationsView, { shell, initialAutomationTab: 'canvas' }))
     expect(canvas).toContain('is-canvas-mode')
     const manage = renderToStaticMarkup(createElement(AutomationsView, { shell, initialAutomationTab: 'manage' }))
-    expect(manage).toContain('Manage')
+    expect(manage).toContain('automations-toolbar')
     expect(manage).not.toContain('is-canvas-mode')
+  })
+
+  it('leaves the breadcrumb to the app shell: no page renders its own', () => {
+    const manage = renderToStaticMarkup(createElement(AutomationsView, { shell, initialAutomationTab: 'manage' }))
+    expect(manage).not.toContain('aria-label="Breadcrumb"')
+    expect(manage).not.toContain('automations-toolbar-title')
   })
 
   it('opens the run page from the route so a nav click can close it', () => {
@@ -124,6 +130,16 @@ describe('AutomationsView', () => {
     expect(html).toContain('Today digest body.')
     expect(html).toContain('Yesterday digest body.')
   })
+})
 
+describe('automations trail', () => {
+  it('names the section of every tab and hides the Updates feed', () => {
+    expect(automationsTrail('manage', null)).toEqual(['Manage'])
+    expect(automationsTrail('canvas', null)).toEqual(['Canvas'])
+    expect(automationsTrail('updates', null)).toEqual([])
+  })
 
+  it('nests the open automation under its section', () => {
+    expect(automationsTrail('manage', 'Say hello')).toEqual(['Automations', 'Say hello'])
+  })
 })

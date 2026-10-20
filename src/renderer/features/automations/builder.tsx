@@ -544,7 +544,8 @@ export default function Builder(props: BuilderProps): React.JSX.Element {
   }
 
   const hasEvent = triggers.some((t) => t.kind === 'event')
-  const heading = hasEvent ? 'When this happens' : 'When'
+  // No trigger yet means the event picker is what the user picks next.
+  const heading = hasEvent || triggers.length === 0 ? 'When this happens' : 'When'
 
   const picker = pickerOpen && (
     <div className="picker-panel" role="menu" aria-label="Choose a trigger">
@@ -805,7 +806,7 @@ export default function Builder(props: BuilderProps): React.JSX.Element {
                     </div>
                   ))}
 
-                  {!hasEvent && (
+                  {triggers.length === 0 && (
                     <button type="button" className="builder-addtrig" onClick={() => setPickerOpen((v) => !v)} aria-expanded={pickerOpen}>
                       + Add Trigger
                     </button>

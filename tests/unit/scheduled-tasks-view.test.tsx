@@ -86,7 +86,6 @@ describe('actions menu', () => {
     const card = render(createElement(AutomationCard, { automation: automation(), onOpen: () => {} }))
     const detail = render(createElement(AutomationDetail, {
       automation: automation(),
-      onBack: () => {},
       onSaved: () => {},
       onToast: () => {},
       onOpenRun: () => {},
@@ -101,7 +100,6 @@ describe('Scheduled Task detail page', () => {
   it('keeps the title and the prompt in separate fields', () => {
     const html = render(createElement(AutomationDetail, {
       automation: automation(),
-      onBack: () => {},
       onSaved: () => {},
       onToast: () => {},
       onOpenRun: () => {},
@@ -117,7 +115,6 @@ describe('Scheduled Task detail page', () => {
   it('shows the schedule row, the approvals card and the advanced settings', () => {
     const html = render(createElement(AutomationDetail, {
       automation: automation(),
-      onBack: () => {},
       onSaved: () => {},
       onToast: () => {},
       onOpenRun: () => {},
@@ -136,7 +133,6 @@ describe('Scheduled Task detail page', () => {
   it('disables the rows the app cannot offer yet', () => {
     const html = render(createElement(AutomationDetail, {
       automation: automation(),
-      onBack: () => {},
       onSaved: () => {},
       onToast: () => {},
       onOpenRun: () => {},

@@ -35,15 +35,7 @@
   margin-inline: auto;
 }
 
-.automations-toolbar-title {
-  margin: 0;
-  color: #e7e7e9;
-  font-size: 20px;
-  font-weight: 600;
-  letter-spacing: -0.02em;
-}
-
-/* Breadcrumb / back row: top-left of the content, aligned with the toolbar. */
+/* Back row of the run page. The trail itself lives in the app shell. */
 .automations-crumbbar {
   display: flex;
   align-items: center;
@@ -51,19 +43,6 @@
   margin: 0 auto;
   padding: 20px 32px 0;
   box-sizing: border-box;
-}
-
-.automations-crumbbar ol {
-  margin: 0;
-  padding: 0;
-  list-style: none;
-}
-
-/* Inside a section body the row already has padding: no container geometry. */
-.automations-crumbbar.is-inline {
-  width: 100%;
-  margin: 0 0 18px;
-  padding: 0;
 }
 
 .automations-backlink {
@@ -2549,7 +2528,6 @@
 
 /* Day mode: light surfaces for automations pages. The canvas drawing surface
    (.automations-canvas) intentionally stays dark in both modes. */
-.light .automations-toolbar-title,
 .light .automations-card-body strong,
 .light .updates-day > h3,
 .light .updates-row-meta strong,

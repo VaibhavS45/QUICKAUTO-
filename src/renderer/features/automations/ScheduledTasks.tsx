@@ -3,7 +3,6 @@ import type { Automation } from '../../../shared/contracts/automations.js'
 import { AutomationActionsProvider, type AutomationActions } from './automation-actions.js'
 import { AutomationCard } from './AutomationCard.js'
 import { AutomationDetail } from './AutomationDetail.js'
-import { ConfirmDialog } from './ConfirmDialog.js'
 import { ToastStack, useToasts } from './toast.js'
 import './scheduled.css'
 
@@ -26,7 +25,6 @@ export default function ScheduledTasks({ onCreate, onOpenRun, onDirtyChange, onS
   const [error, setError] = useState('')
   const [focusSchedule, setFocusSchedule] = useState(0)
   const [dirty, setDirty] = useState(false)
-  const [leaving, setLeaving] = useState(false)
   const { toasts, push, dismiss } = useToasts()
 
   const load = useCallback(async (): Promise<void> => {
@@ -63,6 +61,11 @@ export default function ScheduledTasks({ onCreate, onOpenRun, onDirtyChange, onS
 
   const selected = automations.find((automation) => automation.id === selectedId) ?? null
   const visible = onlyActive ? automations.filter((automation) => automation.status === 'active') : automations
+
+  // A closed detail has no unsaved edits left: the owner may leave the tab.
+  useEffect(() => {
+    if (!selected) onDirtyChange(false)
+  }, [selected, onDirtyChange])
 
   function replace(automation: Automation): void {
     setAutomations((list) => list.map((item) => (item.id === automation.id ? automation : item)))
@@ -117,14 +120,6 @@ export default function ScheduledTasks({ onCreate, onOpenRun, onDirtyChange, onS
     }
   }), [onOpenRun, onSelect, push, selectedId])
 
-  function leaveDetail(): void {
-    if (dirty) {
-      setLeaving(true)
-      return
-    }
-    onSelect('')
-  }
-
   return (
     <AutomationActionsProvider value={actions}>
       {loading && <p className="st-note">Loading automations…</p>}
@@ -133,7 +128,6 @@ export default function ScheduledTasks({ onCreate, onOpenRun, onDirtyChange, onS
         <AutomationDetail
           automation={selected}
           focusSchedule={focusSchedule}
-          onBack={leaveDetail}
           onSaved={replace}
           onToast={(message) => push({ message })}
           onOpenRun={onOpenRun}
@@ -159,19 +153,6 @@ export default function ScheduledTasks({ onCreate, onOpenRun, onDirtyChange, onS
             </div>
           )}
         </>
-      )}
-      {leaving && (
-        <ConfirmDialog
-          title="Leave without saving?"
-          body="This automation has unsaved changes."
-          confirmLabel="Leave"
-          onCancel={() => setLeaving(false)}
-          onConfirm={() => {
-            setLeaving(false)
-            setDirty(false)
-            onSelect('')
-          }}
-        />
       )}
       <ToastStack toasts={toasts} onDismiss={dismiss} />
     </AutomationActionsProvider>

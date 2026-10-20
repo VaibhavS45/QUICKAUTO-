@@ -26,16 +26,24 @@ describe('home view', () => {
     expect(html).not.toContain('<textarea')
   })
 
-  it('opens the create flow from the route, with its own breadcrumb', () => {
+  it('opens the create flow from the route, as a dialog without a breadcrumb', () => {
     const choice = renderToStaticMarkup(createElement(HomeView, { shell, params: { startKind: 'choice' } }))
     expect(choice).toContain('Choose how it starts')
-    expect(choice).toContain('New automation')
+    expect(choice).not.toContain('aria-label="Breadcrumb"')
     const builder = renderToStaticMarkup(createElement(HomeView, { shell, params: { startKind: 'schedule' } }))
-    expect(builder).toContain('Schedule automation')
     expect(builder).toContain('Manus will')
+    expect(builder).not.toContain('aria-label="Breadcrumb"')
     const home = renderToStaticMarkup(createElement(HomeView, { shell }))
-    expect(home).not.toContain('Schedule automation')
-    expect(home).not.toContain('New automation')
+    expect(home).not.toContain('Manus will')
+  })
+
+  it('opens the schedule and the trigger as separate forms', () => {
+    const schedule = renderToStaticMarkup(createElement(HomeView, { shell, params: { startKind: 'schedule' } }))
+    expect(schedule).toContain('AM 9:00')
+    expect(schedule).not.toContain('Add Trigger')
+    const triggered = renderToStaticMarkup(createElement(HomeView, { shell, params: { startKind: 'triggered' } }))
+    expect(triggered).toContain('+ Add Trigger')
+    expect(triggered).not.toContain('AM 9:00')
   })
 })
 

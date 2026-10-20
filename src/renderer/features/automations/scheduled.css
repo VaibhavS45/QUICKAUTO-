@@ -7,17 +7,19 @@
 .st-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 24px;
-  width: 100%;
+  gap: 16px 12px;
+  width: min(100%, 768px);
+  margin-inline: auto;
   align-content: start;
 }
 
 .st-card {
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: 8px;
+  min-width: 0;
   min-height: 168px;
-  padding: 32px;
+  padding: 16px;
   border: 1px solid #29292f;
   border-radius: 16px;
   background: #1e1e20;
@@ -57,18 +59,18 @@
 .st-icon-tile {
   display: grid;
   place-items: center;
-  width: 64px;
-  height: 64px;
+  width: 32px;
+  height: 32px;
   border: 1px solid #2c2c32;
-  border-radius: 16px;
+  border-radius: 9px;
   color: #cfcfd6;
   background: #232326;
 }
 
 .st-icon-tile.is-small {
-  width: 44px;
-  height: 44px;
-  border-radius: 12px;
+  width: 32px;
+  height: 32px;
+  border-radius: 9px;
 }
 
 .st-status {
@@ -135,12 +137,13 @@
 
 .st-preview {
   margin: 0;
+  display: -webkit-box;
   overflow: hidden;
   color: #8c8c93;
   font-size: 13px;
   line-height: 1.5;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 3;
 }
 
 .st-empty {
@@ -185,9 +188,9 @@
 /* ---- Detail page ---- */
 
 .st-detail {
-  width: min(100%, 1000px);
+  width: min(100%, 768px);
   margin: 0 auto;
-  padding: 8px 0 40px;
+  padding: 20px 0 40px;
   overflow-y: auto;
 }
 
@@ -209,8 +212,7 @@
   display: flex;
   align-items: flex-start;
   gap: 16px;
-  margin-top: 16px;
-  padding-bottom: 20px;
+  padding-bottom: 24px;
   border-bottom: 1px solid #2a2a2f;
 }
 
@@ -228,9 +230,9 @@
 .st-detail-title {
   margin: 0;
   color: #ececef;
-  font-size: 20px;
+  font-size: 16px;
   font-weight: 600;
-  letter-spacing: -0.01em;
+  line-height: 1.4;
 }
 
 .st-detail-actions {
@@ -243,24 +245,24 @@
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  padding: 4px 10px;
-  border: 1px solid #2c2c32;
-  border-radius: 9999px;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
   color: #9a9aa2;
-  background: #212124;
   font-size: 12px;
 }
 
 .st-tabs {
   display: flex;
   gap: 4px;
-  margin: 20px 0 24px;
+  margin: 24px 0;
 }
 
 .st-tabs button {
-  padding: 6px 14px;
+  min-height: 32px;
+  padding: 0 12px;
   border: 0;
-  border-radius: 9999px;
+  border-radius: 9px;
   color: #9a9aa2;
   background: transparent;
   font: inherit;
@@ -280,7 +282,7 @@
 
 .st-field {
   display: grid;
-  gap: 8px;
+  gap: 12px;
 }
 
 .st-field label {
@@ -294,10 +296,10 @@
 .st-textarea {
   width: 100%;
   box-sizing: border-box;
-  padding: 0 14px;
-  height: 42px;
+  padding: 0 12px;
+  height: 36px;
   border: 1px solid #2c2c32;
-  border-radius: 10px;
+  border-radius: 9px;
   color: #e7e7e9;
   background: #212124;
   font: inherit;
@@ -314,8 +316,8 @@
 
 .st-textarea {
   height: auto;
-  min-height: 260px;
-  padding: 12px 14px;
+  min-height: 200px;
+  padding: 10px 12px;
   resize: vertical;
   line-height: 1.55;
 }
@@ -341,7 +343,7 @@
   flex-wrap: wrap;
   align-items: center;
   gap: 10px;
-  padding: 14px 16px;
+  padding: 4px;
   border: 1px solid #2c2c32;
   border-radius: 12px;
   background: #212124;
@@ -386,7 +388,7 @@
   align-items: center;
   justify-content: space-between;
   gap: 20px;
-  padding: 20px 24px;
+  padding: 12px 16px;
   border: 1px solid #2a2a2f;
   border-radius: 14px;
   background: #1e1e20;
@@ -394,7 +396,7 @@
 
 .st-panel.is-collapsible {
   display: block;
-  padding: 20px 24px 8px;
+  padding: 12px 16px 4px;
 }
 
 .st-panel-head {
@@ -743,9 +745,14 @@
 @media (max-width: 860px) {
   .st-grid {
     grid-template-columns: minmax(0, 1fr);
+    width: 100%;
   }
 
   .st-card {
-    padding: 24px;
+    padding: 16px;
+  }
+
+  .st-detail {
+    width: 100%;
   }
 }

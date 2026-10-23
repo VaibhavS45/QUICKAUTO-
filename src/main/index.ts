@@ -63,6 +63,8 @@ import type { RunSource } from '../shared/agent.js'
 import type { RunLogRecord } from '../shared/contracts/schedule.js'
 import { ChatStore, type ChatStoreStorage } from './shell/chat-store.js'
 import { registerChatIpc } from './shell/chat-ipc.js'
+import { AutomationService } from './automations/automation-service.js'
+import { registerAutomationIpc } from './automations/automation-ipc.js'
 import { createShellRuntime } from './shell/runtime.js'
 import { createSettingsShellRuntime } from './shell/settings-runtime.js'
 
@@ -232,11 +234,25 @@ class ElectronRoutineStore implements RoutineStore {
 const scheduledActive = new Set<string>()
 /** Assigned inside wireIpc (needs startAgentRun + Notification scope). */
 let fireRoutine: (r: Routine) => void = () => {}
+/** Assigned inside wireIpc (needs startAgentRun scope). */
+let runAutomationTest: (r: Routine) => string = () => ''
 
 const scheduler = new Scheduler(new ElectronRoutineStore(), {
   isRunning: (id) => scheduledActive.has(id),
   fire: (routine) => fireRoutine(routine)
 })
+
+const automationService = new AutomationService({
+  scheduler,
+  runTest: (routine) => runAutomationTest(routine)
+})
+
+/** System prompt of the agent profile an automation picked. */
+function agentSystemPrompt(agentId?: string): string | undefined {
+  if (!agentId) return undefined
+  const agent = settingsShellRuntime.agents.list().find((entry) => entry.id === agentId)
+  return agent?.systemPrompt.trim() || undefined
+}
 
 let budgetGuard: BudgetGuard | null = null
 /** Singleton guard; recreated (with counts carried over) when reset day changes. */
@@ -343,11 +359,22 @@ function wireIpc(): void {
   registerChatIpc(ipcMain, chatStore)
   settingsShellRuntime.registerIpc(ipcMain)
   fireRoutine = (routine) => {
-    startAgentRun(routine.prompt, routine.tools, 'scheduled', routine.id, undefined, undefined, undefined, routine.runAt)
+    // Expired automations pause themselves and never fire.
+    if (routine.expiresAt !== undefined && routine.expiresAt <= Date.now()) {
+      scheduler.setEnabled(routine.id, false)
+      return
+    }
+    startAgentRun(routine.prompt, routine.tools, 'scheduled', routine.id, undefined, agentSystemPrompt(routine.agent), undefined, routine.runAt)
     shellRuntime.notify({ kind: 'info', title: 'Automation started', body: routine.prompt.slice(0, 200) })
     shellRuntime.notificationsChanged()
     new Notification({ title: 'Palette routine fired', body: routine.prompt.slice(0, 200) }).show()
   }
+  runAutomationTest = (routine) =>
+    startAgentRun(routine.prompt, routine.tools, 'scheduled', routine.id, undefined, agentSystemPrompt(routine.agent), undefined, Date.now())
+  registerAutomationIpc(ipcMain, automationService, async (id) => {
+    const runs = await shellRuntime.scheduleService.listRecentRuns(50)
+    return runs.filter((run) => run.routineId === id)
+  })
   ipcMain.handle(IpcChannels.getModelSettings, async () => settingsService.getPublicState())
 
   ipcMain.handle(IpcChannels.agentProviderGet, () => ({ ok: true as const, provider: agentProviderService.get() }))

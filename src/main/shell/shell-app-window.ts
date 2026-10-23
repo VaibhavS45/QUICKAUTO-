@@ -1,6 +1,7 @@
 import { app, BrowserWindow } from 'electron'
 import { join } from 'node:path'
 import { preloadPath } from '../preload-path.js'
+import { TRAFFIC_LIGHT_X, TRAFFIC_LIGHT_Y } from '../../shared/titlebar.js'
 
 let win: BrowserWindow | null = null
 
@@ -27,7 +28,7 @@ export function openShellAppWindow(): BrowserWindow {
     // ponytail: transparent only on macOS (frameless there); keep the native
     // frame on Windows/Linux where transparency needs frameless windows.
     transparent: process.platform === 'darwin',
-    trafficLightPosition: process.platform === 'darwin' ? { x: 12, y: 11 } : undefined,
+    trafficLightPosition: process.platform === 'darwin' ? { x: TRAFFIC_LIGHT_X, y: TRAFFIC_LIGHT_Y } : undefined,
     webPreferences: {
       preload: preloadPath(),
       contextIsolation: true,

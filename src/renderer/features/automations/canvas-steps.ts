@@ -1,3 +1,5 @@
+import type { Automation, AutomationSchedule } from '../../../shared/contracts/automations.js'
+
 export type CanvasKind = 'trigger' | 'action' | 'gmail' | 'filter' | 'delay'
 
 export interface CanvasStep {
@@ -29,6 +31,96 @@ function timeLabelLocal(at: number): string {
 function titleOf(prompt: string): string {
   const first = prompt.split('\n')[0] ?? prompt
   return first.length > 80 ? `${first.slice(0, 80)}…` : first
+}
+
+/** "9:00 AM" / "09:00" → "09:00". */
+export function parseClock(text: string): string | null {
+  const m = /^(\d{1,2})(?::(\d{2}))?\s*(am|pm)?$/i.exec(text.trim())
+  if (!m) return null
+  let hours = Number(m[1])
+  const minutes = m[2] ? Number(m[2]) : 0
+  const ap = m[3]?.toLowerCase()
+  if (ap === 'pm' && hours < 12) hours += 12
+  if (ap === 'am' && hours === 12) hours = 0
+  if (hours > 23 || minutes > 59) return null
+  return `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}`
+}
+
+/**
+ * Read the trigger node back into a schedule. The node shows
+ * "<type> · <time>", so an edited node can carry a new time or frequency.
+ */
+export function parseScheduleSummary(text: string, automation: Automation): AutomationSchedule | null {
+  const [type, time] = text.split('·').map((part) => part.trim())
+  const clock = parseClock(time ?? '')
+  if (!clock) return null
+  const current = automation.schedule
+  const next = automation.nextRunAt ? new Date(automation.nextRunAt) : new Date()
+  switch (type) {
+    case 'once':
+      return { type: 'once', time: clock, date: current?.type === 'once' && current.date ? current.date : localDate(next) }
+    case 'weekly':
+      return {
+        type: 'weekly',
+        time: clock,
+        weekdays: current?.type === 'weekly' && current.weekdays?.length ? [...current.weekdays] : [next.getDay()]
+      }
+    case 'monthly':
+      return {
+        type: 'monthly',
+        time: clock,
+        dayOfMonth: current?.type === 'monthly' && current.dayOfMonth ? current.dayOfMonth : next.getDate()
+      }
+    case 'daily':
+      return { type: 'daily', time: clock }
+    default:
+      return null
+  }
+}
+
+function localDate(date: Date): string {
+  const month = String(date.getMonth() + 1).padStart(2, '0')
+  const day = String(date.getDate()).padStart(2, '0')
+  return `${date.getFullYear()}-${month}-${day}`
+}
+
+/** What the node edits mean for the automation they came from. */
+export interface CanvasPatch {
+  prompt?: string
+  connectors?: string[]
+  schedule?: AutomationSchedule
+}
+
+/**
+ * The tool a connector node stands for. The title names the app (Gmail,
+ * Sheets, GitHub); a generic node keeps its tool id in the subtitle.
+ */
+function toolOfStep(step: CanvasStep): string {
+  const title = step.title.toLowerCase()
+  if (step.kind === 'gmail' || /gmail|email/.test(title)) return 'gmail'
+  if (/sheet/.test(title)) return 'sheets'
+  if (/github/.test(title)) return 'github'
+  if (/search/.test(title)) return 'websearch'
+  return step.subtitle.trim()
+}
+
+/**
+ * The edited nodes back onto the automation: the first action is the task, the
+ * rest are the connectors, the trigger carries the schedule.
+ */
+export function canvasToPatch(steps: CanvasStep[], automation: Automation): CanvasPatch {
+  const patch: CanvasPatch = {}
+  const trigger = steps.find((step) => step.kind === 'trigger')
+  const actions = steps.filter((step) => step.kind !== 'trigger')
+  const prompt = actions[0]?.subtitle.trim() ?? ''
+  if (prompt && prompt !== (automation.prompt ?? '')) patch.prompt = prompt
+  const connectors = actions.slice(1).map(toolOfStep).filter(Boolean)
+  if (connectors.join('|') !== automation.connectors.join('|')) patch.connectors = connectors
+  if (trigger) {
+    const schedule = parseScheduleSummary(trigger.subtitle, automation)
+    if (schedule) patch.schedule = schedule
+  }
+  return patch
 }
 
 /** n8n-style graph metrics: compact node cards wired left → right. */

@@ -46,6 +46,16 @@ export const IpcChannels = {
   routineRemove: 'routine:remove',
   routineToggle: 'routine:toggle',
   routineUpdate: 'routine:update',
+  /** Scheduled Tasks. */
+  automationList: 'automation:list',
+  automationGet: 'automation:get',
+  automationCreate: 'automation:create',
+  automationUpdate: 'automation:update',
+  automationDelete: 'automation:delete',
+  automationPause: 'automation:pause',
+  automationResume: 'automation:resume',
+  automationTestRun: 'automation:test-run',
+  automationRuns: 'automation:runs',
   updatesList: 'updates:list',
   updatesStream: 'updates:stream',
   updatesGetRunLog: 'updates:get-run-log',
@@ -126,7 +136,7 @@ export const RoutineToggleSchema = z.object({
 export const RoutineUpdateSchema = z.object({
   id: z.string().min(1).max(128),
   prompt: z.string().min(1).max(20000).optional(),
-  repeat: z.enum(['once', 'daily', 'weekdays']).optional(),
+  repeat: z.enum(['once', 'daily', 'weekdays', 'weekly', 'monthly']).optional(),
   runAt: z.number().int().positive().optional(),
   tools: z.array(z.string()).max(16).optional(),
   enabled: z.boolean().optional()

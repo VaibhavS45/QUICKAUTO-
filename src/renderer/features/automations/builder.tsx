@@ -1,13 +1,17 @@
-import { useMemo, useState } from 'react'
+import { Fragment, useEffect, useMemo, useState } from 'react'
 import { TOOL_IDS, TOOL_META, type ActiveToolId } from '../../../shared/types.js'
 import { GMAIL_EVENTS } from './trigger-events.js'
-import { draftToText, makeTriggerId, type BuilderDraft, type BuilderRepeat, type BuilderTrigger } from './builder-compile.js'
+import { blankTrigger, draftToAutomation, makeTriggerId, type BuilderDraft, type BuilderRepeat, type BuilderTrigger } from './builder-compile.js'
 import { attachmentPromptText, needsComposioTools, useAttachments } from '../../lib/attachments.js'
+import type { AutomationCreate } from '../../../shared/contracts/automations.js'
 import type { RunRecord } from '../../../shared/contracts/schedule.js'
 import type { DriveFile } from '../../../main/connectors/drive.js'
+import type { AgentProfile } from '../../../main/agent/agent-store.js'
+import { ConnectorPicker } from './ConnectorPicker.js'
 import BuilderConnectorPopover from './BuilderConnectorPopover.js'
 import './automations.css'
 import './builder-opencode.css'
+import './scheduled.css'
 
 interface BuilderProps {
   initial: BuilderDraft
@@ -15,38 +19,24 @@ interface BuilderProps {
   onConnect(): void
   onClose(): void
   /** Resolves with an error message, or null on success. */
-  onSubmit(text: string): Promise<string | null>
+  onSubmit(create: AutomationCreate): Promise<string | null>
 }
 
 const REPEATS: { value: BuilderRepeat; label: string }[] = [
-  { value: 'once', label: 'Once' },
   { value: 'daily', label: 'Daily' },
-  { value: 'weekdays', label: 'Weekdays' }
+  { value: 'weekly', label: 'Weekly' },
+  { value: 'monthly', label: 'Monthly' },
+  { value: 'once', label: 'Once' }
 ]
 
-const REPEAT_OPTIONS: { value: BuilderRepeat; label: string }[] = [
-  { value: 'daily', label: 'Daily' },
-  { value: 'weekdays', label: 'Weekly' },
-  { value: 'once', label: 'Monthly' },
-  { value: 'once', label: 'No Repeat' }
-]
+const REPEAT_OPTIONS = REPEATS
 
 const HOURS_LIST = ['01', '02', '03', '04', '05', '06', '07', '08', '09', '10', '11', '12']
 const MINUTES_LIST = ['00', '15', '30', '45']
 
-/** Half-hour slots labeled like "AM 9:00" (screenshot spec), valued as 24h HH:MM. */
-const TIME_SLOTS: { value: string; label: string }[] = (() => {
-  const slots: { value: string; label: string }[] = []
-  for (let h = 0; h < 24; h += 1) {
-    for (const m of [0, 30]) {
-      const value = `${String(h).padStart(2, '0')}:${m === 0 ? '00' : '30'}`
-      const h12 = h % 12 === 0 ? 12 : h % 12
-      slots.push({ value, label: `${h >= 12 ? 'PM' : 'AM'} ${h12}:${m === 0 ? '00' : '30'}` })
-    }
-  }
-  return slots
-})()
+const WEEKDAY_LABELS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
 
+/** Half-hour slots labeled like "AM 9:00" (screenshot spec), valued as 24h HH:MM. */
 function GmailMark(): React.JSX.Element {
   return (
     <svg width="20" height="16" viewBox="0 0 20 16" fill="none" aria-hidden="true">
@@ -208,15 +198,22 @@ function PlusFigmaIcon(): React.JSX.Element {
 }
 
 export interface BuilderSettingsMenuProps {
-  onPickConnectors(): void
-  onPickAgent(): void
+  agent: string
+  agents: AgentProfile[]
+  onAgent(next: string): void
+  connectorOptions: string[]
+  connectors: string[]
+  onConnectors(next: string[]): void
+  onConnectApps(): void
+  expiresAt: string
+  onExpiresAt(next: string): void
 }
 
-/** Automation settings menu. Only Agent and Connectors act; the rest show spec defaults. */
+/** Automation settings menu. Agent, connectors and expiry are live controls. */
 export function BuilderSettingsMenu(props: BuilderSettingsMenuProps): React.JSX.Element {
-  const rows: { id: string; label: string; value: string; icon: React.ReactNode; action?: 'agent' | 'connectors' }[] = [
+  const rows: { id: string; label: string; value: string; icon: React.ReactNode; control?: React.ReactNode }[] = [
     {
-      id: 'confirmations', label: 'Confirmations', value: 'Approval required',
+      id: 'confirmations', label: 'Confirmations', value: 'Writes blocked',
       icon: (
         <svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true">
           <path fillRule="evenodd" clipRule="evenodd" d="M8 0.733C8.513 0.733 9.005 0.937 9.367 1.299C9.626 1.558 9.802 1.883 9.882 2.234C10.127 2.126 10.394 2.066 10.667 2.066C11.179 2.066 11.671 2.27 12.034 2.633C12.293 2.892 12.468 3.217 12.549 3.568C12.794 3.459 13.06 3.4 13.333 3.4C13.846 3.4 14.338 3.604 14.7 3.966C15.063 4.329 15.267 4.821 15.267 5.333V9.333C15.267 10.907 14.641 12.416 13.529 13.529C12.416 14.641 10.907 15.267 9.333 15.267H8C5.972 15.267 4.688 14.629 3.584 13.533L1.182 11.131C1.175 11.124 1.168 11.116 1.161 11.109C0.829 10.74 0.65 10.258 0.663 9.762C0.677 9.266 0.88 8.794 1.232 8.443C1.583 8.093 2.056 7.892 2.552 7.88C2.847 7.873 3.137 7.936 3.4 8.057V4C3.4 3.487 3.604 2.995 3.966 2.633C4.329 2.27 4.821 2.066 5.333 2.066C5.606 2.066 5.873 2.126 6.117 2.234C6.198 1.883 6.374 1.558 6.633 1.299C6.995 0.937 7.487 0.733 8 0.733ZM8 1.934C7.806 1.934 7.619 2.011 7.482 2.148C7.344 2.286 7.267 2.472 7.267 2.667V7C7.267 7.331 6.998 7.6 6.667 7.6C6.335 7.6 6.067 7.331 6.067 7V4L6.063 3.928C6.047 3.76 5.972 3.602 5.852 3.482C5.715 3.344 5.528 3.267 5.333 3.267C5.139 3.267 4.953 3.344 4.815 3.482C4.678 3.619 4.6 3.806 4.6 4V9.085L5.091 9.576C5.325 9.81 5.325 10.19 5.091 10.425C4.857 10.659 4.476 10.659 4.242 10.425L3.579 9.76C3.577 9.758 3.574 9.756 3.572 9.754L3.085 9.268C2.947 9.143 2.766 9.076 2.579 9.08C2.391 9.084 2.212 9.161 2.079 9.294C1.945 9.426 1.868 9.605 1.863 9.794C1.858 9.979 1.924 10.159 2.046 10.297L4.43 12.681L4.596 12.841C5.438 13.62 6.401 14.066 8 14.066H9.333C10.589 14.066 11.793 13.568 12.68 12.68C13.568 11.793 14.067 10.589 14.067 9.333V5.333C14.067 5.139 13.99 4.953 13.852 4.815C13.715 4.678 13.528 4.6 13.333 4.6C13.139 4.6 12.953 4.678 12.815 4.815C12.678 4.953 12.6 5.139 12.6 5.333V7.333C12.6 7.665 12.331 7.934 12 7.934C11.669 7.934 11.4 7.665 11.4 7.333V4C11.4 3.806 11.323 3.619 11.186 3.482C11.048 3.344 10.861 3.267 10.667 3.267C10.472 3.267 10.286 3.344 10.149 3.482C10.011 3.619 9.934 3.806 9.934 4V6.667C9.934 6.998 9.665 7.267 9.333 7.267C9.002 7.267 8.734 6.998 8.734 6.667V2.667C8.734 2.472 8.656 2.286 8.519 2.148C8.381 2.011 8.194 1.934 8 1.934Z" fill="#E6E6E6" />
@@ -236,7 +233,20 @@ export function BuilderSettingsMenu(props: BuilderSettingsMenuProps): React.JSX.
       )
     },
     {
-      id: 'agent', label: 'Agent', value: 'Manus 2.0', action: 'agent',
+      id: 'agent', label: 'Agent', value: props.agent || 'None',
+      control: (
+        <select
+          className="st-select"
+          aria-label="Agent"
+          value={props.agent}
+          onChange={(event) => props.onAgent(event.target.value)}
+        >
+          <option value="">None</option>
+          {props.agents.map((agent) => (
+            <option key={agent.id} value={agent.id}>{agent.name}</option>
+          ))}
+        </select>
+      ),
       icon: (
         <svg width="16" height="16" viewBox="0 0 24 24" aria-hidden="true">
           <circle cx="12" cy="12" r="1" fill="none" stroke="#E6E6E6" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
@@ -246,7 +256,14 @@ export function BuilderSettingsMenu(props: BuilderSettingsMenuProps): React.JSX.
       )
     },
     {
-      id: 'connectors', label: 'Connectors', value: 'None', action: 'connectors',
+      id: 'connectors', label: 'Connectors', value: props.connectors.length ? `${props.connectors.length} selected` : 'None',
+      control: (
+        <ConnectorPicker
+          options={props.connectorOptions}
+          selected={props.connectors}
+          onChange={props.onConnectors}
+        />
+      ),
       icon: (
         <svg width="16" height="16" viewBox="0 0 24 24" aria-hidden="true">
           <path d="M17 19a1 1 0 0 1-1-1v-2a2 2 0 0 1 2-2h2a2 2 0 0 1 2 2v2a1 1 0 0 1-1 1z" fill="none" stroke="#E6E6E6" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
@@ -285,7 +302,16 @@ export function BuilderSettingsMenu(props: BuilderSettingsMenuProps): React.JSX.
       )
     },
     {
-      id: 'expiration', label: 'Expiration date', value: 'None',
+      id: 'expiration', label: 'Expiration date', value: props.expiresAt || 'None',
+      control: (
+        <input
+          type="date"
+          className="st-input st-date"
+          aria-label="Expiration date"
+          value={props.expiresAt}
+          onChange={(event) => props.onExpiresAt(event.target.value)}
+        />
+      ),
       icon: (
         <svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true">
           <path fillRule="evenodd" clipRule="evenodd" d="M10.667 0.733C10.998 0.733 11.267 1.002 11.267 1.333V2.066H12.667C13.734 2.066 14.6 2.932 14.6 4V13.333C14.6 14.401 13.734 15.267 12.667 15.267H3.333C2.266 15.267 1.4 14.401 1.4 13.333V4C1.4 2.932 2.266 2.066 3.333 2.066H4.733V1.333C4.733 1.002 5.002 0.733 5.333 0.733C5.665 0.733 5.934 1.002 5.934 1.333V2.066H10.066V1.333C10.066 1.002 10.335 0.733 10.667 0.733ZM2.6 13.333C2.6 13.738 2.928 14.066 3.333 14.066H12.667C13.072 14.066 13.4 13.738 13.4 13.333V7.267H2.6V13.333ZM3.333 3.267C2.928 3.267 2.6 3.595 2.6 4V6.066H13.4V4C13.4 3.595 13.072 3.267 12.667 3.267H11.267V4C11.267 4.331 10.998 4.6 10.667 4.6C10.335 4.6 10.066 4.331 10.066 4V3.267H5.934V4C5.934 4.331 5.665 4.6 5.333 4.6C5.002 4.6 4.733 4.331 4.733 4V3.267H3.333Z" fill="#E6E6E6" />
@@ -295,38 +321,28 @@ export function BuilderSettingsMenu(props: BuilderSettingsMenuProps): React.JSX.
   ]
   return (
     <div className="builder-setmenu" role="menu" aria-label="Automation settings">
-      {rows.map((row) => {
-        const body = (
-          <>
+      {rows.map((row) => (
+        <div key={row.id} className="builder-setmenu-item">
+          <div className="builder-setrow">
             <div className="builder-setic">{row.icon}</div>
             <div className="builder-setlabel">
               <div>{row.label}</div>
             </div>
-            <div className="builder-setval">
-              <div>{row.value}</div>
-            </div>
-            <MenuChevronIcon />
-          </>
-        )
-        return (
-          <div key={row.id} className="builder-setmenu-item">
-            {row.action ? (
-              <button
-                type="button"
-                role="menuitem"
-                className="builder-setrow"
-                onClick={row.action === 'agent' ? props.onPickAgent : props.onPickConnectors}
-              >
-                {body}
-              </button>
+            {row.control ? (
+              <div className="builder-setval">{row.control}</div>
             ) : (
-              <div className="builder-setrow">
-                {body}
-              </div>
+              <>
+                <div className="builder-setval">
+                  <div>{row.value}</div>
+                </div>
+                <MenuChevronIcon />
+              </>
             )}
           </div>
-        )
-      })}
+        </div>
+      ))}
+      <p className="builder-setnote">Scheduled runs are read-only: sending, writing, deleting and pushing are always blocked.</p>
+      <button type="button" className="builder-connect" onClick={props.onConnectApps}>Connect apps</button>
     </div>
   )
 }
@@ -336,11 +352,13 @@ function patchTrigger(setTriggers: React.Dispatch<React.SetStateAction<BuilderTr
 }
 
 export default function Builder(props: BuilderProps): React.JSX.Element {
-  const [mode] = useState(props.initial.mode)
   const [triggers, setTriggers] = useState(props.initial.triggers)
   const [task, setTask] = useState(props.initial.task)
-  const [describe, setDescribe] = useState(props.initial.describe)
   const [tools, setTools] = useState<string[]>(props.initial.tools)
+  const [agent, setAgent] = useState(props.initial.agent)
+  const [expiresAt, setExpiresAt] = useState('')
+  const [agents, setAgents] = useState<AgentProfile[]>([])
+  const [connectorOptions, setConnectorOptions] = useState<string[]>([])
   const [pickerOpen, setPickerOpen] = useState(false)
   const [addMenuOpen, setAddMenuOpen] = useState(false)
   const [skillsSubmenuOpen, setSkillsSubmenuOpen] = useState(false)
@@ -361,51 +379,53 @@ export default function Builder(props: BuilderProps): React.JSX.Element {
   const [connectorMenuOpen, setConnectorMenuOpen] = useState(false)
   const [settingsOpen, setSettingsOpen] = useState(false)
 
+  // The agent and the connected apps the task may use.
+  useEffect(() => {
+    let live = true
+    void window.app.agentsList()
+      .then((res) => { if (live && res.ok && res.agents) setAgents(res.agents) })
+      .catch(() => {})
+    void window.app.getConnector()
+      .then((res) => {
+        if (!live) return
+        setConnectorOptions((res.services ?? []).filter((service) => service.connected).map((service) => service.id))
+      })
+      .catch(() => {})
+    return () => { live = false }
+  }, [])
+
   const compiled = useMemo(
-    () => draftToText(mode === 'describe'
-      ? { mode, title: '', triggers: [], task: '', describe, tools: [] }
-      : { mode: 'manual', title: props.initial.title, triggers, task, describe: '', tools }),
-    [mode, props.initial.title, triggers, task, describe, tools]
+    () => draftToAutomation({ title: props.initial.title, triggers, task, tools, agent }),
+    [props.initial.title, triggers, task, tools, agent]
   )
 
   async function submit(event: React.FormEvent): Promise<void> {
     event.preventDefault()
-    if (!compiled.valid || busy) return
+    if (!compiled.valid || !compiled.create || busy) return
 
     setBusy(true)
     setError('')
 
     try {
-      const promptText = mode === 'describe' ? describe : compiled.text
-      const effectiveTools = [...tools]
-      const lower = promptText.toLowerCase()
-      if (!effectiveTools.includes('websearch') && (lower.includes('weather') || lower.includes('search') || lower.includes('news') || lower.includes('forecast'))) {
-        effectiveTools.push('websearch')
-      }
-      if (!effectiveTools.includes('composio') && (lower.includes('weather') || lower.includes('notion') || lower.includes('sheet'))) {
-        effectiveTools.push('composio')
-      }
+      const create: AutomationCreate = { ...compiled.create }
 
       // Attached Drive files need Composio tools for the agent to read them.
-      if (!effectiveTools.includes('composio') && needsComposioTools(attachments.files)) {
-        effectiveTools.push('composio')
+      if (needsComposioTools(attachments.files) && !create.connectors.includes('composio')) {
+        create.connectors = [...create.connectors, 'composio']
       }
-
-      let fullText = promptText
 
       // Attached files travel as readable references (chips state, not raw text).
       const attachText = attachmentPromptText(attachments.files)
       if (attachText) {
-        fullText += ` ${attachText}`
+        create.prompt = `${create.prompt} ${attachText}`.trim()
       }
 
-      for (const t of effectiveTools) {
-        if (!fullText.toLowerCase().includes(`@${t.toLowerCase()}`)) {
-          fullText += ` @${t}`
-        }
+      if (expiresAt) {
+        // The contract takes a full timestamp; the picker gives a local day.
+        create.expiresAt = new Date(`${expiresAt}T23:59:59`).toISOString()
       }
 
-      const err = await props.onSubmit(fullText)
+      const err = await props.onSubmit(create)
       if (err) {
         setError(err)
         setBusy(false)
@@ -422,7 +442,7 @@ export default function Builder(props: BuilderProps): React.JSX.Element {
   }
 
   function addEventTrigger(phrase: string): void {
-    setTriggers((cur) => [...cur, { id: makeTriggerId(), kind: 'event', repeat: 'daily', time: '09:00', app: 'gmail', event: phrase }])
+    setTriggers((cur) => [...cur, { ...blankTrigger('event'), id: makeTriggerId(), event: phrase }])
     setPickerOpen(false)
   }
 
@@ -524,7 +544,8 @@ export default function Builder(props: BuilderProps): React.JSX.Element {
   }
 
   const hasEvent = triggers.some((t) => t.kind === 'event')
-  const heading = mode === 'describe' ? 'Describe when the automation should run' : hasEvent || triggers.length === 0 ? 'When this happens' : 'When'
+  // No trigger yet means the event picker is what the user picks next.
+  const heading = hasEvent || triggers.length === 0 ? 'When this happens' : 'When'
 
   const picker = pickerOpen && (
     <div className="picker-panel" role="menu" aria-label="Choose a trigger">
@@ -560,40 +581,17 @@ export default function Builder(props: BuilderProps): React.JSX.Element {
         )}
 
         <form className="builder-sheet" onSubmit={(e) => void submit(e)}>
-          {mode === 'describe' ? (
-            <div className="builder-sheet-body">
-              <div className="builder-sheet-section">
-                <div className="builder-sheet-head">
-                  <div className="builder-sheet-title">
-                    {heading}
-                  </div>
-                  <button type="button" aria-label="Close builder" onClick={props.onClose} className="builder-sheet-x">
-                    <PaperCloseIcon />
-                  </button>
+          <div className="builder-sheet-body">
+            <div className="builder-sheet-section">
+              <div className="builder-sheet-head">
+                <div className="builder-sheet-title">
+                  {heading}
                 </div>
-                <textarea
-                  className="builder-task"
-                  rows={6}
-                  autoFocus
-                  value={describe}
-                  onChange={(e) => setDescribe(e.currentTarget.value)}
-                  placeholder="e.g. Every weekday at 6:30pm summarize the latest AI news and send me the highlights"
-                />
+                <button type="button" aria-label="Close builder" onClick={props.onClose} className="builder-sheet-x">
+                  <PaperCloseIcon />
+                </button>
               </div>
-            </div>
-          ) : (
-            <>
-              <div className="builder-sheet-body">
-                <div className="builder-sheet-section">
-                  <div className="builder-sheet-head">
-                    <div className="builder-sheet-title">
-                      {heading}
-                    </div>
-                    <button type="button" aria-label="Close builder" onClick={props.onClose} className="builder-sheet-x">
-                      <PaperCloseIcon />
-                    </button>
-                  </div>
-                  {/* Triggers: Schedule */}
+              {/* Triggers: Schedule */}
                   {triggers.filter((t) => t.kind === 'schedule').map((trigger) => {
                     const timeParts = parseTimeParts(trigger.time)
                     const isRepeatOpen = openRepeatId === trigger.id
@@ -603,8 +601,8 @@ export default function Builder(props: BuilderProps): React.JSX.Element {
                       REPEAT_OPTIONS.find((r) => r.value === trigger.repeat)?.label ?? 'Daily'
 
                     return (
-                      <>
-                      <div key={trigger.id} className="builder-whenbox">
+                      <Fragment key={trigger.id}>
+                      <div className="builder-whenbox">
                         <div className="builder-whenrow">
                           <div className="builder-whenclock">
                             <PaperClockIcon />
@@ -731,17 +729,51 @@ export default function Builder(props: BuilderProps): React.JSX.Element {
                         </div>
                       </div>
 
-                      {triggers.length > 1 && (
-                        <button
-                          type="button"
-                          className="builder-iconbtn"
-                          aria-label="Remove schedule"
-                          onClick={() => setTriggers((cur) => cur.filter((t) => t.id !== trigger.id))}
-                        >
-                          <TrashIcon />
-                        </button>
+                      {/* The schedule the contract stores: day-of-month, weekdays or a date. */}
+                      {trigger.repeat === 'weekly' && (
+                        <div className="builder-whenrow st-weekdays" role="group" aria-label="Days of the week">
+                          {WEEKDAY_LABELS.map((label, day) => (
+                            <button
+                              key={label}
+                              type="button"
+                              aria-pressed={trigger.weekdays.includes(day)}
+                              onClick={() => patchTrigger(setTriggers, trigger.id, {
+                                weekdays: trigger.weekdays.includes(day)
+                                  ? trigger.weekdays.filter((item) => item !== day)
+                                  : [...trigger.weekdays, day]
+                              })}
+                            >
+                              {label}
+                            </button>
+                          ))}
+                        </div>
                       )}
-                      </>
+                      {trigger.repeat === 'once' && (
+                        <div className="builder-whenrow">
+                          <input
+                            type="date"
+                            className="st-input st-date"
+                            aria-label="Date"
+                            value={trigger.date}
+                            onChange={(e) => patchTrigger(setTriggers, trigger.id, { date: e.currentTarget.value })}
+                          />
+                        </div>
+                      )}
+                      {trigger.repeat === 'monthly' && (
+                        <div className="builder-whenrow">
+                          <span className="builder-sched-note">on day</span>
+                          <select
+                            aria-label="Day of the month"
+                            value={trigger.dayOfMonth}
+                            onChange={(e) => patchTrigger(setTriggers, trigger.id, { dayOfMonth: Number(e.target.value) })}
+                          >
+                            {Array.from({ length: 31 }, (_, i) => i + 1).map((day) => (
+                              <option key={day} value={day}>{day}</option>
+                            ))}
+                          </select>
+                        </div>
+                      )}
+                      </Fragment>
                     )
                   })}
 
@@ -770,16 +802,6 @@ export default function Builder(props: BuilderProps): React.JSX.Element {
                       </div>
                       <div className="builder-trig-line indent">
                         <span className="builder-cond" title="Conditions are not evaluated yet">+ Add conditions <span className="builder-q" aria-hidden="true">?</span></span>
-                      </div>
-                      <div className="builder-trig-line indent">
-                        <span className="builder-sched-note">Check</span>
-                        <select aria-label="Repeat" value={trigger.repeat} onChange={(e) => patchTrigger(setTriggers, trigger.id, { repeat: e.currentTarget.value as BuilderTrigger['repeat'] })}>
-                          {REPEATS.map((r) => <option key={r.value} value={r.value}>{r.label}</option>)}
-                        </select>
-                        <span className="builder-sched-note">at</span>
-                        <select aria-label="Time" value={trigger.time} onChange={(e) => patchTrigger(setTriggers, trigger.id, { time: e.currentTarget.value })}>
-                          {TIME_SLOTS.map((s) => <option key={s.value} value={s.value}>{s.label}</option>)}
-                        </select>
                       </div>
                     </div>
                   ))}
@@ -830,8 +852,6 @@ export default function Builder(props: BuilderProps): React.JSX.Element {
                     )}
                   </div>
                 </div>
-                </>
-              )}
 
           {error && <p role="alert" className="automations-error">{error}</p>}
 
@@ -1094,14 +1114,18 @@ export default function Builder(props: BuilderProps): React.JSX.Element {
 
                     {settingsOpen && (
                       <BuilderSettingsMenu
-                        onPickConnectors={() => {
+                        agent={agent}
+                        agents={agents}
+                        onAgent={setAgent}
+                        connectorOptions={connectorOptions}
+                        connectors={tools}
+                        onConnectors={setTools}
+                        onConnectApps={() => {
                           setSettingsOpen(false)
                           setConnectorMenuOpen(true)
                         }}
-                        onPickAgent={() => {
-                          setSettingsOpen(false)
-                          window.app.openSettingsWindow('agents')
-                        }}
+                        expiresAt={expiresAt}
+                        onExpiresAt={setExpiresAt}
                       />
                     )}
 

@@ -1,7 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { parseScheduleFromText } from '../../src/main/agent/scheduler.js'
-import { blankTrigger } from '../../src/renderer/features/automations/builder-compile.js'
-import { triggerToPhrase } from '../../src/renderer/features/automations/builder-compile.js'
+import { blankDraft, blankTrigger, draftToAutomation } from '../../src/renderer/features/automations/builder-compile.js'
 import { GMAIL_EVENTS, gmailEventPhrase } from '../../src/renderer/features/automations/trigger-events.js'
 
 describe('trigger events', () => {
@@ -21,12 +19,21 @@ describe('trigger events', () => {
     expect(gmailEventPhrase('new-attachment')).toContain('attachment')
   })
 
-  it('compiles every event into a phrase the scheduler can fire', () => {
+  it('compiles every event into a check the prompt can run', () => {
     for (const item of GMAIL_EVENTS) {
-      const phrase = triggerToPhrase({ ...blankTrigger('event'), repeat: 'daily', time: '09:00', app: 'gmail', event: item.phrase })
-      expect(phrase).toBeTruthy()
-      expect(phrase).toContain('@gmail')
-      expect(parseScheduleFromText(`${phrase} yes`, new Date(2026, 9, 10, 12, 0, 0))).not.toBeNull()
+      const compiled = draftToAutomation({
+        ...blankDraft(),
+        title: 'Inbox',
+        task: 'handle it',
+        triggers: [
+          { ...blankTrigger('schedule'), repeat: 'daily', time: '09:00' },
+          { ...blankTrigger('event'), app: 'gmail', event: item.phrase }
+        ]
+      })
+      expect(compiled.valid).toBe(true)
+      expect(compiled.create?.prompt).toContain('@gmail')
+      expect(compiled.create?.prompt).toContain(item.phrase)
+      expect(compiled.create?.connectors).toContain('gmail')
     }
   })
 })

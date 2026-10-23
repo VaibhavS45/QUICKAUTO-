@@ -1,93 +1,116 @@
 import { describe, expect, it } from 'vitest'
 import { AUTOMATION_TEMPLATES } from '../../src/shared/contracts/automation-templates.js'
-import { parseScheduleFromText } from '../../src/main/agent/scheduler.js'
 import {
   blankDraft,
   blankTrigger,
-  draftToText,
+  draftToAutomation,
   templateToDraft,
-  toAmPm,
-  triggerToPhrase
+  titleFromTask
 } from '../../src/renderer/features/automations/builder-compile.js'
 
 describe('builder compile', () => {
-  it('formats times for the scheduler', () => {
-    expect(toAmPm('09:00')).toBe('9:00am')
-    expect(toAmPm('18:30')).toBe('6:30pm')
-    expect(toAmPm('00:05')).toBe('12:05am')
-    expect(toAmPm('nope')).toBeNull()
-    expect(toAmPm('25:00')).toBeNull()
-  })
-
-  it('compiles every repeat into a phrase the scheduler can fire', () => {
-    for (const repeat of ['once', 'daily', 'weekdays'] as const) {
-      const phrase = triggerToPhrase({ ...blankTrigger('schedule'), repeat, time: '18:30' })
-      expect(phrase).toBeTruthy()
-      expect(parseScheduleFromText(`${phrase} do the thing`, new Date(2026, 9, 10, 12, 0, 0))).not.toBeNull()
-    }
-  })
-
-  it('compiles event triggers as scheduled @app checks', () => {
-    const phrase = triggerToPhrase({ ...blankTrigger('event'), repeat: 'daily', time: '09:00', app: 'gmail', event: 'new conversations in my inbox' })
-    expect(phrase).toContain('@gmail')
-    expect(phrase).toContain('new conversations')
-    expect(parseScheduleFromText(`${phrase} yes`, new Date(2026, 9, 10, 12, 0, 0))).not.toBeNull()
-    expect(triggerToPhrase({ ...blankTrigger('event'), event: '' })).toBeNull()
-  })
-
-  it('validates manual drafts and collects tools', () => {
-    expect(draftToText(blankDraft()).valid).toBe(false)
+  it('turns the picks into the contract payload', () => {
     const draft = {
       ...blankDraft(),
       title: 'Morning digest',
-      task: 'Summarize the news @websearch',
+      task: 'Summarize the news',
       triggers: [{ ...blankTrigger('schedule'), repeat: 'daily' as const, time: '09:00' }]
     }
-    const compiled = draftToText(draft)
+    const compiled = draftToAutomation(draft)
     expect(compiled.valid).toBe(true)
-    expect(compiled.tools).toContain('websearch')
-    expect(compiled.text).toContain('Morning digest')
-    expect(compiled.text).toContain('every day at 9:00am')
+    expect(compiled.create).toMatchObject({
+      kind: 'schedule',
+      title: 'Morning digest',
+      prompt: 'Summarize the news',
+      schedule: { type: 'daily', time: '09:00' },
+      autoApprove: false,
+      runMode: 'separate_task'
+    })
+    expect(compiled.create?.connectors).toEqual([])
   })
 
-  it('passes describe text straight through', () => {
-    expect(draftToText({ ...blankDraft(), mode: 'describe', describe: '  ' }).valid).toBe(false)
-    const compiled = draftToText({ ...blankDraft(), mode: 'describe', describe: 'At 6:30pm summarize HN @websearch' })
-    expect(compiled.valid).toBe(true)
-    expect(compiled.tools).toContain('websearch')
+  it('maps every repeat onto the contract schedule', () => {
+    const base = { ...blankDraft(), title: 'Report', task: 'compile slides' }
+    const once = draftToAutomation({
+      ...base,
+      triggers: [{ ...blankTrigger('schedule'), repeat: 'once' as const, time: '14:30', date: '2026-10-09' }]
+    })
+    expect(once.create?.schedule).toEqual({ type: 'once', time: '14:30', date: '2026-10-09' })
+
+    const weekly = draftToAutomation({
+      ...base,
+      triggers: [{ ...blankTrigger('schedule'), repeat: 'weekly' as const, time: '09:00', weekdays: [3, 1] }]
+    })
+    expect(weekly.create?.schedule).toEqual({ type: 'weekly', time: '09:00', weekdays: [1, 3] })
+
+    const monthly = draftToAutomation({
+      ...base,
+      triggers: [{ ...blankTrigger('schedule'), repeat: 'monthly' as const, time: '08:00', dayOfMonth: 31 }]
+    })
+    expect(monthly.create?.schedule).toEqual({ type: 'monthly', time: '08:00', dayOfMonth: 31 })
+  })
+
+  it('asks for the missing pieces instead of guessing them', () => {
+    expect(draftToAutomation({ ...blankDraft(), triggers: [] }).error).toMatch(/trigger/i)
+    expect(draftToAutomation({ ...blankDraft(), title: '', task: '', triggers: [blankTrigger('schedule')] }).error).toMatch(/title|describe/i)
+    const noDay = draftToAutomation({
+      ...blankDraft(),
+      title: 'Report',
+      task: 'compile slides',
+      triggers: [{ ...blankTrigger('schedule'), repeat: 'weekly' as const, time: '09:00' }]
+    })
+    expect(noDay.valid).toBe(false)
+    expect(noDay.error).toMatch(/day of the week/i)
+  })
+
+  it('folds event triggers into the prompt and the connectors', () => {
+    const draft = {
+      ...blankDraft(),
+      title: 'Inbox',
+      task: 'summarize new mail',
+      triggers: [
+        { ...blankTrigger('schedule'), repeat: 'daily' as const, time: '09:00' },
+        { ...blankTrigger('event'), app: 'gmail', event: 'a new conversation' }
+      ]
+    }
+    const compiled = draftToAutomation(draft)
+    expect(compiled.create?.prompt).toBe('summarize new mail. check @gmail for a new conversation')
+    expect(compiled.create?.connectors).toContain('gmail')
+  })
+
+  it('keeps @tags out of the visible task and carries the ids', () => {
+    const draft = {
+      ...blankDraft(),
+      title: 'Digest',
+      task: 'Summarize the news',
+      triggers: [{ ...blankTrigger('schedule') }],
+      tools: ['websearch']
+    }
+    const compiled = draftToAutomation(draft)
+    expect(compiled.create?.connectors).toContain('websearch')
+    expect(compiled.create?.prompt).toBe('Summarize the news')
+  })
+
+  it('names an unnamed task from its first sentence', () => {
+    expect(titleFromTask('summarize the news. and send it')).toBe('summarize the news')
+    const compiled = draftToAutomation({ ...blankDraft(), task: 'summarize the news', triggers: [blankTrigger('schedule')] })
+    expect(compiled.create?.title).toBe('summarize the news')
   })
 
   it('converts templates into editable drafts', () => {
     const scheduled = templateToDraft(AUTOMATION_TEMPLATES[0]!)
     expect(scheduled.triggers[0]).toMatchObject({ kind: 'schedule', repeat: 'daily', time: '20:00' })
-    expect(draftToText(scheduled).valid).toBe(true)
-    expect(draftToText(scheduled).tools).toEqual(expect.arrayContaining(['websearch', 'files', 'gmail']))
+    expect(draftToAutomation(scheduled).valid).toBe(true)
+    expect(draftToAutomation(scheduled).create?.connectors).toEqual(expect.arrayContaining(['websearch', 'files', 'gmail']))
 
     const event = templateToDraft(AUTOMATION_TEMPLATES[1]!)
     expect(event.triggers[0]).toMatchObject({ kind: 'event' })
     expect(event.title).toBe(AUTOMATION_TEMPLATES[1]!.title)
   })
 
-  it('keeps @tags out of visible inputs and carries tools invisibly', () => {
+  it('keeps @tags out of visible inputs', () => {
     for (const template of AUTOMATION_TEMPLATES) {
-      const draft = templateToDraft(template)
-      expect(draft.task).not.toContain('@')
-      expect(draftToText(draft).text).toContain('@')
+      expect(templateToDraft(template).task).not.toContain('@')
     }
-    const empty = { ...blankDraft(), mode: 'manual' as const, triggers: [] }
-    expect(draftToText(empty).valid).toBe(false)
-  })
-
-  it('compiles a schedule automation for weather with Daily repeat and time', () => {
-    const draft = {
-      ...blankDraft(),
-      title: '',
-      task: 'weather in bangalore',
-      triggers: [{ ...blankTrigger('schedule'), repeat: 'daily' as const, time: '10:00' }],
-      tools: []
-    }
-    const compiled = draftToText(draft)
-    expect(compiled.valid).toBe(true)
-    expect(compiled.text).toBe('When: every day at 10:00am. weather in bangalore')
   })
 })

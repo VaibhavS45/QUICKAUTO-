@@ -35,48 +35,28 @@
   margin-inline: auto;
 }
 
-.automations-toolbar-title {
-  margin: 0;
-  color: #e7e7e9;
-  font-size: 20px;
-  font-weight: 600;
-  letter-spacing: -0.02em;
-}
-
-.automation-breadcrumb {
+/* Back row of the run page. The trail itself lives in the app shell. */
+.automations-crumbbar {
   display: flex;
   align-items: center;
-  gap: 12px;
-  width: min(100%, 1280px);
-  min-height: 52px;
-  margin: 0 auto 16px;
-  padding-inline: 32px;
+  width: min(100%, 1240px);
+  margin: 0 auto;
+  padding: 20px 32px 0;
   box-sizing: border-box;
-  color: #77777f;
-  font-size: 20px;
-  font-weight: 600;
-  letter-spacing: -0.02em;
 }
 
-.automation-breadcrumb button {
+.automations-backlink {
   padding: 0;
   border: 0;
-  color: #77777f;
+  color: #929299;
   background: transparent;
   font: inherit;
+  font-size: 14px;
   cursor: pointer;
 }
 
-.automation-breadcrumb button:hover {
-  color: #d4d4d8;
-}
-
-.automation-breadcrumb strong {
-  overflow: hidden;
+.automations-backlink:hover {
   color: #e7e7e9;
-  font-weight: 600;
-  text-overflow: ellipsis;
-  white-space: nowrap;
 }
 
 .automations-toolbar nav {
@@ -619,6 +599,12 @@
 .automations:not(.is-canvas-mode) > .automations-body,
 .automations:not(.is-canvas-mode) > .automations-calendar {
   padding-inline: 32px;
+}
+
+/* Run history: days stack down the page instead of side by side. */
+.automations-body.updates-body {
+  flex-direction: column;
+  gap: 28px;
 }
 
 .automations-main,
@@ -2542,8 +2528,6 @@
 
 /* Day mode: light surfaces for automations pages. The canvas drawing surface
    (.automations-canvas) intentionally stays dark in both modes. */
-.light .automations-toolbar-title,
-.light .automation-breadcrumb strong,
 .light .automations-card-body strong,
 .light .updates-day > h3,
 .light .updates-row-meta strong,
@@ -2556,8 +2540,6 @@
   color: #17191e;
 }
 
-.light .automation-breadcrumb,
-.light .automation-breadcrumb button,
 .light .automations-month-head,
 .light .automations-weekdays,
 .light .automations-cell.is-outside .automations-cell-day,
@@ -2578,7 +2560,8 @@
   color: #5b6270;
 }
 
-.light .automation-breadcrumb button:hover { color: #17191e; }
+.light .automations-backlink { color: #5b6270; }
+.light .automations-backlink:hover { color: #17191e; }
 .light .automations-toolbar nav { border-bottom-color: rgb(0 0 0 / 12%); }
 .light .automations-toolbar nav [role="tab"] { color: #5b6270; }
 .light .automations-toolbar nav [role="tab"][aria-selected="true"] {

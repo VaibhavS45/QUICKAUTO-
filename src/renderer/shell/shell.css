@@ -17,7 +17,8 @@
   display: flex;
   align-items: center;
   gap: 12px;
-  padding: 0 16px 0 80px;
+  /* --shell-titlebar-left keeps the macOS window controls clear. */
+  padding: 0 16px 0 var(--shell-titlebar-left, 98px);
   color: #85858b;
   background: #1a1a1a;
   -webkit-app-region: drag;
@@ -93,6 +94,76 @@
 
 .shell-topnav-item.is-active:hover {
   background: #e04300;
+}
+
+/* The one breadcrumb of the app: top-left of the window, in the title bar.
+   Muted parents, "/" separator, the current page in the primary tone. It
+   shares the title bar's centre line and stops short of the nav pill: the
+   pill is ~470px wide and centred, so the breadcrumb gets what is left. */
+.shell-breadcrumbs {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  min-width: 0;
+  max-width: min(320px, calc(50vw - var(--shell-titlebar-left, 98px) - 256px));
+}
+
+.shell-breadcrumbs-list {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  font-size: 13px;
+  line-height: 1;
+}
+
+.shell-breadcrumbs-item {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 6px;
+}
+
+/* Only the current page gives up space: it ellipsizes instead. */
+.shell-breadcrumbs-item:last-child {
+  flex: 0 1 auto;
+  min-width: 0;
+}
+
+.shell-breadcrumbs-parent {
+  padding: 0;
+  border: 0;
+  color: #929299;
+  background: transparent;
+  font: inherit;
+  font-size: 13px;
+  white-space: nowrap;
+  cursor: pointer;
+  /* The title bar drags the window; the crumb link stays clickable. */
+  -webkit-app-region: no-drag;
+}
+
+.shell-breadcrumbs-parent:hover {
+  color: #e7e7e9;
+}
+
+.shell-breadcrumbs-sep {
+  color: #5f5f66;
+  font-size: 13px;
+}
+
+.shell-breadcrumbs-current {
+  min-width: 0;
+  overflow: hidden;
+  color: #e7e7e9;
+  font-size: 13px;
+  font-weight: 500;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -1721,6 +1792,22 @@
 
 .light .shell-topnav-item.is-active {
   color: #fff;
+}
+
+.light .shell-breadcrumbs-parent {
+  color: #5b6270;
+}
+
+.light .shell-breadcrumbs-parent:hover {
+  color: #17191e;
+}
+
+.light .shell-breadcrumbs-sep {
+  color: #9aa1ae;
+}
+
+.light .shell-breadcrumbs-current {
+  color: #17191e;
 }
 
 .light .shell-profile-button,

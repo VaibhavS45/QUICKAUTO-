@@ -2,7 +2,7 @@ import { createElement } from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { describe, expect, it, vi } from 'vitest'
 import { addDaysKey, dayLabel, localDayKey, monthGrid, monthLabel, pastDayLabel, routineOccursOn, routineTitle } from '../../src/renderer/features/automations/dates.js'
-import AutomationsView, { ManageDetail, RoutineRail, UpdatesList, routineKindLabel, stepsForRoutine } from '../../src/renderer/features/automations/AutomationsView.js'
+import AutomationsView, { UpdatesList, automationsTrail, stepsForRoutine } from '../../src/renderer/features/automations/AutomationsView.js'
 import type { ShellApi } from '../../src/renderer/contracts/feature.js'
 
 const shell: ShellApi = {
@@ -60,14 +60,12 @@ describe('AutomationsView', () => {
   it('renders the view toggle without an in-view tab bar (tabs live in the sidebar)', () => {
     const html = renderToStaticMarkup(createElement(AutomationsView, { shell }))
     expect(html).not.toContain('Automation sections')
-    expect(html).toContain('List')
-    expect(html).toContain('Calendar')
     expect(html).toContain('Create')
   })
 
-  it('updates tab shows the calendar only, without the list view toggle', () => {
+  it('updates tab shows the run feed only, without the section toolbar', () => {
     const html = renderToStaticMarkup(createElement(AutomationsView, { shell, initialAutomationTab: 'updates' }))
-    expect(html).toContain('Updates')
+    expect(html).not.toContain('automations-toolbar')
     expect(html).not.toContain('aria-label="List"')
     expect(html).not.toContain('automations-view-toggle')
   })
@@ -86,6 +84,36 @@ describe('AutomationsView', () => {
     expect(html).not.toContain('agent will create it')
   })
 
+  it('leaves the create flow to the Automate section', () => {
+    // The create flow lives in the home view now, so Manage never shows it.
+    const manage = renderToStaticMarkup(createElement(AutomationsView, { shell, initialAutomationTab: 'manage' }))
+    expect(manage).not.toContain('Choose how it starts')
+    expect(manage).not.toContain('Manus will')
+  })
+
+  it('takes the section from the route so a top-nav click lands on it', () => {
+    const updates = renderToStaticMarkup(createElement(AutomationsView, { shell, initialAutomationTab: 'updates' }))
+    expect(updates).not.toContain('automations-toolbar')
+    const canvas = renderToStaticMarkup(createElement(AutomationsView, { shell, initialAutomationTab: 'canvas' }))
+    expect(canvas).toContain('is-canvas-mode')
+    const manage = renderToStaticMarkup(createElement(AutomationsView, { shell, initialAutomationTab: 'manage' }))
+    expect(manage).toContain('automations-toolbar')
+    expect(manage).not.toContain('is-canvas-mode')
+  })
+
+  it('leaves the breadcrumb to the app shell: no page renders its own', () => {
+    const manage = renderToStaticMarkup(createElement(AutomationsView, { shell, initialAutomationTab: 'manage' }))
+    expect(manage).not.toContain('aria-label="Breadcrumb"')
+    expect(manage).not.toContain('automations-toolbar-title')
+  })
+
+  it('opens the run page from the route so a nav click can close it', () => {
+    const run = renderToStaticMarkup(createElement(AutomationsView, { shell, focusRunId: 'run-1' }))
+    expect(run).toContain('Run details')
+    const list = renderToStaticMarkup(createElement(AutomationsView, { shell, initialAutomationTab: 'updates' }))
+    expect(list).not.toContain('Run details')
+  })
+
   it('groups update rows by day with title, time, and full summary', () => {
     const at = (y: number, m: number, d: number, h: number, min = 0): number => new Date(y, m, d, h, min).getTime()
     const html = renderToStaticMarkup(createElement(UpdatesList, {
@@ -102,47 +130,16 @@ describe('AutomationsView', () => {
     expect(html).toContain('Today digest body.')
     expect(html).toContain('Yesterday digest body.')
   })
+})
 
-  it('labels multi-tool routines advanced and single-tool routines scheduled', () => {
-    const base = { id: 'r', prompt: 'Do things', runAt: Date.now(), repeat: 'daily', enabled: true }
-    expect(routineKindLabel({ ...base, tools: ['gmail', 'sheets'] })).toBe('Advanced')
-    expect(routineKindLabel({ ...base, tools: ['github'] })).toBe('Scheduled')
+describe('automations trail', () => {
+  it('names the section of every tab and hides the Updates feed', () => {
+    expect(automationsTrail('manage', null)).toEqual(['Manage'])
+    expect(automationsTrail('canvas', null)).toEqual(['Canvas'])
+    expect(automationsTrail('updates', null)).toEqual([])
   })
 
-  it('renders the manage detail with sections and history', () => {
-    const routine = { id: 'r1', prompt: 'Summarize inbox', tools: ['gmail'], runAt: new Date(2026, 9, 11, 9).getTime(), repeat: 'daily', enabled: false }
-    const html = renderToStaticMarkup(createElement(ManageDetail, {
-      routine,
-      runs: [
-        { id: 'run1', routineId: 'r1', title: 'Summarize inbox', startedAt: 1, status: 'succeeded', summary: 'Did the thing.' },
-        { id: 'run2', routineId: 'other', title: 'Elsewhere', startedAt: 2, status: 'failed' }
-      ],
-      onToggle: () => {},
-      onRemove: () => {},
-      onSelectRun: () => {}
-    }))
-    expect(html).toContain('Summarize inbox')
-    expect(html).toContain('Paused')
-    expect(html).toContain('Details')
-    expect(html).toContain('History')
-    expect(html).toContain('The agent will')
-    expect(html).toContain('Advanced settings')
-    expect(html).toContain('@gmail')
-    expect(html).not.toContain('Elsewhere')
-  })
-
-  it('renders the config rail with engine and connector states', () => {
-    const html = renderToStaticMarkup(createElement(RoutineRail, {
-      routine: { id: 'r1', prompt: 'x', tools: ['gmail', 'sheets'], runAt: 0, repeat: 'daily', enabled: true },
-      engine: 'builtin',
-      connected: { gmail: false, sheets: true },
-      onOpenConnectors: () => {}
-    }))
-    expect(html).toContain('Agent')
-    expect(html).toContain('Built-in')
-    expect(html).toContain('Connectors')
-    expect(html).toContain('Gmail')
-    expect(html).toContain('Google Sheets')
-    expect(html).toContain('View all')
+  it('nests the open automation under its section', () => {
+    expect(automationsTrail('manage', 'Say hello')).toEqual(['Automations', 'Say hello'])
   })
 })

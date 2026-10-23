@@ -4,10 +4,12 @@ import type { ShellApi } from '../contracts/feature.js'
 import type { ChatThread } from '../../shared/chat.js'
 import type { AgentEvent } from '../../shared/agent.js'
 import type { AppNotification } from '../../shared/contracts/notifications.js'
+import { TITLEBAR_LEFT } from '../../shared/titlebar.js'
 import { parseMentionedTools } from '../../shared/types.js'
 import { ChatView } from './ChatView.js'
 import { HomeView } from './HomeView.js'
 import { ProfileMenu } from './ProfileMenu.js'
+import { BreadcrumbBar, BreadcrumbProvider } from '../components/layout/Breadcrumbs.js'
 import { createChatRunState, reduceChatRun, resolveChatApproval, type ChatRunState } from './chat-state.js'
 import { getFeatureRegistry } from './registry.js'
 import { FeatureContent } from './FeatureHost.js'
@@ -23,6 +25,9 @@ interface LocalProfile {
   name: string
   email: string
 }
+
+/** The title bar keeps clear of the macOS window controls. */
+const TITLEBAR_VARS = { '--shell-titlebar-left': `${TITLEBAR_LEFT}px` } as React.CSSProperties
 
 function Icon({ name }: { name: string }): React.JSX.Element {
   const paths: Record<string, React.ReactNode> = {
@@ -197,6 +202,22 @@ export default function ShellApp(): React.JSX.Element {
     }
   }, [profileMenuOpen, notificationsOpen])
 
+  const navigate = useCallback((view: string, params: Record<string, unknown> = {}): void => {
+    const apply = () => flushSync(() => {
+      router.navigate(view, params)
+      setChatError('')
+      setNotificationsOpen(false)
+      setProfileMenuOpen(false)
+    })
+    // Router updates state synchronously via its subscribe(setRoute), so
+    // flushSync commits the new DOM inside the transition snapshot.
+    if (document.startViewTransition && !window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+      document.startViewTransition(apply)
+    } else {
+      apply()
+    }
+  }, [router])
+
   useEffect(() => {
     const unsubscribe = router.subscribe(setRoute)
     const onKeyDown = (event: KeyboardEvent): void => {
@@ -214,7 +235,7 @@ export default function ShellApp(): React.JSX.Element {
       unsubscribe()
       window.removeEventListener('keydown', onKeyDown)
     }
-  }, [router])
+  }, [router, navigate])
 
   const handleAgentEvent = useCallback((event: AgentEvent): void => {
     if (!runIdRef.current) {
@@ -250,23 +271,7 @@ export default function ShellApp(): React.JSX.Element {
 
   useEffect(() => window.app.onAgentEvent(handleAgentEvent), [handleAgentEvent])
 
-  function navigate(view: string, params: Record<string, unknown> = {}): void {
-    const apply = () => flushSync(() => {
-      router.navigate(view, params)
-      setChatError('')
-      setNotificationsOpen(false)
-      setProfileMenuOpen(false)
-    })
-    // Router updates state synchronously via its subscribe(setRoute), so
-    // flushSync commits the new DOM inside the transition snapshot.
-    if (document.startViewTransition && !window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
-      document.startViewTransition(apply)
-    } else {
-      apply()
-    }
-  }
-
-  const shellApi: ShellApi = {
+  const shellApi = useMemo<ShellApi>(() => ({
     navigate,
     openCalendarWindow: () => {},
     openSettings: (tab) => window.app.openSettingsWindow(tab),
@@ -275,7 +280,7 @@ export default function ShellApp(): React.JSX.Element {
     updatesStream: () => window.app.updatesStream(),
     onUpdatesChanged: (cb) => window.app.onUpdatesChanged(cb),
     getRunLog: (runId) => window.app.getRunLog(runId)
-  }
+  }), [navigate])
   const initials = displayName(profile, t('shell.defaultProfile')).split(/\s+/).slice(0, 2).map((part) => part[0]?.toUpperCase()).join('')
 
   async function sendMessage(text: string): Promise<boolean> {
@@ -418,123 +423,126 @@ export default function ShellApp(): React.JSX.Element {
   }
 
   return (
-    <main className="shell-frame">
-      <header className="shell-drag-strip" aria-label={t('shell.windowBar')}>
-        <nav className="shell-topnav" aria-label={t('shell.mainNav')}>
-          {beforeActive.length > 0 && <div className="shell-topnav-group">{beforeActive.map(renderItem)}</div>}
-          {renderItem(activeNav)}
-          {afterActive.length > 0 && <div className="shell-topnav-group">{afterActive.map(renderItem)}</div>}
-        </nav>
-        <div className="shell-topbar-actions">
-          <button
-            type="button"
-            className="shell-icon-button shell-notifications-button"
-            aria-label={`${t('shell.notifications')}${unreadCount ? ` (${unreadCount} ${t('shell.unread')})` : ''}`}
-            aria-expanded={notificationsOpen}
-            title={t('shell.notifications')}
-            onClick={() => setNotificationsOpen((open) => !open)}
-          >
-            <Icon name="bell" />
-            {unreadCount > 0 && <span className="shell-notification-badge">{unreadCount > 99 ? '99+' : unreadCount}</span>}
-          </button>
-          <button
-            type="button"
-            className="shell-profile-button"
-            aria-label={`${t('shell.accountMenuFor')} ${displayName(profile, t('shell.defaultProfile'))}`}
-            aria-expanded={profileMenuOpen}
-            aria-haspopup="menu"
-            title={t('shell.profile')}
-            onClick={() => {
-              setProfileMenuOpen((open) => !open)
-              setNotificationsOpen(false)
-            }}
-          >
-            <span className="shell-avatar">{initials || 'L'}</span>
-          </button>
-          <ProfileMenu
-            open={profileMenuOpen}
-            name={displayName(profile, t('shell.defaultProfile'))}
-            email={profile.email.trim()}
-            initials={initials}
-            onClose={() => setProfileMenuOpen(false)}
-            onOpenSettings={(tab) => window.app.openSettingsWindow(tab)}
-          />
-          {notificationsOpen && (
-            <section className="shell-notifications-panel" aria-label={t('shell.notifications')}>
-              <header>
-                <strong>{t('shell.notifications')}</strong>
-                {unreadCount > 0 && <button type="button" onClick={() => void readAllNotifications()}>{t('shell.markAllRead')}</button>}
-              </header>
-              {notifications.length ? (
-                <div className="shell-notifications-list">
-                  {notifications.map((notification) => (
-                    <article key={notification.id} className={`shell-notification${notification.read ? '' : ' is-unread'}`}>
-                      <button type="button" className="shell-notification-body" onClick={() => void readNotification(notification)}>
-                        <span>{notification.title}</span>
-                        {notification.body && <small>{notification.body}</small>}
-                        <time>{new Date(notification.createdAt).toLocaleString()}</time>
-                      </button>
-                      <button type="button" className="shell-notification-dismiss" aria-label={`${t('shell.dismiss')} ${notification.title}`} onClick={() => void dismissNotification(notification.id)}>×</button>
-                    </article>
-                  ))}
-                </div>
-              ) : <p className="shell-notifications-empty">{t('shell.emptyNotifs')}</p>}
-            </section>
-          )}
-        </div>
-      </header>
-      <div className="shell-workspace">
-        <section className="shell-main-pane">
-          {(chatError || dashboardError) && (
-            <div className="shell-chat-error" role="alert">
-              {chatError || dashboardError}
-              <button type="button" onClick={() => { setChatError(''); setDashboardError('') }}>{t('shell.dismiss')}</button>
-            </div>
-          )}
-          <div
-            className={`shell-content${route.view === 'chat' ? ' has-chat-view' : ''}${!activeFeature && !activeChatId ? ' is-home' : ''}${activeFeature ? ' has-feature' : ''}${isCanvasView ? ' is-canvas-view' : ''}`}
-            style={{ viewTransitionName: 'shell-content' }}
-          >
-            {activeFeature ? (
-              <FeatureContent feature={activeFeature} shell={shellApi} params={route.params} />
-            ) : activeChatId ? (
-              activeThread ? (
-                <>
-                  {approvalError && <p className="chat-inline-error" role="alert">{approvalError}</p>}
-                  <ChatView
-                    messages={activeThread.messages}
-                    run={runThreadId === activeChatId ? run : null}
-                    busy={busy}
-                    onSend={sendMessage}
-                    onApprove={(approvalId, approved) => void decideApproval(approvalId, approved)}
-                    onStop={() => void stopRun()}
-                    onOpenSettings={() => window.app.openSettingsWindow('agents')}
-                    onOpenConnections={() => window.app.openSettingsWindow('connectors')}
-                    onOpenAutomations={() => navigate('automations')}
-                    onSelectTemplate={(template: AutomationTemplate) => navigate('automations', { templateId: template.id })}
-                  />
-                </>
-              ) : (
-                <p className="shell-empty-state">{chatLoading ? t('shell.loadingChats') : t('shell.chatGone')}</p>
-              )
-            ) : (
-              <HomeView shell={shellApi} />
+    <BreadcrumbProvider>
+      <main className="shell-frame" style={TITLEBAR_VARS}>
+        <header className="shell-drag-strip" aria-label={t('shell.windowBar')}>
+          <BreadcrumbBar />
+          <nav className="shell-topnav" aria-label={t('shell.mainNav')}>
+            {beforeActive.length > 0 && <div className="shell-topnav-group">{beforeActive.map(renderItem)}</div>}
+            {renderItem(activeNav)}
+            {afterActive.length > 0 && <div className="shell-topnav-group">{afterActive.map(renderItem)}</div>}
+          </nav>
+          <div className="shell-topbar-actions">
+            <button
+              type="button"
+              className="shell-icon-button shell-notifications-button"
+              aria-label={`${t('shell.notifications')}${unreadCount ? ` (${unreadCount} ${t('shell.unread')})` : ''}`}
+              aria-expanded={notificationsOpen}
+              title={t('shell.notifications')}
+              onClick={() => setNotificationsOpen((open) => !open)}
+            >
+              <Icon name="bell" />
+              {unreadCount > 0 && <span className="shell-notification-badge">{unreadCount > 99 ? '99+' : unreadCount}</span>}
+            </button>
+            <button
+              type="button"
+              className="shell-profile-button"
+              aria-label={`${t('shell.accountMenuFor')} ${displayName(profile, t('shell.defaultProfile'))}`}
+              aria-expanded={profileMenuOpen}
+              aria-haspopup="menu"
+              title={t('shell.profile')}
+              onClick={() => {
+                setProfileMenuOpen((open) => !open)
+                setNotificationsOpen(false)
+              }}
+            >
+              <span className="shell-avatar">{initials || 'L'}</span>
+            </button>
+            <ProfileMenu
+              open={profileMenuOpen}
+              name={displayName(profile, t('shell.defaultProfile'))}
+              email={profile.email.trim()}
+              initials={initials}
+              onClose={() => setProfileMenuOpen(false)}
+              onOpenSettings={(tab) => window.app.openSettingsWindow(tab)}
+            />
+            {notificationsOpen && (
+              <section className="shell-notifications-panel" aria-label={t('shell.notifications')}>
+                <header>
+                  <strong>{t('shell.notifications')}</strong>
+                  {unreadCount > 0 && <button type="button" onClick={() => void readAllNotifications()}>{t('shell.markAllRead')}</button>}
+                </header>
+                {notifications.length ? (
+                  <div className="shell-notifications-list">
+                    {notifications.map((notification) => (
+                      <article key={notification.id} className={`shell-notification${notification.read ? '' : ' is-unread'}`}>
+                        <button type="button" className="shell-notification-body" onClick={() => void readNotification(notification)}>
+                          <span>{notification.title}</span>
+                          {notification.body && <small>{notification.body}</small>}
+                          <time>{new Date(notification.createdAt).toLocaleString()}</time>
+                        </button>
+                        <button type="button" className="shell-notification-dismiss" aria-label={`${t('shell.dismiss')} ${notification.title}`} onClick={() => void dismissNotification(notification.id)}>×</button>
+                      </article>
+                    ))}
+                  </div>
+                ) : <p className="shell-notifications-empty">{t('shell.emptyNotifs')}</p>}
+              </section>
             )}
           </div>
-        </section>
-      </div>
-      {settings !== null && (
-        <div
-          className="shell-settings-overlay"
-          onClick={(event) => {
-            if (event.target === event.currentTarget) window.app.closeSettings()
-          }}
-        >
-          <div className="shell-settings-card" style={{ width: SETTINGS_WIDTH, height: SETTINGS_HEIGHT }}>
-            <SettingsApp key={settings.tab ?? 'general'} initialTab={settings.tab} />
-          </div>
+        </header>
+        <div className="shell-workspace">
+          <section className="shell-main-pane">
+            {(chatError || dashboardError) && (
+              <div className="shell-chat-error" role="alert">
+                {chatError || dashboardError}
+                <button type="button" onClick={() => { setChatError(''); setDashboardError('') }}>{t('shell.dismiss')}</button>
+              </div>
+            )}
+            <div
+              className={`shell-content${route.view === 'chat' ? ' has-chat-view' : ''}${!activeFeature && !activeChatId ? ' is-home' : ''}${activeFeature ? ' has-feature' : ''}${isCanvasView ? ' is-canvas-view' : ''}`}
+              style={{ viewTransitionName: 'shell-content' }}
+            >
+              {activeFeature ? (
+                <FeatureContent feature={activeFeature} shell={shellApi} params={route.params} />
+              ) : activeChatId ? (
+                activeThread ? (
+                  <>
+                    {approvalError && <p className="chat-inline-error" role="alert">{approvalError}</p>}
+                    <ChatView
+                      messages={activeThread.messages}
+                      run={runThreadId === activeChatId ? run : null}
+                      busy={busy}
+                      onSend={sendMessage}
+                      onApprove={(approvalId, approved) => void decideApproval(approvalId, approved)}
+                      onStop={() => void stopRun()}
+                      onOpenSettings={() => window.app.openSettingsWindow('agents')}
+                      onOpenConnections={() => window.app.openSettingsWindow('connectors')}
+                      onOpenAutomations={() => navigate('automations')}
+                      onSelectTemplate={(template: AutomationTemplate) => navigate('home', { templateId: template.id })}
+                    />
+                  </>
+                ) : (
+                  <p className="shell-empty-state">{chatLoading ? t('shell.loadingChats') : t('shell.chatGone')}</p>
+                )
+              ) : (
+                <HomeView shell={shellApi} params={route.params} />
+              )}
+            </div>
+          </section>
         </div>
-      )}
-    </main>
+        {settings !== null && (
+          <div
+            className="shell-settings-overlay"
+            onClick={(event) => {
+              if (event.target === event.currentTarget) window.app.closeSettings()
+            }}
+          >
+            <div className="shell-settings-card" style={{ width: SETTINGS_WIDTH, height: SETTINGS_HEIGHT }}>
+              <SettingsApp key={settings.tab ?? 'general'} initialTab={settings.tab} />
+            </div>
+          </div>
+        )}
+      </main>
+    </BreadcrumbProvider>
   )
 }

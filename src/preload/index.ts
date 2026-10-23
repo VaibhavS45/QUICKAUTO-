@@ -1,5 +1,6 @@
 import { contextBridge, ipcRenderer } from 'electron'
 import { shellApi } from './shell.js'
+import { automationsApi } from './automations.js'
 import type { ChatMessage, ChatThread } from '../shared/chat.js'
 import { AgentEventSchema, type AgentEvent } from '../shared/agent.js'
 import type { ComposioToolkit } from '../main/connectors/composio-marketplace.js'
@@ -186,7 +187,8 @@ const api = {
     ipcRenderer.on('settings:close', fn)
     return () => ipcRenderer.removeListener('settings:close', fn)
   },
-  ...shellApi
+  ...shellApi,
+  ...automationsApi
 }
 
 export type AppApi = typeof api

@@ -1,6 +1,5 @@
 import { describe, expect, it } from 'vitest'
 import { mkdir, readFile, rm, writeFile } from 'node:fs/promises'
-import { tmpdir } from 'node:os'
 import path from 'node:path'
 import { createBuiltinTools } from '../../src/main/agent/tools.js'
 
@@ -12,7 +11,9 @@ function exec(names: keyof ReturnType<typeof createBuiltinTools>): (input: unkno
 }
 
 const read_file = exec('read_file')
-const work = path.join(tmpdir(), 'palette-tools-test')
+// Inside the workspace: the tool only reads from the home dir, the cwd or /tmp,
+// and os.tmpdir() is neither on macOS.
+const work = path.join(process.cwd(), 'out', 'palette-tools-test')
 
 async function seed(name: string, content: string): Promise<string> {
   await mkdir(work, { recursive: true })
@@ -41,7 +42,7 @@ describe('read_file', () => {
 
   it('refuses paths outside allowed roots', async () => {
     await expect(read_file({ path: '/etc/hostname' })).rejects.toThrow(/may be read/i)
-    await expect(read_file({ path: path.join(work, '..', '..', '..', 'outside.txt') })).rejects.toThrow(/may be read/i)
+    await expect(read_file({ path: '/private/etc/outside.txt' })).rejects.toThrow(/may be read/i)
   })
 
   it('gives a clear error for a missing file', async () => {

@@ -87,7 +87,7 @@ export function UpdatesStream({ shell }: { shell: ShellApi }): React.JSX.Element
   }, [])
 
   function openRow(row: StreamRow): void {
-    shell.navigate('automations', { focusRunId: row.key })
+    shell.navigate('automations', { automationTab: 'updates', focusRunId: row.key })
   }
 
   if (failed) return <p className="automations-empty">Could not load updates.</p>

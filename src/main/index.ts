@@ -22,7 +22,9 @@ import {
   ComposioToolkitSearchSchema,
   ComposioToolkitConnectSchema,
   DriveListFilesSchema,
-  OpenFileDialogSchema
+  OpenFileDialogSchema,
+  RunLogIdSchema,
+  UpdatesListRequestSchema
 } from './ipc.js'
 import { TOOL_IDS, type ToolId } from '../shared/types.js'
 import type { AgentEvent } from '../shared/agent.js'
@@ -58,8 +60,11 @@ import { installStdioGuard } from './agent/stdio-guard.js'
 import { createAppTray, watchDockVisibility } from './shell/app-lifecycle.js'
 import { getShellAppWindow, openShellAppWindow } from './shell/shell-app-window.js'
 import type { RunSource } from '../shared/agent.js'
+import type { RunLogRecord } from '../shared/contracts/schedule.js'
 import { ChatStore, type ChatStoreStorage } from './shell/chat-store.js'
 import { registerChatIpc } from './shell/chat-ipc.js'
+import { AutomationService } from './automations/automation-service.js'
+import { registerAutomationIpc } from './automations/automation-ipc.js'
 import { createShellRuntime } from './shell/runtime.js'
 import { createSettingsShellRuntime } from './shell/settings-runtime.js'
 
@@ -229,11 +234,25 @@ class ElectronRoutineStore implements RoutineStore {
 const scheduledActive = new Set<string>()
 /** Assigned inside wireIpc (needs startAgentRun + Notification scope). */
 let fireRoutine: (r: Routine) => void = () => {}
+/** Assigned inside wireIpc (needs startAgentRun scope). */
+let runAutomationTest: (r: Routine) => string = () => ''
 
 const scheduler = new Scheduler(new ElectronRoutineStore(), {
   isRunning: (id) => scheduledActive.has(id),
   fire: (routine) => fireRoutine(routine)
 })
+
+const automationService = new AutomationService({
+  scheduler,
+  runTest: (routine) => runAutomationTest(routine)
+})
+
+/** System prompt of the agent profile an automation picked. */
+function agentSystemPrompt(agentId?: string): string | undefined {
+  if (!agentId) return undefined
+  const agent = settingsShellRuntime.agents.list().find((entry) => entry.id === agentId)
+  return agent?.systemPrompt.trim() || undefined
+}
 
 let budgetGuard: BudgetGuard | null = null
 /** Singleton guard; recreated (with counts carried over) when reset day changes. */
@@ -340,11 +359,22 @@ function wireIpc(): void {
   registerChatIpc(ipcMain, chatStore)
   settingsShellRuntime.registerIpc(ipcMain)
   fireRoutine = (routine) => {
-    startAgentRun(routine.prompt, routine.tools, 'scheduled', routine.id)
+    // Expired automations pause themselves and never fire.
+    if (routine.expiresAt !== undefined && routine.expiresAt <= Date.now()) {
+      scheduler.setEnabled(routine.id, false)
+      return
+    }
+    startAgentRun(routine.prompt, routine.tools, 'scheduled', routine.id, undefined, agentSystemPrompt(routine.agent), undefined, routine.runAt)
     shellRuntime.notify({ kind: 'info', title: 'Automation started', body: routine.prompt.slice(0, 200) })
     shellRuntime.notificationsChanged()
     new Notification({ title: 'Palette routine fired', body: routine.prompt.slice(0, 200) }).show()
   }
+  runAutomationTest = (routine) =>
+    startAgentRun(routine.prompt, routine.tools, 'scheduled', routine.id, undefined, agentSystemPrompt(routine.agent), undefined, Date.now())
+  registerAutomationIpc(ipcMain, automationService, async (id) => {
+    const runs = await shellRuntime.scheduleService.listRecentRuns(50)
+    return runs.filter((run) => run.routineId === id)
+  })
   ipcMain.handle(IpcChannels.getModelSettings, async () => settingsService.getPublicState())
 
   ipcMain.handle(IpcChannels.agentProviderGet, () => ({ ok: true as const, provider: agentProviderService.get() }))
@@ -481,7 +511,8 @@ function wireIpc(): void {
     routineId?: string,
     history?: import('../shared/chat.js').ChatMessage[],
     systemPrompt?: string,
-    chatId?: string
+    chatId?: string,
+    scheduledFor?: number
   ): string {
     const runId = randomUUID()
     const startedAt = Date.now()
@@ -489,6 +520,17 @@ function wireIpc(): void {
     const active: ActiveRun = { controller, pending: new Map() }
     activeRuns.set(runId, active)
     if (routineId) scheduledActive.add(routineId)
+    let logRunId: string | undefined
+    if (scheduledFor !== undefined) {
+      logRunId = shellRuntime.startRunLog({
+        taskId: routineId ?? runId,
+        taskTitle: prompt,
+        sourceType: 'schedule',
+        scheduledFor,
+        startedAt,
+        agentRunId: runId
+      })
+    }
     shellRuntime.startRun({
       id: runId,
       ...(routineId ? { routineId } : {}),
@@ -509,6 +551,12 @@ function wireIpc(): void {
       emit: (event) => {
         shellRuntime.observeRunEvent(event)
         emitToApp(event)
+        if (!logRunId) return
+        if (event.type === 'tool-call') {
+          shellRuntime.appendRunLogStep(logRunId, { tool: event.toolName, input: event.input })
+        } else if (event.type === 'tool-result') {
+          shellRuntime.appendRunLogStep(logRunId, { tool: event.toolName, outputPreview: String(event.output ?? '').slice(0, 300) })
+        }
       },
       decideApproval: (req) =>
         new Promise<ApprovalDecision>((resolve) => {
@@ -547,6 +595,7 @@ function wireIpc(): void {
     .catch((err) => {
       const message = err instanceof Error ? err.message : String(err)
       shellRuntime.observeRunFailure(runId, message)
+      if (logRunId) shellRuntime.finishRunLog(logRunId, { status: 'failed', error: message, finishedAt: Date.now() })
       emitToApp({
         type: 'error',
         runId,
@@ -556,7 +605,19 @@ function wireIpc(): void {
     .finally(() => {
       activeRuns.delete(runId)
       getGuard().endRun(runId)
-      shellRuntime.finishRun(runId)
+      const finished = shellRuntime.finishRun(runId)
+      if (logRunId) {
+        const logStatus: RunLogRecord['status'] =
+          finished.status === 'cancelled' || finished.status === 'skipped_budget' ? 'failed'
+          : finished.status === 'waiting-approval' ? 'running'
+          : finished.status
+        shellRuntime.finishRunLog(logRunId, {
+          status: logStatus,
+          finishedAt: Date.now(),
+          ...(finished.summary ? { summary: finished.summary } : {}),
+          ...(finished.status === 'failed' ? { error: finished.summary } : {})
+        })
+      }
       if (routineId) scheduledActive.delete(routineId)
     })
     return runId
@@ -763,6 +824,25 @@ function wireIpc(): void {
     return routine
       ? { ok: true as const, routine }
       : { ok: false as const, error: 'Routine not found.' }
+  })
+
+  ipcMain.handle(IpcChannels.updatesList, async (_event, payload) => {
+    const parsed = UpdatesListRequestSchema.safeParse(payload)
+    if (!parsed.success) return { ok: false as const, error: 'Invalid updates request.' }
+    return shellRuntime.scheduleService.listRunLogs(parsed.data)
+  })
+
+  ipcMain.handle(IpcChannels.updatesStream, async () => {
+    // Live updates are pushed to the renderer via shell:updates-changed
+    // (broadcast from createShellRuntime whenever the run log changes).
+    // This endpoint acknowledges the subscription and returns the latest page.
+    return { ok: true as const }
+  })
+
+  ipcMain.handle(IpcChannels.updatesGetRunLog, async (_event, payload) => {
+    const parsed = RunLogIdSchema.safeParse(payload)
+    if (!parsed.success) return { ok: false as const, error: 'Invalid run id.' }
+    return { ok: true as const, log: shellRuntime.scheduleService.getRunLog(parsed.data.runId) }
   })
 
   ipcMain.handle(IpcChannels.openFileDialog, async (_event, payload: unknown) => {

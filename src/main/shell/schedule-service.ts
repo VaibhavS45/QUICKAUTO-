@@ -1,10 +1,23 @@
 import type {
+  RunLogRecord,
+  RunLogRawStorage,
+  RunLogStep,
   RunRecord,
   ScheduleItem,
   ScheduleSource,
-  TodaySchedule
+  TodaySchedule,
+  UpdatesListRequest,
+  UpdatesListResponse
 } from '../../shared/contracts/schedule.js'
-import { RunRecordSchema, ScheduleItemSchema, TodayScheduleSchema } from '../../shared/contracts/schedule.js'
+import {
+  RunLogRecordSchema,
+  RunLogStepSchema,
+  RunRecordSchema,
+  ScheduleItemSchema,
+  TodayScheduleSchema,
+  UpdatesListRequestSchema,
+  UpdatesListResponseSchema
+} from '../../shared/contracts/schedule.js'
 import { nextFire, type Repeat } from '../agent/scheduler.js'
 
 const MAX_RECENT_RUNS = 200
@@ -24,6 +37,11 @@ export interface ScheduleRoutine {
 export interface RunRecordStorage {
   load(): unknown
   save(records: RunRecord[]): void
+}
+
+export interface RunLogStorage {
+  load(): unknown
+  save(records: RunLogRecord[]): void
 }
 
 export function localDateKey(date = new Date()): string {
@@ -102,10 +120,12 @@ function routineItemForDay(routine: ScheduleRoutine, date: string): ScheduleItem
 
 export class ScheduleService implements ScheduleSource {
   private readonly listeners = new Set<() => void>()
+  private readonly runLogListeners = new Set<() => void>()
 
   constructor(
     private readonly getRoutines: () => ScheduleRoutine[],
     private readonly runStorage: RunRecordStorage,
+    private readonly runLogStorage: RunLogRawStorage,
     private readonly now: () => number = Date.now
   ) {}
 
@@ -156,11 +176,104 @@ export class ScheduleService implements ScheduleSource {
     for (const listener of this.listeners) listener()
   }
 
+  // ---- Run log (read-only activity feed) ----
+
+  recordRunLog(log: Omit<RunLogRecord, 'runId' | 'steps'> & { steps?: RunLogRecord['steps'] }, runId?: string): string {
+    const id = runId ?? `${Date.now()}-${Math.floor(Math.random() * 1e6)}`
+    const record: RunLogRecord = RunLogRecordSchema.parse({ runId: id, ...log, steps: log.steps ?? [] })
+    const records = this.readRunLogs().filter((item) => item.runId !== record.runId)
+    records.unshift(record)
+    this.runLogStorage.save(records.slice(0, MAX_RECENT_RUNS))
+    this.runLogChanged()
+    return record.runId
+  }
+
+  appendRunLogStep(runId: string, step: Omit<RunLogStep, 'timestamp'>): void {
+    const records = this.readRunLogs()
+    const index = records.findIndex((item) => item.runId === runId)
+    if (index < 0) return
+    const next: RunLogStep = RunLogStepSchema.parse({ ...step, timestamp: Date.now() })
+    records[index].steps.push(next)
+    if (records[index].status === 'running') {
+      records[index].currentStep = step.tool
+    }
+    this.runLogStorage.save(records)
+    this.runLogChanged()
+  }
+
+  finishRunLog(runId: string, patch: {
+    status?: RunLogRecord['status']
+    finishedAt?: number
+    summary?: string
+    error?: string
+    currentStep?: string
+  }): void {
+    const records = this.readRunLogs()
+    const index = records.findIndex((item) => item.runId === runId)
+    if (index < 0) return
+    const record = records[index]
+    records[index] = RunLogRecordSchema.parse({
+      ...record,
+      ...(patch.status !== undefined ? { status: patch.status } : {}),
+      ...(patch.finishedAt !== undefined ? { finishedAt: patch.finishedAt } : {}),
+      ...(patch.summary !== undefined ? { summary: patch.summary } : {}),
+      ...(patch.error !== undefined ? { error: patch.error } : {}),
+      ...(patch.currentStep !== undefined ? { currentStep: patch.currentStep } : {})
+    })
+    this.runLogStorage.save(records)
+    this.runLogChanged()
+  }
+
+  listRunLogs(request: UpdatesListRequest): UpdatesListResponse {
+    const parsed = UpdatesListRequestSchema.parse(request)
+    const all = this.readRunLogs()
+      .sort((a, b) => b.startedAt - a.startedAt)
+      .filter((log) => {
+        if (parsed.status && !parsed.status.includes(log.status)) return false
+        if (parsed.sourceType && !parsed.sourceType.includes(log.sourceType)) return false
+        if (parsed.task && !log.taskTitle.toLowerCase().includes(parsed.task.toLowerCase())) return false
+        if (parsed.from !== undefined && log.startedAt < parsed.from) return false
+        if (parsed.to !== undefined && log.startedAt > parsed.to) return false
+        return true
+      })
+    let cursorIndex = 0
+    if (parsed.cursor) {
+      cursorIndex = all.findIndex((log) => log.runId === parsed.cursor)
+      if (cursorIndex < 0) cursorIndex = 0
+      else cursorIndex += 1
+    }
+    const page = all.slice(cursorIndex, cursorIndex + parsed.limit)
+    const nextCursor = page.length === parsed.limit ? page[page.length - 1]?.runId : undefined
+    return UpdatesListResponseSchema.parse({ ok: true, logs: page, ...(nextCursor ? { nextCursor } : {}) })
+  }
+
+  getRunLog(runId: string): RunLogRecord | null {
+    return this.readRunLogs().find((item) => item.runId === runId) ?? null
+  }
+
+  onRunLogChange(cb: () => void): () => void {
+    this.runLogListeners.add(cb)
+    return () => this.runLogListeners.delete(cb)
+  }
+
+  private runLogChanged(): void {
+    for (const listener of this.runLogListeners) listener()
+  }
+
   private readRuns(): RunRecord[] {
     const raw = this.runStorage.load()
     if (!Array.isArray(raw)) return []
     return raw.flatMap((record) => {
       const parsed = RunRecordSchema.safeParse(record)
+      return parsed.success ? [parsed.data] : []
+    })
+  }
+
+  private readRunLogs(): RunLogRecord[] {
+    const raw = this.runLogStorage.load()
+    if (!Array.isArray(raw)) return []
+    return raw.flatMap((record) => {
+      const parsed = RunLogRecordSchema.safeParse(record)
       return parsed.success ? [parsed.data] : []
     })
   }

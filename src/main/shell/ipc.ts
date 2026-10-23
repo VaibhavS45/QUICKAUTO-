@@ -10,7 +10,8 @@ export const ShellIpcChannels = {
   notificationRead: 'shell:notification-read',
   notificationsReadAll: 'shell:notifications-read-all',
   notificationDismiss: 'shell:notification-dismiss',
-  notificationsChanged: 'shell:notifications-changed'
+  notificationsChanged: 'shell:notifications-changed',
+  updatesChanged: 'shell:updates-changed'
 } as const
 
 export const ScheduleDateRequestSchema = z.object({

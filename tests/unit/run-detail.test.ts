@@ -10,7 +10,11 @@ const shell: ShellApi = {
   navigate: () => {},
   openCalendarWindow: () => {},
   openSettings: () => {},
-  notify: () => {}
+  notify: () => {},
+  updatesList: async () => ({ ok: true, logs: [], nextCursor: undefined }),
+  updatesStream: async () => ({ ok: true }),
+  onUpdatesChanged: () => () => {},
+  getRunLog: async () => ({ ok: true, log: undefined })
 }
 
 const runs = [

@@ -1,0 +1,423 @@
+.wc {
+  display: flex;
+  flex-direction: column;
+  margin-top: 14px;
+  background: #131316;
+  border: 1px solid #232326;
+  border-radius: 12px;
+  overflow: hidden;
+  flex: 1;
+  min-height: 620px;
+  user-select: none;
+}
+
+.wc-topbar {
+  height: 46px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0 12px;
+  flex: none;
+  border-bottom: 1px solid #232326;
+}
+
+.wc-today {
+  border: 1px solid #2c2c32;
+  background: #1b1b1e;
+  border-radius: 8px;
+  padding: 4px 11px;
+  font-size: 12px;
+  font-weight: 600;
+  color: #e7e7e9;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.wc-today:hover,
+.wc-nav:hover {
+  background: #252528;
+}
+
+.wc-nav {
+  border: none;
+  background: transparent;
+  color: #929299;
+  cursor: pointer;
+  padding: 3px 7px;
+  border-radius: 6px;
+  font-size: 14px;
+  line-height: 1;
+  font: inherit;
+}
+
+.wc-month {
+  font-size: 13px;
+  font-weight: 650;
+  color: #e7e7e9;
+  margin-left: 2px;
+}
+
+.wc-skipped {
+  margin-left: auto;
+  font-size: 11px;
+  color: #77777f;
+}
+
+.wc-grid {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  overflow-x: hidden;
+}
+
+/* One content box every layer anchors to: full-day height so the columns,
+   hour lines, labels, events and drop targets all share the same bottom. */
+.wc-content {
+  position: relative;
+}
+
+.wc-colsep {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 1px;
+  background: #232326;
+}
+
+.wc-hourline {
+  position: absolute;
+  left: 64px;
+  right: 0;
+  height: 1px;
+  background: #1d1d20;
+}
+
+.wc-hourlabel {
+  position: absolute;
+  left: 0;
+  width: 54px;
+  text-align: right;
+  font-size: 10.5px;
+  font-weight: 500;
+  color: #77777f;
+  line-height: 1;
+}
+
+.wc-dayheader {
+  position: absolute;
+  top: 0;
+  padding: 6px 0 0 12px;
+  display: flex;
+  flex-direction: row;
+  align-items: baseline;
+  gap: 6px;
+  height: 34px;
+  z-index: 30;
+  background: linear-gradient(#131316 70%, rgb(19 19 22 / 0%));
+}
+
+.wc-dayname {
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  color: #77777f;
+}
+
+.wc-daynum {
+  font-size: 14px;
+  font-weight: 550;
+  color: #e7e7e9;
+  width: auto;
+  height: auto;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 999px;
+  padding: 1px 6px;
+}
+
+.wc-daynum.is-today {
+  background: #c8c8ce;
+  color: #111113;
+  font-weight: 650;
+}
+
+.wc-nowline {
+  position: absolute;
+  height: 2px;
+  left: 56px;
+  right: 0;
+  background: #7c86f5;
+  border-radius: 2px;
+  z-index: 6;
+  pointer-events: none;
+}
+
+.wc-nowline::after {
+  content: '';
+  position: absolute;
+  left: -4px;
+  top: -3px;
+  width: 8px;
+  height: 8px;
+  border-radius: 999px;
+  background: #7c86f5;
+}
+
+.wc-nowpill {
+  position: absolute;
+  left: 6px;
+  z-index: 7;
+  background: #7c86f5;
+  color: #111113;
+  font-size: 10px;
+  font-weight: 650;
+  padding: 3px 7px;
+  border-radius: 999px;
+  line-height: 1;
+  pointer-events: none;
+}
+
+.wc-card {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 148px;
+  height: 94px;
+  will-change: transform;
+  touch-action: none;
+  cursor: grab;
+  border: none;
+  padding: 0;
+  text-align: left;
+  font: inherit;
+  color: inherit;
+  background-color: rgb(52 189 144 / 0.82);
+  border-radius: 14px;
+  display: flex;
+  overflow: hidden;
+  box-sizing: border-box;
+  transition: box-shadow 0.18s ease, filter 0.18s ease, background-color 0.18s ease;
+}
+
+.wc-card:active {
+  cursor: grabbing;
+}
+
+.wc-card:focus-visible {
+  outline: 2px solid #7c86f5;
+  outline-offset: 2px;
+}
+
+.wc-card-inner {
+  position: relative;
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  padding: 9px 10px 8px 11px;
+  overflow: hidden;
+  transition: filter 0.16s ease, opacity 0.16s ease;
+}
+
+.wc-card.is-drag .wc-card-inner {
+  filter: blur(7px);
+  opacity: 0.3;
+}
+
+.wc-card-top {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+}
+
+.wc-card-dots {
+  color: rgba(20, 20, 26, 0.55);
+  font-size: 10px;
+  letter-spacing: 1px;
+  margin: -1px -2px 0 0;
+}
+
+.wc-card-meta {
+  margin-top: 7px;
+  font-size: 9.5px;
+  font-weight: 550;
+  color: rgba(20, 20, 26, 0.6);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.wc-card-title {
+  margin-top: 3px;
+  font-size: 12.5px;
+  font-weight: 700;
+  color: #16161a;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.wc-hiddenbadge {
+  position: absolute;
+  top: 7px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: #0c0c0e;
+  border: 1px solid rgb(255 255 255 / 14%);
+  color: #f4f4f5;
+  font-size: 9.5px;
+  font-weight: 650;
+  padding: 3px 8px;
+  border-radius: 999px;
+  z-index: 4;
+  pointer-events: none;
+  white-space: nowrap;
+}
+
+.wc-draglabel {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  pointer-events: none;
+  z-index: 3;
+}
+
+.wc-draglabel span {
+  background: #1b1b1e;
+  border: 1px solid rgb(255 255 255 / 12%);
+  color: #f4f4f5;
+  font-size: 13.5px;
+  font-weight: 700;
+  padding: 8px 13px;
+  border-radius: 11px;
+  white-space: nowrap;
+  box-shadow: 0 10px 26px rgb(0 0 0 / 45%);
+}
+
+.wc-tooltip {
+  position: absolute;
+  z-index: 2000;
+  pointer-events: none;
+  transform: translate(-50%, 0);
+  background: #1b1b1e;
+  border: 1px solid rgb(255 255 255 / 12%);
+  color: #f4f4f5;
+  font-size: 10.5px;
+  font-weight: 600;
+  padding: 5px 10px;
+  border-radius: 8px;
+  white-space: nowrap;
+  box-shadow: 0 6px 18px rgb(0 0 0 / 40%);
+}
+
+.wc-card svg {
+  filter: saturate(0.4) brightness(0.35);
+}
+
+/* Day mode: match the light surfaces of the automations pages. */
+.light .wc {
+  background: #fff;
+  border-color: rgb(0 0 0 / 12%);
+}
+
+.light .wc-topbar {
+  border-bottom-color: rgb(0 0 0 / 12%);
+}
+
+.light .wc-today {
+  background: #fff;
+  border-color: rgb(0 0 0 / 12%);
+  color: #17191e;
+}
+
+.light .wc-today:hover,
+.light .wc-nav:hover {
+  background: #eef0f4;
+}
+
+.light .wc-nav {
+  color: #5b6270;
+}
+
+.light .wc-month {
+  color: #17191e;
+}
+
+.light .wc-skipped,
+.light .wc-hourlabel,
+.light .wc-dayname {
+  color: #5b6270;
+}
+
+.light .wc-hourline {
+  background: #ece9ef;
+}
+
+.light .wc-colsep {
+  background: rgb(0 0 0 / 12%);
+}
+
+.light .wc-daynum {
+  color: #17191e;
+}
+
+.light .wc-daynum.is-today {
+  background: #3a3f47;
+  color: #fafafa;
+}
+
+.light .wc-nowline,
+.light .wc-nowpill {
+  background: #e1485b;
+}
+
+.light .wc-nowline::after {
+  background: #e1485b;
+}
+
+.light .wc-nowpill {
+  color: #fff;
+}
+
+.light .wc-card {
+  background-color: rgb(243 245 250 / 0.8);
+  box-shadow: 0 2px 6px rgb(0 0 0 / 8%);
+}
+
+.light .wc-card-title {
+  color: #17191e;
+}
+
+.light .wc-card-meta,
+.light .wc-card-dots {
+  color: rgba(30 34 44 / 0.6);
+}
+
+.light .wc-card svg {
+  filter: saturate(0.4) brightness(0.45);
+}
+
+.light .wc-hiddenbadge,
+.light .wc-draglabel span,
+.light .wc-tooltip {
+  background: #23262d;
+  border-color: transparent;
+  color: #fafafa;
+}
+
+.light .wc-card:focus-visible {
+  outline-color: #3b46b8;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .wc-card,
+  .wc-card-inner {
+    transition: none;
+  }
+}

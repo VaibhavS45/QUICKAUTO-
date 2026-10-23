@@ -17,13 +17,21 @@
   display: flex;
   align-items: center;
   gap: 12px;
-  padding: 0 16px 0 80px;
+  /* --shell-titlebar-left keeps the macOS window controls clear. */
+  padding: 0 16px 0 var(--shell-titlebar-left, 98px);
   color: #85858b;
   background: #1a1a1a;
   -webkit-app-region: drag;
   user-select: none;
 }
 
+.shell-brand {
+  flex: 1;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  color: #f0f0f2;
+}
 
 /* Top bar nav: the pill splits either side of the active view, which stays in
    its own slot and turns orange. No borders, no glow. */
@@ -88,6 +96,76 @@
   background: #e04300;
 }
 
+/* The one breadcrumb of the app: top-left of the window, in the title bar.
+   Muted parents, "/" separator, the current page in the primary tone. It
+   shares the title bar's centre line and stops short of the nav pill: the
+   pill is ~470px wide and centred, so the breadcrumb gets what is left. */
+.shell-breadcrumbs {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  min-width: 0;
+  max-width: min(320px, calc(50vw - var(--shell-titlebar-left, 98px) - 256px));
+}
+
+.shell-breadcrumbs-list {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  font-size: 13px;
+  line-height: 1;
+}
+
+.shell-breadcrumbs-item {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 6px;
+}
+
+/* Only the current page gives up space: it ellipsizes instead. */
+.shell-breadcrumbs-item:last-child {
+  flex: 0 1 auto;
+  min-width: 0;
+}
+
+.shell-breadcrumbs-parent {
+  padding: 0;
+  border: 0;
+  color: #929299;
+  background: transparent;
+  font: inherit;
+  font-size: 13px;
+  white-space: nowrap;
+  cursor: pointer;
+  /* The title bar drags the window; the crumb link stays clickable. */
+  -webkit-app-region: no-drag;
+}
+
+.shell-breadcrumbs-parent:hover {
+  color: #e7e7e9;
+}
+
+.shell-breadcrumbs-sep {
+  color: #5f5f66;
+  font-size: 13px;
+}
+
+.shell-breadcrumbs-current {
+  min-width: 0;
+  overflow: hidden;
+  color: #e7e7e9;
+  font-size: 13px;
+  font-weight: 500;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 @media (prefers-reduced-motion: reduce) {
   .shell-topnav,
   .shell-topnav * {
@@ -143,76 +221,11 @@
 }
 
 .shell-topbar-actions .shell-profile-button {
-  width: 34px;
-  height: 34px;
+  width: 32px;
+  height: 32px;
   justify-content: center;
   padding: 0;
   border-radius: 50%;
-  transition: transform 180ms cubic-bezier(0.34, 1.56, 0.64, 1);
-}
-
-.shell-topbar-actions .shell-profile-button:hover {
-  transform: translateY(-1px);
-}
-
-.shell-topbar-actions .shell-profile-button:active {
-  transform: translateY(0) scale(0.94);
-}
-
-/* Avatar matches the pill aesthetic: graphite face, hairline ring. Hover rings
-   it with the accent orange; the open menu fills it orange like the active
-   nav pill, with a one-shot ring pulse. */
-.shell-topbar-actions .shell-avatar {
-  width: 28px;
-  height: 28px;
-  border: 1px solid #39393f;
-  color: #d6d6db;
-  background: linear-gradient(145deg, #43434a, #2a2a2e);
-  letter-spacing: 0.04em;
-  box-shadow: 0 0 0 1px rgb(0 0 0 / 60%);
-  transition: color 160ms ease, border-color 160ms ease, background-color 160ms ease, box-shadow 160ms ease;
-}
-
-.shell-topbar-actions .shell-profile-button:hover .shell-avatar {
-  color: #fff;
-  border-color: rgb(252 76 0 / 55%);
-  box-shadow: 0 0 0 3px rgb(252 76 0 / 16%), 0 0 0 1px rgb(0 0 0 / 60%);
-}
-
-.shell-topbar-actions .shell-profile-button[aria-expanded='true'] .shell-avatar {
-  animation: shell-avatar-pop 260ms ease;
-  color: #fff;
-  border-color: #fc4c00;
-  background: #fc4c00;
-  box-shadow: 0 0 0 3px rgb(252 76 0 / 22%), 0 0 0 1px rgb(0 0 0 / 60%);
-}
-
-@keyframes shell-avatar-pop {
-  0% {
-    box-shadow: 0 0 0 1px rgb(0 0 0 / 60%);
-  }
-
-  50% {
-    box-shadow: 0 0 0 6px rgb(252 76 0 / 28%), 0 0 0 1px rgb(0 0 0 / 60%);
-  }
-
-  100% {
-    box-shadow: 0 0 0 3px rgb(252 76 0 / 22%), 0 0 0 1px rgb(0 0 0 / 60%);
-  }
-}
-
-@media (prefers-reduced-motion: reduce) {
-
-  .shell-topbar-actions .shell-profile-button,
-  .shell-topbar-actions .shell-profile-button:hover,
-  .shell-topbar-actions .shell-profile-button:active {
-    transform: none;
-    transition: none;
-  }
-
-  .shell-topbar-actions .shell-profile-button[aria-expanded='true'] .shell-avatar {
-    animation: none;
-  }
 }
 
 .shell-topbar-actions .shell-notifications-panel {
@@ -438,19 +451,6 @@
   color: #898990;
   font-size: 11px;
   text-align: center;
-}
-
-.shell-menu-backdrop {
-  position: fixed;
-  inset: 0;
-  /* Fullscreen click-catcher for open menus. Without no-drag the window's
-     drag region underneath swallows clicks, so the menu feels frozen. */
-  -webkit-app-region: no-drag;
-  z-index: 3;
-  border: 0;
-  padding: 0;
-  background: transparent;
-  cursor: default;
 }
 
 .shell-profile-menu {
@@ -1770,6 +1770,7 @@
   color: #5b6270;
 }
 
+.light .shell-brand,
 .light .shell-home h2,
 .light .shell-home-automate > h2,
 .light .chat-composer-welcome h2 {
@@ -1793,6 +1794,22 @@
   color: #fff;
 }
 
+.light .shell-breadcrumbs-parent {
+  color: #5b6270;
+}
+
+.light .shell-breadcrumbs-parent:hover {
+  color: #17191e;
+}
+
+.light .shell-breadcrumbs-sep {
+  color: #9aa1ae;
+}
+
+.light .shell-breadcrumbs-current {
+  color: #17191e;
+}
+
 .light .shell-profile-button,
 .light .shell-icon-button {
   color: #4b5260;
@@ -1808,25 +1825,6 @@
 .light .shell-home-mark {
   color: #23262d;
   background: #d5d8de;
-}
-
-.light .shell-topbar-actions .shell-avatar {
-  border-color: #c3c7cf;
-  background: linear-gradient(145deg, #e6e8ee, #cfd2d9);
-  box-shadow: 0 0 0 1px rgb(0 0 0 / 8%);
-}
-
-.light .shell-topbar-actions .shell-profile-button:hover .shell-avatar {
-  color: #17191e;
-  border-color: rgb(224 67 0 / 55%);
-  box-shadow: 0 0 0 3px rgb(252 76 0 / 12%), 0 0 0 1px rgb(0 0 0 / 8%);
-}
-
-.light .shell-topbar-actions .shell-profile-button[aria-expanded='true'] .shell-avatar {
-  color: #fff;
-  border-color: #e04300;
-  background: #e04300;
-  box-shadow: 0 0 0 3px rgb(224 67 0 / 18%), 0 0 0 1px rgb(0 0 0 / 12%);
 }
 
 .light .shell-notification-badge { border-color: #f4f5f7; }

@@ -306,6 +306,38 @@
   font-size: 10px;
 }
 
+.automations-week {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  border-top: 1px solid #232326;
+  border-left: 1px solid #232326;
+}
+
+.automations-week-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 4px;
+}
+
+.automations-week-head strong {
+  color: #77777f;
+  font-size: 11px;
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+}
+
+.automations-week-head .automations-cell-day {
+  width: 20px;
+  height: 20px;
+  margin-left: 0;
+}
+
+.automations-chip strong {
+  font-weight: 600;
+}
+
 .automations-canvas {
   display: flex;
   flex: 1;
@@ -2560,6 +2592,7 @@
 .light .automation-breadcrumb button,
 .light .automations-month-head,
 .light .automations-weekdays,
+.light .automations-week-head strong,
 .light .automations-cell.is-outside .automations-cell-day,
 .light .automations-more,
 .light .automations-card-body small,
@@ -2621,7 +2654,8 @@
   box-shadow: 0 1px 3px rgb(0 0 0 / 14%);
 }
 
-.light .automations-month-grid {
+.light .automations-month-grid,
+.light .automations-week {
   border-top-color: rgb(0 0 0 / 12%);
   border-left-color: rgb(0 0 0 / 12%);
 }

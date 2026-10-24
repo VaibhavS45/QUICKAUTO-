@@ -95,6 +95,12 @@ describe('toAutomation', () => {
     expect(automation.status).toBe('paused')
     expect(automation.nextRunAt).toBeUndefined()
   })
+
+  it('keeps the schedule of an advanced routine so the canvas can show it', () => {
+    const automation = toAutomation(routine({ kind: 'advanced' }), BASE.getTime())
+    expect(automation.kind).toBe('advanced')
+    expect(automation.schedule?.type).toBe('daily')
+  })
 })
 
 describe('AutomationService', () => {

@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import type { ShellApi } from '../contracts/feature.js'
 import type { RunRecord } from '../../shared/contracts/schedule.js'
 import { localDayKey, pastDayLabel, routineTitle, timeLabel } from '../features/automations/dates.js'
+import { UpdatesGlyph } from '../components/ui/primitives.js'
 
 const SEEN_KEY = 'palette:updates-since'
 const PREVIEW_MAX_ROWS = 4
@@ -142,7 +143,7 @@ export function UpdatesStream({ shell }: { shell: ShellApi }): React.JSX.Element
                 aria-label={`${row.title}, ${row.status.replaceAll('_', ' ')}`}
               >
                 <span className="updates-row-meta">
-                  <span className="updates-row-icon" aria-hidden="true">⟁</span>
+                  <span className="updates-row-icon" aria-hidden="true"><UpdatesGlyph /></span>
                   <strong>{row.title}</strong>
                   <small>{timeLabel(row.at)}</small>
                 </span>

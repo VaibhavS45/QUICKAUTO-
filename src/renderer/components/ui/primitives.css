@@ -81,30 +81,6 @@
   .p-status--running .p-status-dot { animation: none; }
 }
 
-/* Thin ember sweep along the top edge of a running card. */
-.p-heatbar {
-  position: absolute;
-  top: 0;
-  left: 0;
-  right: 0;
-  height: 2px;
-  border-radius: var(--radius-md) var(--radius-md) 0 0;
-  overflow: hidden;
-  background: linear-gradient(90deg, transparent, var(--ember) 40%, var(--ember) 60%, transparent);
-  background-size: 220% 100%;
-  background-position: 100% 0;
-  animation: p-heat 2.8s linear infinite;
-}
-
-@keyframes p-heat {
-  from { background-position: 110% 0; }
-  to { background-position: -110% 0; }
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .p-heatbar { animation: none; background: var(--ember); background-size: 100% 100%; }
-}
-
 /* Mono micro-label: uppercase, tracked, ash-2. */
 .p-monolabel {
   font-family: var(--font-mono);
@@ -192,20 +168,10 @@
   gap: var(--space-2);
 }
 
-/* Timeline rail: dots + vertical hairline, for the updates feed. */
+/* Timeline rail: status dots, for the updates feed. */
 .p-rail {
   position: relative;
   padding-left: 20px;
-}
-
-.p-rail::before {
-  content: '';
-  position: absolute;
-  left: 5px;
-  top: 6px;
-  bottom: 6px;
-  width: 1px;
-  background: var(--line);
 }
 
 .p-rail-item {

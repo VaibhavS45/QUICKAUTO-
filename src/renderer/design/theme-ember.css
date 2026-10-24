@@ -282,13 +282,6 @@ code, kbd, pre, time {
   --focus-ink: 2px;
 }
 
-/* Heat sweep on running rows: thin 1px orange edge (was 2px). */
-.p-heatbar {
-  height: 1px;
-  background: linear-gradient(90deg, transparent, var(--ember) 40%, var(--ember) 60%, transparent);
-  animation: p-heat 2.8s linear infinite;
-}
-
 /* ---------------------------------------------------------------- extras */
 
 .card-hover-line {
@@ -301,49 +294,20 @@ code, kbd, pre, time {
 
 /* ------------------------------------------------------------ screens */
 
-/* Active nav pill: LED. Solid orange, dark ink, soft outer glow. */
-.shell-topnav-item.is-active {
-  box-shadow: 0 0 24px 0 var(--ember-glow);
-}
-
-/* Updates: mono day headers, no serif echoes. */
+/* Updates: sans day headers, matching the card list. */
 .updates-day > h3 {
-  font-family: var(--font-mono);
-  font-size: 11px;
+  font-family: var(--font-sans);
+  font-size: 16px;
   font-weight: 500;
-  line-height: 16px;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-  color: var(--text-disabled);
+  line-height: 22px;
+  letter-spacing: 0;
+  text-transform: none;
+  color: var(--text);
 }
-.updates-day > h3 span { color: var(--text-muted); font-weight: 400; }
+.updates-day > h3 span { color: var(--text-muted); font-size: 14px; font-weight: 500; }
 
-/* Summary strip: one bg-2 band, hairline between cells, dot-matrix figures. */
-.updates-summary {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(120px, 1fr));
-  width: 100%;
-  margin: 0 0 24px;
-  border: 1px solid var(--line);
-  border-radius: 10px;
-  background: var(--black-2);
-  box-shadow: inset 0 1px 0 var(--highlight);
-  overflow: hidden;
-}
-.updates-summary-cell {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  padding: 16px 20px;
-}
-.updates-summary-cell + .updates-summary-cell {
-  border-left: 1px solid var(--line);
-}
-.updates-summary-cell .p-num { font-size: 32px; }
+/* Summary figures: failures read alarm red. */
 .p-num.is-fail { color: var(--danger-bright); }
-.updates-summary-cell .p-monolabel {
-  color: var(--text-disabled);
-}
 .updates-body {
   max-width: var(--content-max);
   margin-inline: auto;
@@ -364,7 +328,7 @@ code, kbd, pre, time {
   margin-inline: auto;
 }
 
-/* Start cards: equal 140px height, icon rested in a bg-3 square. */
+/* Start cards: equal 140px height, icon rested in a grey tile. */
 .start-opt {
   min-height: 140px;
   box-shadow: inset 0 1px 0 var(--highlight);
@@ -373,11 +337,16 @@ code, kbd, pre, time {
 .start-icon {
   width: 40px;
   height: 40px;
-  border-radius: var(--radius-md);
-  background: var(--black-3);
+  border-radius: 10px;
+  background: var(--black-4);
   border: 1px solid var(--line);
   display: grid;
   place-items: center;
+  color: var(--ash-1);
+}
+.start-icon svg {
+  width: 20px;
+  height: 20px;
 }
 .start-badge {
   font-family: var(--font-mono);
@@ -594,11 +563,12 @@ code, kbd, pre, time {
   width: 100%;
 }
 
-/* Canvas: bg-0, unified 24px dot pitch behind nodes. Ports and edge "+" stay
-   neutral hairline — orange is reserved for the active nav and status. */
+/* Canvas: bg-0 with a panning dot + major grid, so it reads as a canvas.
+   Ports and edge "+" stay neutral hairline — orange is reserved for the active
+   nav and status. */
 .n8n-viewport {
-  background-image: radial-gradient(rgb(255 255 255 / 5%) 1px, transparent 1px);
-  background-size: 24px 24px;
+  --grid-dot: rgb(255 255 255 / 11%);
+  --grid-line: rgb(255 255 255 / 4%);
 }
 .n8n-handle {
   border-color: var(--line-3);
@@ -628,19 +598,9 @@ code, kbd, pre, time {
   font-size: 11px;
   color: var(--ash-3);
 }
-.n8n-title {
-  color: var(--ash-1);
-}
 .n8n-sub {
   color: var(--ash-3);
   font-size: var(--font-xs);
-}
-.n8n-status {
-  font-family: var(--font-mono);
-  font-size: 11px;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-  color: var(--ash-3);
 }
 
 /* Day fallback: keep surfaces legible while the day polish task is pending.

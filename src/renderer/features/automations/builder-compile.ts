@@ -1,5 +1,6 @@
 import type { AutomationTemplate } from '../../../shared/contracts/automation-templates.js'
 import type { AutomationCreate, AutomationSchedule, ScheduleType } from '../../../shared/contracts/automations.js'
+import { triggerMention } from './trigger-events.js'
 
 /** The schedule types the contract supports. */
 export type BuilderRepeat = ScheduleType
@@ -21,6 +22,8 @@ export interface BuilderTrigger {
   app: string
   /** what to watch for (event triggers) */
   event: string
+  /** Composio trigger config params (query, labelIds, owner, repo, …) folded into the event check */
+  config?: Record<string, string>
 }
 
 export interface BuilderDraft {
@@ -49,7 +52,8 @@ export function blankTrigger(kind: BuilderTriggerKind = 'schedule'): BuilderTrig
     weekdays: [],
     dayOfMonth: new Date().getDate(),
     app: 'gmail',
-    event: ''
+    event: '',
+    config: {}
   }
 }
 
@@ -115,7 +119,13 @@ export function draftToAutomation(draft: BuilderDraft): CompiledAutomation {
 
   const eventPhrases = draft.triggers
     .filter((t) => t.kind === 'event' && t.app && t.event.trim())
-    .map((t) => `check @${t.app} for ${t.event.trim()}`)
+    .map((t) => {
+      const config = Object.entries(t.config ?? {}).filter(([, value]) => value.trim())
+      const filters = config
+        .map(([key, value]) => `${key}="${value.trim().replaceAll('"', '\\"')}"`)
+        .join(', ')
+      return `check @${triggerMention(t.app)} for ${t.event.trim()}${filters ? ` with config ${filters}` : ''}`
+    })
   const prompt = [task, ...eventPhrases].filter(Boolean).join('. ')
   if (!prompt.trim()) return fail('Describe what the agent should do.')
 

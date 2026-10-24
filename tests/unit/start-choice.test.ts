@@ -17,6 +17,22 @@ describe('start choice', () => {
     expect(html).toContain('<svg')
   })
 
+  it('puts the weekday on the repeat row for weekly schedules', () => {
+    const html = renderToStaticMarkup(
+      createElement(Builder, {
+        initial: { ...blankDraft(), triggers: [{ ...blankTrigger('schedule'), repeat: 'weekly', weekdays: [6] }] },
+        gmailConnected: false,
+        onConnect: () => {},
+        onClose: () => {},
+        onSubmit: async () => null
+      })
+    )
+    expect(html).toContain('Weekly')
+    expect(html).toContain('Saturday')
+    // The day is a pill in the when row, not a second row of chips.
+    expect(html).not.toContain('st-weekdays')
+  })
+
   it('renders the event trigger form for triggered tasks', () => {
     const html = renderToStaticMarkup(
       createElement(Builder, {
@@ -28,7 +44,7 @@ describe('start choice', () => {
       })
     )
     expect(html).toContain('When this happens')
-    expect(html).toContain('mailbox')
+    expect(html).toContain('in Gmail')
     expect(html).toContain('a new conversation is started')
   })
 

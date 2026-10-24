@@ -20,7 +20,8 @@ describe('home view', () => {
   it('shows the start panel with updates and no chat bar', () => {
     const html = renderToStaticMarkup(createElement(HomeView, { shell }))
     expect(html).toContain('Automate your work')
-    expect(html).toContain('Choose how it starts')
+    // The panel leads with the choices; the label lives only in the create dialog.
+    expect(html).not.toContain('Choose how it starts')
     for (const opt of START_OPTIONS) expect(html).toContain(opt.title)
     expect(html).toContain('No updates yet')
     expect(html).not.toContain('<textarea')

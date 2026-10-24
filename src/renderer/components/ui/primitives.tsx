@@ -47,6 +47,21 @@ export function StatusBadge({ status, label }: { status: RunStatus; label?: stri
   )
 }
 
+/** Branch/flow glyph for an update card. */
+export function UpdatesGlyph(): React.JSX.Element {
+  return (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <path d="m10.586 5.414-5.172 5.172" />
+      <path d="m18.586 13.414-5.172 5.172" />
+      <path d="M6 12h12" />
+      <circle cx="12" cy="20" r="2" />
+      <circle cx="12" cy="4" r="2" />
+      <circle cx="20" cy="12" r="2" />
+      <circle cx="4" cy="12" r="2" />
+    </svg>
+  )
+}
+
 /** Empty/zero-data state with an optional call to action. */
 export function EmptyState({ title, body, action }: {
   title: string

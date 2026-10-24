@@ -4,6 +4,7 @@ import {
   NODE_W,
   blankStep,
   canvasStepsForRoutine,
+  canvasToCreate,
   canvasToPrompt,
   compileCanvasToSchedulerText,
   defaultCanvasSteps,
@@ -14,6 +15,7 @@ import {
   moveCanvasStep,
   moveStepTo,
   removeCanvasStep,
+  scheduleFromSteps,
   tidyCanvasSteps,
   updateCanvasStep
 } from '../../src/renderer/features/automations/canvas-steps.js'
@@ -98,5 +100,22 @@ describe('canvas steps', () => {
     expect(text).toContain('Morning Briefing')
     expect(text).toContain('at 9:00am')
     expect(text).toContain('@gmail')
+  })
+
+  it('creates a Manage automation from the chain, keeping the trigger time', () => {
+    const base = defaultCanvasSteps()
+    const steps = updateCanvasStep(base, base[0]!.id, { subtitle: 'weekly · 6:30 pm' })
+    const input = canvasToCreate(steps, 'Morning briefing', new Date(2026, 9, 25, 8, 0))
+    expect(input.kind).toBe('advanced')
+    expect(input.title).toBe('Morning briefing')
+    expect(input.schedule).toEqual({ type: 'weekly', time: '18:30', weekdays: [0] })
+    // Placeholders never leak into the stored prompt.
+    expect(input.prompt).not.toMatch(/select the/i)
+    const monthly = scheduleFromSteps(
+      updateCanvasStep(base, base[0]!.id, { subtitle: 'monthly · 9:00 am' }),
+      new Date(2026, 9, 25)
+    )
+    expect(monthly).toEqual({ type: 'monthly', time: '09:00', dayOfMonth: 25 })
+    expect(canvasToCreate(steps, '  ').title).toBe('New automation')
   })
 })

@@ -7,8 +7,8 @@ import {
   NODE_H,
   NODE_W,
   WORLD,
-  blankStep,
   canvasStepsForRoutine,
+  canvasToCreate,
   canvasToPatch,
   edgePath,
   insertCanvasStep,
@@ -17,7 +17,6 @@ import {
   removeCanvasStep,
   tidyCanvasSteps,
   updateCanvasStep,
-  type CanvasKind,
   type CanvasStep
 } from './canvas-steps.js'
 import { parseAutomationCreate, parseAutomationTab, type AutomationTabId } from '../../shell/nav.js'
@@ -26,7 +25,8 @@ import CanvasDescribeBar from './canvas-describe.js'
 import { formatDateTime } from '../../lib/format.js'
 import ScheduledTasks from './ScheduledTasks.js'
 import { ConfirmDialog } from './ConfirmDialog.js'
-import { StatusBadge } from '../../components/ui/primitives.js'
+import { StatusBadge, UpdatesGlyph } from '../../components/ui/primitives.js'
+import { CanvasNodeIcon, CanvasStepEditor, CanvasStepPicker, type CanvasPick, type CanvasPickTarget } from './canvas-picker.js'
 import './automations.css'
 
 interface Routine {
@@ -46,16 +46,17 @@ interface ZapStep {
   filled: boolean
 }
 
-export const CANVAS_KINDS: { kind: CanvasKind; label: string; hint: string }[] = [
-  { kind: 'trigger', label: 'Trigger', hint: 'Starts the workflow' },
-  { kind: 'action', label: 'Action', hint: 'Do something' },
-  { kind: 'gmail', label: 'Gmail', hint: 'Send or read email' },
-  { kind: 'filter', label: 'Filter', hint: 'Only continue if…' },
-  { kind: 'delay', label: 'Delay', hint: 'Wait, then continue' }
-]
-
 function errorText(reason: unknown): string {
   return reason instanceof Error ? reason.message : String(reason)
+}
+
+/** Canvas header title: the prompt without its @tool mentions. */
+function canvasHeadTitle(prompt: string): string {
+  const clean = routineTitle(prompt)
+    .replace(/\s*@[a-z-]+/gi, ' ')
+    .replace(/\s{2,}/g, ' ')
+    .trim()
+  return clean || 'Untitled automation'
 }
 
 function FilterIcon(): React.JSX.Element {
@@ -73,41 +74,6 @@ export function stepsForRoutine(routine: Routine | undefined): ZapStep[] {
     subtitle: s.subtitle,
     filled: s.filled
   }))
-}
-
-/**
- * Instrument strip above the Updates feed: dot-matrix numbers for the day.
- * One emissive orange figure (runs today); failures read alarm red; the next
- * scheduled run is a clock. Mirrors the run/schedule data already loaded.
- */
-export function UpdatesSummary({ runs, todayItems, todayKey }: {
-  runs: RunRecord[]
-  todayItems: ScheduleItem[]
-  todayKey: string
-}): React.JSX.Element {
-  const runsToday = runs.filter((run) => localDayKey(new Date(run.startedAt)) === todayKey).length
-  const failures = runs.filter((run) => run.status === 'failed').length
-  const now = Date.now()
-  const todayNext = (todayItems ?? [])
-    .map((item) => item.at)
-    .filter((at) => at > now)
-    .sort((a, b) => a - b)[0]
-  return (
-    <div className="updates-summary" role="group" aria-label="Run summary">
-      <div className="updates-summary-cell">
-        <span className="p-monolabel">Runs today</span>
-        <span className={`p-num${runsToday > 0 ? ' is-heat' : ''}`}>{runsToday}</span>
-      </div>
-      <div className="updates-summary-cell">
-        <span className="p-monolabel">Failures</span>
-        <span className={`p-num${failures > 0 ? ' is-fail' : ''}`}>{failures}</span>
-      </div>
-      <div className="updates-summary-cell">
-        <span className="p-monolabel">Next run</span>
-        <span className="p-num">{typeof todayNext === 'number' ? timeLabel(todayNext) : '—'}</span>
-      </div>
-    </div>
-  )
 }
 
 export function UpdatesList({ runs, todayKey, onSelect }: {
@@ -142,12 +108,11 @@ export function UpdatesList({ runs, todayKey, onSelect }: {
                   aria-hidden="true"
                 />
                 <span className="updates-row-meta">
-                  <span className="updates-row-icon" aria-hidden="true">⟁</span>
+                  <span className="updates-row-icon" aria-hidden="true"><UpdatesGlyph /></span>
                   <strong>{routineTitle(run.title)}</strong>
                   <small>{timeLabel(run.endedAt ?? run.startedAt)}</small>
                 </span>
                 <span className="updates-row-body">{run.summary || 'No output recorded yet.'}</span>
-                {run.status === 'running' && <span className="p-heatbar" aria-hidden="true" />}
               </button>
             ))}
           </div>
@@ -227,11 +192,10 @@ export default function AutomationsView(props: FeatureProps): React.JSX.Element 
   const [selectedStepId, setSelectedStepId] = useState('')
   const [openStepMenuId, setOpenStepMenuId] = useState('')
   const [addAt, setAddAt] = useState<number | null>(null)
-  const [editTitle, setEditTitle] = useState('')
-  const [editEvent, setEditEvent] = useState('')
-  const [editKind, setEditKind] = useState<CanvasKind>('action')
   const [vp, setVp] = useState({ x: 24, y: 0, z: 1 })
   const viewportRef = useRef<HTMLDivElement | null>(null)
+  /** The canvas that was just created keeps the nodes it was built from. */
+  const keepCanvasRef = useRef('')
   const dragRef = useRef<
     | { mode: 'pan'; sx: number; sy: number; ox: number; oy: number }
     | { mode: 'node'; id: string; dx: number; dy: number }
@@ -344,6 +308,8 @@ export default function AutomationsView(props: FeatureProps): React.JSX.Element 
 
   useEffect(() => {
     if (!props.focusId || routines.length === 0) return
+    // Canvas-built automations open on the canvas, not in the Manage detail.
+    if (automations.some((automation) => automation.id === props.focusId && automation.kind === 'advanced')) return
     const known =
       routines.some((routine) => routine.id === props.focusId) ||
       todayItems.some((item) => item.routineId === props.focusId) ||
@@ -352,7 +318,7 @@ export default function AutomationsView(props: FeatureProps): React.JSX.Element 
     if (tab !== 'manage') {
       props.shell.navigate('automations', { automationTab: 'manage', focusId: props.focusId })
     }
-  }, [props.focusId, routines, todayItems, tomorrowItems, tab, props.shell])
+  }, [props.focusId, routines, automations, todayItems, tomorrowItems, tab, props.shell])
 
   /** "+ Create" belongs to the Automate section, not to Manage. */
   function goCreate(): void {
@@ -360,35 +326,45 @@ export default function AutomationsView(props: FeatureProps): React.JSX.Element 
   }
 
   /**
-   * The canvas takes free text, so it goes through the prose path: the
-   * scheduler reads the time and the @tools out of the sentence and stores a
-   * routine the automation view reads back.
+   * The canvas takes free text, so the sentence becomes the first action and
+   * the trigger node keeps the schedule. The result is a real automation, so
+   * it shows up in Manage and reopens here when edited.
    */
-  async function submitCanvasDescribe(): Promise<void> {
+  async function createCanvasAutomation(): Promise<void> {
+    if (canvasBusy) return
     const text = canvasPrompt.trim()
-    if (!text || canvasBusy) return
     setCanvasBusy(true)
     setCanvasError('')
     try {
-      const res = await window.app.routineCreate(text)
-      if (!res.ok) {
+      const firstAction = canvasSteps.find((step) => step.kind !== 'trigger')
+      const steps = text && firstAction ? updateCanvasStep(canvasSteps, firstAction.id, { subtitle: text }) : canvasSteps
+      const title = canvasHeadTitle(text || firstAction?.subtitle || '')
+      const input = canvasToCreate(steps, title)
+      const res = await window.app.automationsCreate(text ? { ...input, prompt: text.slice(0, 20000) } : input)
+      if (!res.ok || !res.automation) {
         setCanvasError(res.error || 'Could not create the automation.')
         return
       }
       await refresh()
-      const id = (res as { routine?: { id?: string } }).routine?.id
-      if (id) props.shell.navigate('automations', { automationTab: 'canvas', focusId: id })
+      // The nodes on screen are what was just created: don't rebuild them.
+      keepCanvasRef.current = res.automation.id
+      setCanvasKey(res.automation.id)
+      setCanvasSteps(steps)
       setCanvasPrompt('')
       setCanvasDescribe(false)
+      props.shell.navigate('automations', { automationTab: 'canvas', focusId: res.automation.id })
+    } catch (reason) {
+      setCanvasError(errorText(reason))
     } finally {
       setCanvasBusy(false)
     }
   }
 
-  // The canvas shows the same automation the Manage list edits.
+  // The canvas shows the automation in the route, or else the most recent one.
   const canvasAutomation =
     automations.find((automation) => automation.id === props.focusId) ??
-    automations[0]
+    automations[0] ??
+    null
   const canvasRoutine = canvasAutomation
     ? {
       prompt: canvasAutomation.prompt ?? canvasAutomation.title,
@@ -400,13 +376,16 @@ export default function AutomationsView(props: FeatureProps): React.JSX.Element 
   const canvasRoutineKey = canvasAutomation?.id ?? 'blank'
 
   useEffect(() => {
-    if (canvasRoutineKey !== canvasKey) {
-      setCanvasKey(canvasRoutineKey)
-      setCanvasSteps(canvasStepsForRoutine(canvasRoutine))
-      setSelectedStepId('')
-      setOpenStepMenuId('')
-      setAddAt(null)
+    if (canvasRoutineKey === canvasKey) return
+    setCanvasKey(canvasRoutineKey)
+    if (keepCanvasRef.current === canvasRoutineKey) {
+      keepCanvasRef.current = ''
+      return
     }
+    setCanvasSteps(canvasStepsForRoutine(canvasRoutine))
+    setSelectedStepId('')
+    setOpenStepMenuId('')
+    setAddAt(null)
   }, [canvasRoutineKey, canvasKey, canvasRoutine])
 
   const selectedStep = useMemo(
@@ -414,37 +393,11 @@ export default function AutomationsView(props: FeatureProps): React.JSX.Element 
     [canvasSteps, selectedStepId]
   )
 
-  useEffect(() => {
-    if (selectedStep) {
-      setEditTitle(selectedStep.title)
-      setEditEvent(selectedStep.subtitle)
-      setEditKind(selectedStep.kind)
-    }
-  }, [selectedStep?.id]) // eslint-disable-line react-hooks/exhaustive-deps
+  /** A step the user configured: Create can go ahead without a description. */
+  const hasCanvasWork = canvasSteps.some((step) => step.kind !== 'trigger' && !/^select /i.test(step.subtitle))
 
   function pickStep(step: CanvasStep): void {
     setSelectedStepId(step.id)
-    setEditTitle(step.title)
-    setEditEvent(step.subtitle)
-    setEditKind(step.kind)
-  }
-
-  function saveStepEdit(event: React.FormEvent): void {
-    event.preventDefault()
-    if (!selectedStep) return
-    const title =
-      editKind === 'trigger' ? 'Trigger'
-      : editKind === 'gmail' ? 'Gmail'
-      : editKind === 'filter' ? 'Filter'
-      : editKind === 'delay' ? 'Delay'
-      : editTitle.trim() || 'Action'
-    const next = updateCanvasStep(canvasSteps, selectedStep.id, {
-      kind: editKind,
-      title,
-      subtitle: editEvent.trim() || blankStep(editKind).subtitle
-    })
-    setCanvasSteps(next)
-    void persistCanvas(next)
   }
 
   /** Write the edited nodes back onto the automation they came from. */
@@ -468,6 +421,30 @@ export default function AutomationsView(props: FeatureProps): React.JSX.Element 
     setCanvasSteps((steps) =>
       insertCanvasStep(steps, steps.length, 'action', { x: w.x - NODE_W / 2, y: w.y - NODE_H / 2 })
     )
+  }
+
+  /** Add-step panel picks: a trigger retargets step 1, the rest insert a node. */
+  function addPickedStep(at: number, target: CanvasPickTarget, pick: CanvasPick): void {
+    if (target === 'trigger') {
+      const trigger = canvasSteps.find((step) => step.kind === 'trigger') ?? canvasSteps[0]
+      if (trigger) {
+        // The trigger keeps its schedule; the pick only changes which app starts it.
+        const schedule = trigger.subtitle.includes('·') ? trigger.subtitle : 'daily · 9:00 am'
+        setCanvasSteps((steps) => updateCanvasStep(steps, trigger.id, { kind: 'trigger', title: pick.title, subtitle: schedule }))
+      }
+      setAddAt(null)
+      return
+    }
+    setCanvasSteps((steps) => insertCanvasStep(steps, at, pick.kind, undefined, { title: pick.title, subtitle: pick.subtitle }))
+    setAddAt(null)
+  }
+
+  /** Step inspector save: update the node and write it back to the automation. */
+  function applyStepEdit(patch: Partial<Pick<CanvasStep, 'kind' | 'title' | 'subtitle'>>): void {
+    if (!selectedStep) return
+    const next = updateCanvasStep(canvasSteps, selectedStep.id, patch)
+    setCanvasSteps(next)
+    void persistCanvas(next)
   }
 
   useEffect(() => {
@@ -540,8 +517,25 @@ export default function AutomationsView(props: FeatureProps): React.JSX.Element 
     window.addEventListener('pointerup', up)
   }
 
+  const ZOOM_MIN = 0.35
+  const ZOOM_MAX = 1.8
+
+  /** Zoom about a viewport point so the spot under the cursor stays put. */
+  function zoomAt(clientX: number, clientY: number, factor: number): void {
+    const rect = viewportRef.current?.getBoundingClientRect()
+    const px = clientX - (rect?.left ?? 0)
+    const py = clientY - (rect?.top ?? 0)
+    setVp((v) => {
+      const z = Math.max(ZOOM_MIN, Math.min(ZOOM_MAX, v.z * factor))
+      if (z === v.z) return v
+      const ratio = z / v.z
+      return { z, x: px - (px - v.x) * ratio, y: py - (py - v.y) * ratio }
+    })
+  }
+
   function zoomBy(factor: number): void {
-    setVp((v) => ({ ...v, z: Math.max(0.4, Math.min(1.6, v.z * factor)) }))
+    const rect = viewportRef.current?.getBoundingClientRect()
+    zoomAt((rect?.left ?? 0) + (rect?.width ?? 0) / 2, (rect?.top ?? 0) + (rect?.height ?? 0) / 2, factor)
   }
 
   function fitCanvas(): void {
@@ -558,20 +552,40 @@ export default function AutomationsView(props: FeatureProps): React.JSX.Element 
     const maxX = Math.max(...xs) + NODE_W
     const minY = Math.min(...ys)
     const maxY = Math.max(...ys) + NODE_H
-    const z = Math.max(0.4, Math.min(1.2, Math.min((vw - 80) / Math.max(1, maxX - minX), (vh - 80) / Math.max(1, maxY - minY))))
-    setVp({ x: 40 - minX * z, y: vh / 2 - ((minY + maxY) / 2) * z, z })
+    const z = Math.max(ZOOM_MIN, Math.min(1.2, Math.min((vw - 80) / Math.max(1, maxX - minX), (vh - 80) / Math.max(1, maxY - minY))))
+    setVp({ x: 48 - minX * z, y: vh / 2 - ((minY + maxY) / 2) * z, z })
   }
 
+  // Trackpad: vertical swipe zooms, horizontal swipe pans; pinch is ignored
+  // (its event stream was far too sensitive). Drag still pans.
   useEffect(() => {
     const el = viewportRef.current
     if (!el) return
     const onWheel = (e: WheelEvent): void => {
       e.preventDefault()
-      setVp((v) => ({ ...v, z: Math.max(0.4, Math.min(1.6, v.z * (e.deltaY > 0 ? 0.92 : 1.08))) }))
+      if (e.ctrlKey) return
+      if (Math.abs(e.deltaX) > Math.abs(e.deltaY)) {
+        setVp((v) => ({ ...v, x: v.x - e.deltaX }))
+        return
+      }
+      const factor = Math.max(0.92, Math.min(1.08, Math.exp(-e.deltaY * 0.005)))
+      zoomAt(e.clientX, e.clientY, factor)
     }
     el.addEventListener('wheel', onWheel, { passive: false })
     return () => el.removeEventListener('wheel', onWheel)
-  }, [tab])
+  }, [tab]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Frame the chain the first time the canvas is shown, so it never opens
+  // jammed into the top-left corner.
+  const fittedRef = useRef(false)
+  useEffect(() => {
+    if (tab !== 'canvas' || fittedRef.current || canvasSteps.length === 0) return
+    const id = requestAnimationFrame(() => {
+      fittedRef.current = true
+      fitCanvas()
+    })
+    return () => cancelAnimationFrame(id)
+  }, [tab, canvasSteps.length]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const runId = props.focusRunId ?? ''
   const goUpdates = (): void => {
@@ -635,7 +649,6 @@ export default function AutomationsView(props: FeatureProps): React.JSX.Element 
 
       {!loading && !error && tab === 'updates' && (
         <div className="automations-body updates-body">
-          <UpdatesSummary runs={runs} todayItems={todayItems} todayKey={todayKey} />
           <UpdatesList
             runs={runs}
             todayKey={todayKey}
@@ -650,7 +663,15 @@ export default function AutomationsView(props: FeatureProps): React.JSX.Element 
             onlyActive={activeOnly}
             focusAutomationId={props.focusId}
             selectedId={manageSelectedId}
-            onSelect={setManageSelectedId}
+            onSelect={(id) => {
+              // Automations built on the canvas reopen there, not in the form.
+              const target = automations.find((automation) => automation.id === id)
+              if (target?.kind === 'advanced') {
+                props.shell.navigate('automations', { automationTab: 'canvas', focusId: id })
+                return
+              }
+              setManageSelectedId(id)
+            }}
             onCreate={goCreate}
             onOpenRun={(runId) => props.shell.navigate('automations', { automationTab: 'updates', focusRunId: runId })}
             onDirtyChange={setManageDirty}
@@ -660,26 +681,43 @@ export default function AutomationsView(props: FeatureProps): React.JSX.Element 
 
       {!loading && !error && tab === 'canvas' && (
         <div className="automations-canvas">
+          <header className="canvas-head">
+            <div className="canvas-head-text">
+              <strong title={canvasRoutine ? routineTitle(canvasRoutine.prompt) : 'New canvas'}>
+                {canvasRoutine ? canvasHeadTitle(canvasRoutine.prompt) : 'New canvas'}
+              </strong>
+              {canvasRoutine && <span className="canvas-head-meta">{canvasRoutine.repeat} · {timeLabel(canvasRoutine.runAt)}</span>}
+            </div>
+            <button
+              type="button"
+              className="canvas-head-create"
+              title="Turn this canvas into an automation"
+              onClick={() => setCanvasDescribe(true)}
+            >
+              Create
+            </button>
+          </header>
           <div
             className="n8n-viewport"
             ref={viewportRef}
-            onPointerDown={beginPan}
+            style={{
+              backgroundSize: `${24 * vp.z}px ${24 * vp.z}px, ${120 * vp.z}px ${120 * vp.z}px, ${120 * vp.z}px ${120 * vp.z}px`,
+              backgroundPosition: `${vp.x}px ${vp.y}px, ${vp.x}px ${vp.y}px, ${vp.x}px ${vp.y}px`
+            }}
+            onPointerDown={(e) => {
+              if (!(e.target as HTMLElement).closest('.n8n-picker, .n8n-edge-add, .n8n-end')) setAddAt(null)
+              beginPan(e)
+            }}
             onDoubleClick={(e) => {
-              if ((e.target as HTMLElement).closest('.n8n-node, .n8n-menu, .n8n-edge-add, .n8n-end, button, .n8n-toolbar, .n8n-topbar, .n8n-inspector, .n8n-describe')) return
+              if ((e.target as HTMLElement).closest('.n8n-node, .n8n-menu, .n8n-picker, .n8n-edge-add, .n8n-end, button, .n8n-toolbar, .n8n-inspector, .n8n-describe')) return
               addAtPoint(e.clientX, e.clientY)
             }}
             aria-label={canvasRoutine ? `Canvas for ${routineTitle(canvasRoutine.prompt)}` : 'Canvas builder'}
           >
-            <div className="n8n-topbar">
-              <span className="n8n-status">
-                {canvasRoutine ? `${routineTitle(canvasRoutine.prompt)} · ${canvasRoutine.repeat} · ${timeLabel(canvasRoutine.runAt)}` : 'Blank canvas'}
-              </span>
-              <button type="button" className="n8n-create" title="Describe an automation for the agent to create" onClick={() => setCanvasDescribe(true)}>Create</button>
-            </div>
             <div className="n8n-toolbar" role="toolbar" aria-label="Canvas controls">
-              <button type="button" aria-label="Zoom out" onClick={() => zoomBy(0.9)}>−</button>
+              <button type="button" aria-label="Zoom out" onClick={() => zoomBy(0.87)}>−</button>
               <span aria-hidden="true">{Math.round(vp.z * 100)}%</span>
-              <button type="button" aria-label="Zoom in" onClick={() => zoomBy(1.1)}>+</button>
+              <button type="button" aria-label="Zoom in" onClick={() => zoomBy(1.15)}>+</button>
               <button type="button" aria-label="Fit to screen" onClick={fitCanvas}>Fit</button>
               <button type="button" aria-label="Tidy layout" title="Arrange nodes left to right" onClick={() => setCanvasSteps((s) => tidyCanvasSteps(s))}>Tidy</button>
             </div>
@@ -708,7 +746,7 @@ export default function AutomationsView(props: FeatureProps): React.JSX.Element 
                   <span className="n8n-handle in" aria-hidden="true" />
                   <button type="button" className="n8n-head" onClick={() => pickStep(step)} aria-label={`Configure step ${i + 1} ${step.title}`}>
                     <span className="n8n-icon" aria-hidden="true">
-                      {step.kind === 'trigger' ? '⚡' : step.kind === 'gmail' ? '✉' : step.kind === 'filter' ? '⧩' : step.kind === 'delay' ? '◷' : '◆'}
+                      <CanvasNodeIcon step={step} />
                     </span>
                     <span className="n8n-titles">
                       <strong>{step.title}</strong>
@@ -755,18 +793,12 @@ export default function AutomationsView(props: FeatureProps): React.JSX.Element 
                       +
                     </button>
                     {addAt === edgeIndex && (
-                      <div className="n8n-menu" role="menu" aria-label={`Add step before step ${edgeIndex + 1}`}>
-                        {CANVAS_KINDS.map((kk) => (
-                          <button
-                            key={kk.kind}
-                            type="button"
-                            role="menuitem"
-                            onClick={() => { setCanvasSteps((s) => insertCanvasStep(s, edgeIndex, kk.kind)); setAddAt(null) }}
-                          >
-                            <strong>{kk.label}</strong><small>{kk.hint}</small>
-                          </button>
-                        ))}
-                      </div>
+                      <CanvasStepPicker
+                        ariaLabel={`Add step before step ${edgeIndex + 1}`}
+                        zoom={vp.z}
+                        onPick={(target, pick) => addPickedStep(edgeIndex, target, pick)}
+                        onClose={() => setAddAt(null)}
+                      />
                     )}
                   </div>
                 )
@@ -781,57 +813,38 @@ export default function AutomationsView(props: FeatureProps): React.JSX.Element 
                       <span aria-hidden="true">+</span> Add step
                     </button>
                     {addAt === canvasSteps.length && (
-                      <div className="n8n-menu" role="menu" aria-label="Add step at the end">
-                        {CANVAS_KINDS.map((kk) => (
-                          <button
-                            key={kk.kind}
-                            type="button"
-                            role="menuitem"
-                            onClick={() => { setCanvasSteps((s) => insertCanvasStep(s, s.length, kk.kind)); setAddAt(null) }}
-                          >
-                            <strong>{kk.label}</strong><small>{kk.hint}</small>
-                          </button>
-                        ))}
-                      </div>
+                      <CanvasStepPicker
+                        ariaLabel="Add step at the end"
+                        zoom={vp.z}
+                        onPick={(target, pick) => addPickedStep(canvasSteps.length, target, pick)}
+                        onClose={() => setAddAt(null)}
+                      />
                     )}
                   </div>
                 )
               })()}
             </div>
-            <p className="n8n-hint" aria-hidden="true">Drag nodes to arrange · drag background to pan · scroll to zoom · double-click empty canvas to add</p>
+            <p className="n8n-hint" aria-hidden="true">Swipe up/down to zoom · swipe sideways or drag to pan · double-click empty canvas to add</p>
             {canvasDescribe && (
               <CanvasDescribeBar
                 value={canvasPrompt}
                 busy={canvasBusy}
+                disabled={!canvasPrompt.trim() && !hasCanvasWork}
                 error={canvasError}
                 onChange={(value) => { setCanvasPrompt(value); setCanvasError('') }}
-                onSubmit={() => void submitCanvasDescribe()}
+                onSubmit={() => void createCanvasAutomation()}
                 onClose={() => { setCanvasDescribe(false); setCanvasError('') }}
               />
             )}
             {selectedStep && (
               <div className="n8n-inspector" aria-label={`Configure step ${selectedStep.title}`}>
-                <form className="canvas-editor" onSubmit={saveStepEdit}>
-                  <h3>Step {canvasSteps.findIndex((s) => s.id === selectedStep.id) + 1} · {selectedStep.title}</h3>
-                  <label className="canvas-label" htmlFor="canvas-kind">App</label>
-                  <select id="canvas-kind" className="canvas-select" value={editKind} onChange={(e) => setEditKind(e.currentTarget.value as CanvasKind)}>
-                    {CANVAS_KINDS.map((k) => (
-                      <option key={k.kind} value={k.kind}>{k.label} — {k.hint}</option>
-                    ))}
-                  </select>
-                  {editKind === 'action' && (
-                    <>
-                      <label className="canvas-label" htmlFor="canvas-title">Action name</label>
-                      <input id="canvas-title" value={editTitle} onChange={(e) => setEditTitle(e.currentTarget.value)} placeholder="Sheets, GitHub, Websearch…" />
-                    </>
-                  )}
-                  <label className="canvas-label" htmlFor="canvas-event">Event</label>
-                  <input id="canvas-event" value={editEvent} onChange={(e) => setEditEvent(e.currentTarget.value)} placeholder="What should this step do?" />
-                  <div className="canvas-editor-row">
-                    <button type="submit">Apply</button>
-                    <button type="button" onClick={() => setSelectedStepId('')}>Done</button>
-                  </div>
-                </form>
+                <CanvasStepEditor
+                  key={selectedStep.id}
+                  step={selectedStep}
+                  index={canvasSteps.findIndex((s) => s.id === selectedStep.id) + 1}
+                  onApply={applyStepEdit}
+                  onClose={() => setSelectedStepId('')}
+                />
               </div>
             )}
           </div>

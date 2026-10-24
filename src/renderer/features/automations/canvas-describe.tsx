@@ -1,6 +1,7 @@
 interface CanvasDescribeProps {
   value: string
   busy: boolean
+  disabled: boolean
   error: string
   onChange(value: string): void
   onSubmit(): void
@@ -20,9 +21,9 @@ export default function CanvasDescribeBar(props: CanvasDescribeProps): React.JSX
         aria-label="Describe the automation"
         value={props.value}
         onChange={(e) => props.onChange(e.currentTarget.value)}
-        placeholder="Describe the automation and the agent will create it…"
+        placeholder="Describe what this automation should do…"
       />
-      <button type="submit" disabled={!props.value.trim() || props.busy}>
+      <button type="submit" disabled={props.busy || props.disabled}>
         {props.busy ? 'Creating…' : 'Create'}
       </button>
       {props.error && <p role="alert" className="n8n-describe-error">{props.error}</p>}

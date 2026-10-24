@@ -49,9 +49,6 @@ export function HomeView({ shell, params }: { shell: ShellApi; params?: Record<s
     <section className="shell-home-automate" aria-label={t('home.title')}>
       <h2>{t('home.title')}</h2>
       <div className="home-start-card">
-        <div className="home-start-head">
-          <strong>{t('home.chooseStart')}</strong>
-        </div>
         <div className="start-grid">
           {START_OPTIONS.map((opt) => (
             <button key={opt.kind} type="button" className="start-opt" onClick={() => pickStart(opt.kind)}>

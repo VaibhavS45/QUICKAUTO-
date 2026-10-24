@@ -2,7 +2,7 @@ import { createElement } from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { describe, expect, it, vi } from 'vitest'
 import { addDaysKey, dayLabel, localDayKey, monthGrid, monthLabel, pastDayLabel, routineOccursOn, routineTitle } from '../../src/renderer/features/automations/dates.js'
-import AutomationsView, { UpdatesList, UpdatesSummary, automationsTrail, stepsForRoutine } from '../../src/renderer/features/automations/AutomationsView.js'
+import AutomationsView, { UpdatesList, automationsTrail, stepsForRoutine } from '../../src/renderer/features/automations/AutomationsView.js'
 import type { ShellApi } from '../../src/renderer/contracts/feature.js'
 
 const shell: ShellApi = {
@@ -131,23 +131,17 @@ describe('AutomationsView', () => {
     expect(html).toContain('Yesterday digest body.')
   })
 
-  it('shows the dot-matrix summary strip: runs today, failures, next run', () => {
-    const at = (y: number, m: number, d: number, h: number, min = 0): number => new Date(y, m, d, h, min).getTime()
-    const html = renderToStaticMarkup(createElement(UpdatesSummary, {
+  it('does not render a summary strip above the feed', () => {
+    const html = renderToStaticMarkup(createElement(UpdatesList, {
       todayKey: '2026-10-11',
       runs: [
-        { id: 'a', title: 't', startedAt: at(2026, 9, 11, 9), status: 'succeeded' },
-        { id: 'b', title: 't', startedAt: at(2026, 9, 11, 10), status: 'failed' },
-        { id: 'c', title: 't', startedAt: at(2026, 9, 10, 10), status: 'failed' }
+        { id: 'a', title: 'Daily Hacker News Top 10 Digest', startedAt: new Date(2026, 9, 11, 9).getTime(), status: 'succeeded', summary: 'Today digest body.' }
       ],
-      todayItems: [{ id: 's', title: 't', kind: 'schedule', at: Date.now() + 60000, status: 'upcoming', toolIds: [] }]
+      onSelect: () => {}
     }))
-    expect(html).toContain('Runs today')
-    expect(html).toContain('Failures')
-    expect(html).toContain('Next run')
-    expect(html).toContain('>2<')
-    expect(html).toContain('p-num is-heat')
-    expect(html).toContain('is-fail')
+    expect(html).toContain('Today')
+    expect(html).not.toContain('updates-summary')
+    expect(html).not.toContain('Runs today')
   })
 })
 

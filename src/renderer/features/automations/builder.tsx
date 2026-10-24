@@ -1,7 +1,10 @@
-import { Fragment, useEffect, useMemo, useState } from 'react'
+import { Fragment, useEffect, useMemo, useRef, useState } from 'react'
+import { createPortal } from 'react-dom'
 import { TOOL_IDS, TOOL_META, type ActiveToolId } from '../../../shared/types.js'
-import { GMAIL_EVENTS } from './trigger-events.js'
+import { TIMER_TRIGGER, TRIGGER_APPS, triggerApp, triggerEvent, triggerMention } from './trigger-events.js'
+import { TriggerAppIcon } from './trigger-icons.js'
 import { blankTrigger, draftToAutomation, makeTriggerId, type BuilderDraft, type BuilderRepeat, type BuilderTrigger } from './builder-compile.js'
+import { localDayKey } from './dates.js'
 import { attachmentPromptText, needsComposioTools, useAttachments } from '../../lib/attachments.js'
 import type { AutomationCreate } from '../../../shared/contracts/automations.js'
 import type { RunRecord } from '../../../shared/contracts/schedule.js'
@@ -34,21 +37,16 @@ const REPEAT_OPTIONS = REPEATS
 const HOURS_LIST = ['01', '02', '03', '04', '05', '06', '07', '08', '09', '10', '11', '12']
 const MINUTES_LIST = ['00', '15', '30', '45']
 
-const WEEKDAY_LABELS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
+const WEEKDAY_NAMES = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday']
 
-/** Half-hour slots labeled like "AM 9:00" (screenshot spec), valued as 24h HH:MM. */
-function GmailMark(): React.JSX.Element {
-  return (
-    <svg width="20" height="16" viewBox="0 0 20 16" fill="none" aria-hidden="true">
-      <path d="M2 2.5v11" stroke="#EA4335" strokeWidth="2.4" strokeLinecap="round" />
-      <path d="M2.5 3.5 10 9.5" stroke="#FBBC05" strokeWidth="2.4" strokeLinecap="round" />
-      <path d="M17.5 3.5 10 9.5" stroke="#34A853" strokeWidth="2.4" strokeLinecap="round" />
-      <path d="M18 2.5v11" stroke="#4285F4" strokeWidth="2.4" strokeLinecap="round" />
-      <path d="M2 13.5h16" stroke="#4285F4" strokeWidth="2.4" strokeLinecap="round" />
-    </svg>
-  )
+/** "24th", "1st", "3rd" — the label on the monthly day pill. */
+function ordinal(day: number): string {
+  const tail = day % 100
+  if (tail >= 11 && tail <= 13) return `${day}th`
+  return `${day}${['th', 'st', 'nd', 'rd'][day % 10] ?? 'th'}`
 }
 
+/** Half-hour slots labeled like "AM 9:00" (screenshot spec), valued as 24h HH:MM. */
 function TrashIcon(): React.JSX.Element {
   return (
     <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" aria-hidden="true">
@@ -360,6 +358,11 @@ export default function Builder(props: BuilderProps): React.JSX.Element {
   const [agents, setAgents] = useState<AgentProfile[]>([])
   const [connectorOptions, setConnectorOptions] = useState<string[]>([])
   const [pickerOpen, setPickerOpen] = useState(false)
+  const [pickerApp, setPickerApp] = useState<string | null>(null)
+  const [configEditingId, setConfigEditingId] = useState<string | null>(null)
+  const [pickerBox, setPickerBox] = useState<{ top: number; left: number; width: number } | null>(null)
+  const triggerAnchorRef = useRef<HTMLDivElement>(null)
+  const pickerRef = useRef<HTMLDivElement>(null)
   const [addMenuOpen, setAddMenuOpen] = useState(false)
   const [skillsSubmenuOpen, setSkillsSubmenuOpen] = useState(false)
   const [recentTasksSubmenuOpen, setRecentTasksSubmenuOpen] = useState(false)
@@ -376,6 +379,7 @@ export default function Builder(props: BuilderProps): React.JSX.Element {
   // Custom Dropdown Menus State (for timing & connectors)
   const [openRepeatId, setOpenRepeatId] = useState<string | null>(null)
   const [openTimeId, setOpenTimeId] = useState<string | null>(null)
+  const [openDayId, setOpenDayId] = useState<string | null>(null)
   const [connectorMenuOpen, setConnectorMenuOpen] = useState(false)
   const [settingsOpen, setSettingsOpen] = useState(false)
 
@@ -393,6 +397,44 @@ export default function Builder(props: BuilderProps): React.JSX.Element {
       .catch(() => {})
     return () => { live = false }
   }, [])
+
+  // The sheet's backdrop-filter clips in-flow popovers and the builder overlay
+  // scrolls, so the picker is portalled and anchored to the trigger button.
+  useEffect(() => {
+    if (!pickerOpen) {
+      setPickerBox(null)
+      return
+    }
+    const place = (): void => {
+      const rect = triggerAnchorRef.current?.getBoundingClientRect()
+      if (!rect) return
+      setPickerBox({ top: rect.bottom + 8, left: rect.left, width: rect.width })
+    }
+    const close = (): void => {
+      setPickerOpen(false)
+      setPickerApp(null)
+    }
+    const onPointerDown = (event: PointerEvent): void => {
+      const target = event.target as Node | null
+      if (!target) return
+      if (triggerAnchorRef.current?.contains(target) || pickerRef.current?.contains(target)) return
+      close()
+    }
+    const onKeyDown = (event: KeyboardEvent): void => {
+      if (event.key === 'Escape') close()
+    }
+    place()
+    window.addEventListener('resize', place)
+    window.addEventListener('scroll', place, true)
+    document.addEventListener('pointerdown', onPointerDown)
+    document.addEventListener('keydown', onKeyDown)
+    return () => {
+      window.removeEventListener('resize', place)
+      window.removeEventListener('scroll', place, true)
+      document.removeEventListener('pointerdown', onPointerDown)
+      document.removeEventListener('keydown', onKeyDown)
+    }
+  }, [pickerOpen])
 
   const compiled = useMemo(
     () => draftToAutomation({ title: props.initial.title, triggers, task, tools, agent }),
@@ -441,9 +483,28 @@ export default function Builder(props: BuilderProps): React.JSX.Element {
     setTools((cur) => (cur.includes(id) ? cur.filter((t) => t !== id) : [...cur, id]))
   }
 
-  function addEventTrigger(phrase: string): void {
-    setTriggers((cur) => [...cur, { ...blankTrigger('event'), id: makeTriggerId(), event: phrase }])
+  function addEventTrigger(app: string, phrase: string): void {
+    setTriggers((cur) => [...cur, { ...blankTrigger('event'), id: makeTriggerId(), app, event: phrase }])
     setPickerOpen(false)
+    setPickerApp(null)
+  }
+
+  function addScheduleTrigger(): void {
+    setTriggers((cur) => cur.some((t) => t.kind === 'schedule') ? cur : [...cur, blankTrigger('schedule')])
+    setPickerOpen(false)
+    setPickerApp(null)
+  }
+
+  function toggleTriggerPicker(): void {
+    setPickerOpen((open) => !open)
+    setPickerApp(null)
+  }
+
+  /** true/false when this app can read the status, undefined for Composio-backed toolkits. */
+  function triggerConnection(appId: string): boolean | undefined {
+    if (appId === 'gmail') return props.gmailConnected === true
+    if (triggerMention(appId) === appId) return connectorOptions.includes(appId)
+    return undefined
   }
 
   async function handleLocalFilesClick(): Promise<void> {
@@ -547,24 +608,67 @@ export default function Builder(props: BuilderProps): React.JSX.Element {
   // No trigger yet means the event picker is what the user picks next.
   const heading = hasEvent || triggers.length === 0 ? 'When this happens' : 'When'
 
-  const picker = pickerOpen && (
-    <div className="picker-panel" role="menu" aria-label="Choose a trigger">
-      <button type="button" className="picker-head" onClick={() => setPickerOpen(false)}>
-        <span aria-hidden="true">‹</span> Gmail
-      </button>
-      {GMAIL_EVENTS.map((item) => (
-        <button key={item.id} type="button" role="menuitem" className="picker-item" onClick={() => addEventTrigger(item.phrase)}>
-          {item.label}
-        </button>
-      ))}
-    </div>
+  const selectedApp = pickerApp ? triggerApp(pickerApp) : undefined
+
+  const picker = pickerOpen && pickerBox && createPortal(
+    <div
+      ref={pickerRef}
+      className="picker-panel"
+      role="menu"
+      aria-label="Choose a trigger"
+      style={{
+        top: pickerBox.top,
+        left: pickerBox.left,
+        width: pickerBox.width,
+        maxHeight: `min(520px, calc(100vh - ${pickerBox.top + 16}px))`
+      }}
+    >
+      {selectedApp ? (
+        <>
+          <button type="button" className="picker-head" onClick={() => setPickerApp(null)}>
+            <span aria-hidden="true">‹</span> {selectedApp.label}
+          </button>
+          {selectedApp.events.map((item) => (
+            <button
+              key={item.id}
+              type="button"
+              role="menuitem"
+              className="picker-item"
+              onClick={() => addEventTrigger(selectedApp.id, item.phrase)}
+            >
+              {item.label}
+            </button>
+          ))}
+        </>
+      ) : (
+        <div className="picker-grid">
+          {TRIGGER_APPS.map((app) => (
+            <button
+              key={app.id}
+              type="button"
+              role="menuitem"
+              className="picker-card"
+              onClick={() => setPickerApp(app.id)}
+            >
+              <TriggerAppIcon app={app} size={26} />
+              <span className="picker-card-label">{app.label}</span>
+            </button>
+          ))}
+          <button type="button" role="menuitem" className="picker-card" onClick={addScheduleTrigger}>
+            <TriggerAppIcon app={TIMER_TRIGGER} size={26} />
+            <span className="picker-card-label">{TIMER_TRIGGER.label}</span>
+          </button>
+        </div>
+      )}
+    </div>,
+    document.body
   )
 
   return (
     <>
       <div className="builder-overlay" role="dialog" aria-modal="true" aria-label="Create automation">
         {/* Outside-click backdrop shared by the repeat/time/plus/settings dropdowns */}
-        {(openRepeatId !== null || openTimeId !== null || addMenuOpen || settingsOpen || driveOpen) && (
+        {(openRepeatId !== null || openTimeId !== null || openDayId !== null || addMenuOpen || settingsOpen || driveOpen) && (
           <button
             type="button"
             className="builder-pop-backdrop"
@@ -573,6 +677,7 @@ export default function Builder(props: BuilderProps): React.JSX.Element {
             onClick={() => {
               setOpenRepeatId(null)
               setOpenTimeId(null)
+              setOpenDayId(null)
               setAddMenuOpen(false)
               setSettingsOpen(false)
               setDriveOpen(false)
@@ -580,7 +685,18 @@ export default function Builder(props: BuilderProps): React.JSX.Element {
           />
         )}
 
-        <form className="builder-sheet" onSubmit={(e) => void submit(e)}>
+        <form
+          className="builder-sheet"
+          onSubmit={(e) => void submit(e)}
+          onClick={(e) => {
+            // Click-away inside the sheet closes the timing popups; the
+            // backdrop below the sheet handles clicks outside it.
+            if ((e.target as HTMLElement).closest('.builder-menu-anchor')) return
+            setOpenRepeatId(null)
+            setOpenTimeId(null)
+            setOpenDayId(null)
+          }}
+        >
           <div className="builder-sheet-body">
             <div className="builder-sheet-section">
               <div className="builder-sheet-head">
@@ -596,9 +712,16 @@ export default function Builder(props: BuilderProps): React.JSX.Element {
                     const timeParts = parseTimeParts(trigger.time)
                     const isRepeatOpen = openRepeatId === trigger.id
                     const isTimeOpen = openTimeId === trigger.id
+                    const isDayOpen = openDayId === trigger.id
 
                     const selectedRepeatLabel =
                       REPEAT_OPTIONS.find((r) => r.value === trigger.repeat)?.label ?? 'Daily'
+
+                    // Pill text for the day the schedule lands on: weekday(s),
+                    // day of the month, or the once-off date.
+                    const dayLabel = trigger.repeat === 'weekly'
+                      ? ([...trigger.weekdays].sort((a, b) => a - b).map((day) => WEEKDAY_NAMES[day]).join(', ') || 'Pick a day')
+                      : ordinal(trigger.dayOfMonth)
 
                     return (
                       <Fragment key={trigger.id}>
@@ -619,6 +742,7 @@ export default function Builder(props: BuilderProps): React.JSX.Element {
                                     onClick={() => {
                                       setOpenRepeatId(isRepeatOpen ? null : trigger.id)
                                       setOpenTimeId(null)
+                                      setOpenDayId(null)
                                     }}
                                   >
                                     <div className="builder-pilltext is-repeat">
@@ -638,7 +762,12 @@ export default function Builder(props: BuilderProps): React.JSX.Element {
                                     role="menuitem"
                                     className={`builder-repeat-item ${isSelected ? 'is-selected' : ''}`}
                                     onClick={() => {
-                                      patchTrigger(setTriggers, trigger.id, { repeat: opt.value })
+                                      // Weekly and once need a day: seed today so the row is complete.
+                                      patchTrigger(setTriggers, trigger.id, {
+                                        repeat: opt.value,
+                                        ...(opt.value === 'weekly' && trigger.weekdays.length === 0 ? { weekdays: [new Date().getDay()] } : {}),
+                                        ...(opt.value === 'once' && !trigger.date ? { date: localDayKey() } : {})
+                                      })
                                       setOpenRepeatId(null)
                                     }}
                                   >
@@ -650,6 +779,88 @@ export default function Builder(props: BuilderProps): React.JSX.Element {
                             </div>
                           )}
                         </div>
+
+                        {/* "on <day>" pill: weekday(s) for weekly, day of the month
+                            for monthly, a date field for once. */}
+                        {trigger.repeat !== 'daily' && (
+                          <>
+                            <div className="builder-whenat">
+                              on
+                            </div>
+
+                            {trigger.repeat === 'once' ? (
+                              <input
+                                type="date"
+                                className="builder-pillbtn is-date"
+                                aria-label="Date"
+                                value={trigger.date}
+                                onChange={(e) => patchTrigger(setTriggers, trigger.id, { date: e.currentTarget.value })}
+                              />
+                            ) : (
+                              <div className="builder-menu-anchor">
+                                <button
+                                  type="button"
+                                  className="builder-pillbtn is-day"
+                                  aria-label={trigger.repeat === 'weekly' ? 'Days of the week' : 'Day of the month'}
+                                  aria-expanded={isDayOpen}
+                                  onClick={() => {
+                                    setOpenDayId(isDayOpen ? null : trigger.id)
+                                    setOpenRepeatId(null)
+                                    setOpenTimeId(null)
+                                  }}
+                                >
+                                  <div className="builder-pilltext is-repeat">{dayLabel}</div>
+                                  <PaperChevronIcon />
+                                </button>
+
+                                {isDayOpen && (
+                                  <div className="builder-repeat-popup is-days" role="menu">
+                                    {trigger.repeat === 'weekly'
+                                      ? WEEKDAY_NAMES.map((name, day) => {
+                                        const isSelected = trigger.weekdays.includes(day)
+                                        return (
+                                          <button
+                                            key={name}
+                                            type="button"
+                                            role="menuitemcheckbox"
+                                            aria-checked={isSelected}
+                                            className={`builder-repeat-item ${isSelected ? 'is-selected' : ''}`}
+                                            onClick={() => patchTrigger(setTriggers, trigger.id, {
+                                              weekdays: isSelected
+                                                ? trigger.weekdays.filter((item) => item !== day)
+                                                : [...trigger.weekdays, day]
+                                            })}
+                                          >
+                                            <span>{name}</span>
+                                            {isSelected && <span className="builder-repeat-check">✓</span>}
+                                          </button>
+                                        )
+                                      })
+                                      : Array.from({ length: 31 }, (_, i) => i + 1).map((day) => {
+                                        const isSelected = trigger.dayOfMonth === day
+                                        return (
+                                          <button
+                                            key={day}
+                                            type="button"
+                                            role="menuitemradio"
+                                            aria-checked={isSelected}
+                                            className={`builder-repeat-item ${isSelected ? 'is-selected' : ''}`}
+                                            onClick={() => {
+                                              patchTrigger(setTriggers, trigger.id, { dayOfMonth: day })
+                                              setOpenDayId(null)
+                                            }}
+                                          >
+                                            <span>{ordinal(day)}</span>
+                                            {isSelected && <span className="builder-repeat-check">✓</span>}
+                                          </button>
+                                        )
+                                      })}
+                                  </div>
+                                )}
+                              </div>
+                            )}
+                          </>
+                        )}
 
                         <div className="builder-whenat">
                           at
@@ -664,6 +875,7 @@ export default function Builder(props: BuilderProps): React.JSX.Element {
                             onClick={() => {
                               setOpenTimeId(isTimeOpen ? null : trigger.id)
                               setOpenRepeatId(null)
+                              setOpenDayId(null)
                             }}
                           >
                             <div className="builder-pilltext">
@@ -728,94 +940,110 @@ export default function Builder(props: BuilderProps): React.JSX.Element {
                           </div>
                         </div>
                       </div>
-
-                      {/* The schedule the contract stores: day-of-month, weekdays or a date. */}
-                      {trigger.repeat === 'weekly' && (
-                        <div className="builder-whenrow st-weekdays" role="group" aria-label="Days of the week">
-                          {WEEKDAY_LABELS.map((label, day) => (
-                            <button
-                              key={label}
-                              type="button"
-                              aria-pressed={trigger.weekdays.includes(day)}
-                              onClick={() => patchTrigger(setTriggers, trigger.id, {
-                                weekdays: trigger.weekdays.includes(day)
-                                  ? trigger.weekdays.filter((item) => item !== day)
-                                  : [...trigger.weekdays, day]
-                              })}
-                            >
-                              {label}
-                            </button>
-                          ))}
-                        </div>
-                      )}
-                      {trigger.repeat === 'once' && (
-                        <div className="builder-whenrow">
-                          <input
-                            type="date"
-                            className="st-input st-date"
-                            aria-label="Date"
-                            value={trigger.date}
-                            onChange={(e) => patchTrigger(setTriggers, trigger.id, { date: e.currentTarget.value })}
-                          />
-                        </div>
-                      )}
-                      {trigger.repeat === 'monthly' && (
-                        <div className="builder-whenrow">
-                          <span className="builder-sched-note">on day</span>
-                          <select
-                            aria-label="Day of the month"
-                            value={trigger.dayOfMonth}
-                            onChange={(e) => patchTrigger(setTriggers, trigger.id, { dayOfMonth: Number(e.target.value) })}
-                          >
-                            {Array.from({ length: 31 }, (_, i) => i + 1).map((day) => (
-                              <option key={day} value={day}>{day}</option>
-                            ))}
-                          </select>
-                        </div>
-                      )}
                       </Fragment>
                     )
                   })}
 
                   {/* Triggers: Event */}
-                  {triggers.filter((t) => t.kind === 'event').map((trigger, i) => (
-                    <div key={trigger.id} className="builder-trig">
-                      <div className="builder-trig-line">
-                        <GmailMark />
-                        <span className="builder-trig-text">When {trigger.event || 'something happens'} in mailbox</span>
-                        <span className="builder-pill">{props.gmailConnected ? 'Connected' : 'Not Connected'} <span aria-hidden="true">▾</span></span>
-                        <span className="builder-trig-text">of the account</span>
-                        {!props.gmailConnected && (
-                          <button type="button" className="builder-connect" onClick={props.onConnect}>Connect</button>
+                  {triggers.filter((t) => t.kind === 'event').map((trigger, i) => {
+                    const app = triggerApp(trigger.app)
+                    const fields = triggerEvent(trigger.app, trigger.event)?.config ?? []
+                    const connection = triggerConnection(trigger.app)
+                    const status = connection === undefined ? 'Via Composio' : connection ? 'Connected' : 'Not connected'
+                    const tone = connection === undefined ? 'is-muted' : connection ? 'is-on' : 'is-off'
+                    const filled = Object.values(trigger.config ?? {}).some((value) => value.trim())
+                    const configOpen = configEditingId === trigger.id || filled
+                    const firstInput = fields.findIndex((field) => !field.options)
+                    return (
+                      <div key={trigger.id} className="builder-trig">
+                        <div className="builder-trig-line">
+                          {app ? <TriggerAppIcon app={app} size={22} /> : null}
+                          <span className="builder-trig-text">When {trigger.event || 'something happens'} in {app?.label ?? trigger.app}</span>
+                          <span className={`builder-status ${tone}`}>
+                            <span className="builder-status-dot" aria-hidden="true" />
+                            {status}
+                          </span>
+                          {connection !== true && (
+                            <button type="button" className="builder-connect" onClick={props.onConnect}>Connect</button>
+                          )}
+                          <button
+                            type="button"
+                            className="builder-iconbtn"
+                            aria-label={`Remove trigger ${i + 1}`}
+                            onClick={() => setTriggers((cur) => cur.filter((t) => t.id !== trigger.id))}
+                          >
+                            <TrashIcon />
+                          </button>
+                        </div>
+                        {fields.length > 0 && (
+                          <div className="builder-trig-line indent">
+                            {configOpen ? (
+                              <div className="builder-cfg">
+                                <span className="builder-sched-note">Only when</span>
+                                <div className="builder-cfg-fields">
+                                  {fields.map((field, index) => (
+                                    <label key={field.key} className="builder-cfg-field">
+                                      <span>{field.label}</span>
+                                      {field.options ? (
+                                        <select
+                                          value={trigger.config?.[field.key] ?? ''}
+                                          onChange={(event) => patchTrigger(setTriggers, trigger.id, {
+                                            config: { ...trigger.config, [field.key]: event.currentTarget.value }
+                                          })}
+                                        >
+                                          <option value="">{field.placeholder}</option>
+                                          {field.options.map((option) => <option key={option} value={option}>{option}</option>)}
+                                        </select>
+                                      ) : (
+                                        <input
+                                          autoFocus={configEditingId === trigger.id && index === firstInput}
+                                          className="builder-pill-input"
+                                          aria-label={field.label}
+                                          placeholder={field.placeholder}
+                                          value={trigger.config?.[field.key] ?? ''}
+                                          onChange={(event) => patchTrigger(setTriggers, trigger.id, {
+                                            config: { ...trigger.config, [field.key]: event.currentTarget.value }
+                                          })}
+                                        />
+                                      )}
+                                    </label>
+                                  ))}
+                                </div>
+                                <button
+                                  type="button"
+                                  className="builder-cond-remove"
+                                  aria-label="Clear conditions"
+                                  onClick={() => {
+                                    patchTrigger(setTriggers, trigger.id, { config: {} })
+                                    setConfigEditingId(null)
+                                  }}
+                                >
+                                  ×
+                                </button>
+                              </div>
+                            ) : (
+                              <button
+                                type="button"
+                                className="builder-cond"
+                                title="Optional filters from the Composio trigger config."
+                                onClick={() => setConfigEditingId(trigger.id)}
+                              >
+                                + Add conditions <span className="builder-q" aria-hidden="true">?</span>
+                              </button>
+                            )}
+                          </div>
                         )}
-                        <button
-                          type="button"
-                          className="builder-iconbtn"
-                          aria-label={`Remove trigger ${i + 1}`}
-                          onClick={() => setTriggers((cur) => cur.filter((t) => t.id !== trigger.id))}
-                        >
-                          <TrashIcon />
-                        </button>
                       </div>
-                      <div className="builder-trig-line indent">
-                        <span className="builder-pill">{props.gmailConnected ? 'Connected' : 'Not Connected'} <span aria-hidden="true">▾</span></span>
-                      </div>
-                      <div className="builder-trig-line indent">
-                        <span className="builder-cond" title="Conditions are not evaluated yet">+ Add conditions <span className="builder-q" aria-hidden="true">?</span></span>
-                      </div>
-                    </div>
-                  ))}
+                    )
+                  })}
 
-                  {triggers.length === 0 && (
-                    <button type="button" className="builder-addtrig" onClick={() => setPickerOpen((v) => !v)} aria-expanded={pickerOpen}>
-                      + Add Trigger
-                    </button>
-                  )}
-                  {picker}
-                  {hasEvent && (
-                    <button type="button" className="builder-addtrig" onClick={() => setPickerOpen((v) => !v)} aria-expanded={pickerOpen}>
-                      + Add another trigger
-                    </button>
+                  {(triggers.length === 0 || hasEvent) && (
+                    <div className="builder-menu-anchor builder-trig-anchor" ref={triggerAnchorRef}>
+                      <button type="button" className="builder-addtrig" onClick={toggleTriggerPicker} aria-expanded={pickerOpen}>
+                        {triggers.length === 0 ? '+ Add Trigger' : '+ Add another trigger'}
+                      </button>
+                      {picker}
+                    </div>
                   )}
 
                   </div>

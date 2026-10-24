@@ -4,6 +4,7 @@ import { TOOL_IDS, TOOL_META, type ActiveToolId } from '../../../shared/types.js
 import { TIMER_TRIGGER, TRIGGER_APPS, triggerApp, triggerEvent, triggerMention } from './trigger-events.js'
 import { TriggerAppIcon } from './trigger-icons.js'
 import { blankTrigger, draftToAutomation, makeTriggerId, type BuilderDraft, type BuilderRepeat, type BuilderTrigger } from './builder-compile.js'
+import { localDayKey } from './dates.js'
 import { attachmentPromptText, needsComposioTools, useAttachments } from '../../lib/attachments.js'
 import type { AutomationCreate } from '../../../shared/contracts/automations.js'
 import type { RunRecord } from '../../../shared/contracts/schedule.js'
@@ -36,7 +37,14 @@ const REPEAT_OPTIONS = REPEATS
 const HOURS_LIST = ['01', '02', '03', '04', '05', '06', '07', '08', '09', '10', '11', '12']
 const MINUTES_LIST = ['00', '15', '30', '45']
 
-const WEEKDAY_LABELS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
+const WEEKDAY_NAMES = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday']
+
+/** "24th", "1st", "3rd" — the label on the monthly day pill. */
+function ordinal(day: number): string {
+  const tail = day % 100
+  if (tail >= 11 && tail <= 13) return `${day}th`
+  return `${day}${['th', 'st', 'nd', 'rd'][day % 10] ?? 'th'}`
+}
 
 /** Half-hour slots labeled like "AM 9:00" (screenshot spec), valued as 24h HH:MM. */
 function TrashIcon(): React.JSX.Element {
@@ -371,6 +379,7 @@ export default function Builder(props: BuilderProps): React.JSX.Element {
   // Custom Dropdown Menus State (for timing & connectors)
   const [openRepeatId, setOpenRepeatId] = useState<string | null>(null)
   const [openTimeId, setOpenTimeId] = useState<string | null>(null)
+  const [openDayId, setOpenDayId] = useState<string | null>(null)
   const [connectorMenuOpen, setConnectorMenuOpen] = useState(false)
   const [settingsOpen, setSettingsOpen] = useState(false)
 
@@ -659,7 +668,7 @@ export default function Builder(props: BuilderProps): React.JSX.Element {
     <>
       <div className="builder-overlay" role="dialog" aria-modal="true" aria-label="Create automation">
         {/* Outside-click backdrop shared by the repeat/time/plus/settings dropdowns */}
-        {(openRepeatId !== null || openTimeId !== null || addMenuOpen || settingsOpen || driveOpen) && (
+        {(openRepeatId !== null || openTimeId !== null || openDayId !== null || addMenuOpen || settingsOpen || driveOpen) && (
           <button
             type="button"
             className="builder-pop-backdrop"
@@ -668,6 +677,7 @@ export default function Builder(props: BuilderProps): React.JSX.Element {
             onClick={() => {
               setOpenRepeatId(null)
               setOpenTimeId(null)
+              setOpenDayId(null)
               setAddMenuOpen(false)
               setSettingsOpen(false)
               setDriveOpen(false)
@@ -675,7 +685,18 @@ export default function Builder(props: BuilderProps): React.JSX.Element {
           />
         )}
 
-        <form className="builder-sheet" onSubmit={(e) => void submit(e)}>
+        <form
+          className="builder-sheet"
+          onSubmit={(e) => void submit(e)}
+          onClick={(e) => {
+            // Click-away inside the sheet closes the timing popups; the
+            // backdrop below the sheet handles clicks outside it.
+            if ((e.target as HTMLElement).closest('.builder-menu-anchor')) return
+            setOpenRepeatId(null)
+            setOpenTimeId(null)
+            setOpenDayId(null)
+          }}
+        >
           <div className="builder-sheet-body">
             <div className="builder-sheet-section">
               <div className="builder-sheet-head">
@@ -691,9 +712,16 @@ export default function Builder(props: BuilderProps): React.JSX.Element {
                     const timeParts = parseTimeParts(trigger.time)
                     const isRepeatOpen = openRepeatId === trigger.id
                     const isTimeOpen = openTimeId === trigger.id
+                    const isDayOpen = openDayId === trigger.id
 
                     const selectedRepeatLabel =
                       REPEAT_OPTIONS.find((r) => r.value === trigger.repeat)?.label ?? 'Daily'
+
+                    // Pill text for the day the schedule lands on: weekday(s),
+                    // day of the month, or the once-off date.
+                    const dayLabel = trigger.repeat === 'weekly'
+                      ? ([...trigger.weekdays].sort((a, b) => a - b).map((day) => WEEKDAY_NAMES[day]).join(', ') || 'Pick a day')
+                      : ordinal(trigger.dayOfMonth)
 
                     return (
                       <Fragment key={trigger.id}>
@@ -714,6 +742,7 @@ export default function Builder(props: BuilderProps): React.JSX.Element {
                                     onClick={() => {
                                       setOpenRepeatId(isRepeatOpen ? null : trigger.id)
                                       setOpenTimeId(null)
+                                      setOpenDayId(null)
                                     }}
                                   >
                                     <div className="builder-pilltext is-repeat">
@@ -733,7 +762,12 @@ export default function Builder(props: BuilderProps): React.JSX.Element {
                                     role="menuitem"
                                     className={`builder-repeat-item ${isSelected ? 'is-selected' : ''}`}
                                     onClick={() => {
-                                      patchTrigger(setTriggers, trigger.id, { repeat: opt.value })
+                                      // Weekly and once need a day: seed today so the row is complete.
+                                      patchTrigger(setTriggers, trigger.id, {
+                                        repeat: opt.value,
+                                        ...(opt.value === 'weekly' && trigger.weekdays.length === 0 ? { weekdays: [new Date().getDay()] } : {}),
+                                        ...(opt.value === 'once' && !trigger.date ? { date: localDayKey() } : {})
+                                      })
                                       setOpenRepeatId(null)
                                     }}
                                   >
@@ -745,6 +779,88 @@ export default function Builder(props: BuilderProps): React.JSX.Element {
                             </div>
                           )}
                         </div>
+
+                        {/* "on <day>" pill: weekday(s) for weekly, day of the month
+                            for monthly, a date field for once. */}
+                        {trigger.repeat !== 'daily' && (
+                          <>
+                            <div className="builder-whenat">
+                              on
+                            </div>
+
+                            {trigger.repeat === 'once' ? (
+                              <input
+                                type="date"
+                                className="builder-pillbtn is-date"
+                                aria-label="Date"
+                                value={trigger.date}
+                                onChange={(e) => patchTrigger(setTriggers, trigger.id, { date: e.currentTarget.value })}
+                              />
+                            ) : (
+                              <div className="builder-menu-anchor">
+                                <button
+                                  type="button"
+                                  className="builder-pillbtn is-day"
+                                  aria-label={trigger.repeat === 'weekly' ? 'Days of the week' : 'Day of the month'}
+                                  aria-expanded={isDayOpen}
+                                  onClick={() => {
+                                    setOpenDayId(isDayOpen ? null : trigger.id)
+                                    setOpenRepeatId(null)
+                                    setOpenTimeId(null)
+                                  }}
+                                >
+                                  <div className="builder-pilltext is-repeat">{dayLabel}</div>
+                                  <PaperChevronIcon />
+                                </button>
+
+                                {isDayOpen && (
+                                  <div className="builder-repeat-popup is-days" role="menu">
+                                    {trigger.repeat === 'weekly'
+                                      ? WEEKDAY_NAMES.map((name, day) => {
+                                        const isSelected = trigger.weekdays.includes(day)
+                                        return (
+                                          <button
+                                            key={name}
+                                            type="button"
+                                            role="menuitemcheckbox"
+                                            aria-checked={isSelected}
+                                            className={`builder-repeat-item ${isSelected ? 'is-selected' : ''}`}
+                                            onClick={() => patchTrigger(setTriggers, trigger.id, {
+                                              weekdays: isSelected
+                                                ? trigger.weekdays.filter((item) => item !== day)
+                                                : [...trigger.weekdays, day]
+                                            })}
+                                          >
+                                            <span>{name}</span>
+                                            {isSelected && <span className="builder-repeat-check">✓</span>}
+                                          </button>
+                                        )
+                                      })
+                                      : Array.from({ length: 31 }, (_, i) => i + 1).map((day) => {
+                                        const isSelected = trigger.dayOfMonth === day
+                                        return (
+                                          <button
+                                            key={day}
+                                            type="button"
+                                            role="menuitemradio"
+                                            aria-checked={isSelected}
+                                            className={`builder-repeat-item ${isSelected ? 'is-selected' : ''}`}
+                                            onClick={() => {
+                                              patchTrigger(setTriggers, trigger.id, { dayOfMonth: day })
+                                              setOpenDayId(null)
+                                            }}
+                                          >
+                                            <span>{ordinal(day)}</span>
+                                            {isSelected && <span className="builder-repeat-check">✓</span>}
+                                          </button>
+                                        )
+                                      })}
+                                  </div>
+                                )}
+                              </div>
+                            )}
+                          </>
+                        )}
 
                         <div className="builder-whenat">
                           at
@@ -759,6 +875,7 @@ export default function Builder(props: BuilderProps): React.JSX.Element {
                             onClick={() => {
                               setOpenTimeId(isTimeOpen ? null : trigger.id)
                               setOpenRepeatId(null)
+                              setOpenDayId(null)
                             }}
                           >
                             <div className="builder-pilltext">
@@ -823,51 +940,6 @@ export default function Builder(props: BuilderProps): React.JSX.Element {
                           </div>
                         </div>
                       </div>
-
-                      {/* The schedule the contract stores: day-of-month, weekdays or a date. */}
-                      {trigger.repeat === 'weekly' && (
-                        <div className="builder-whenrow st-weekdays" role="group" aria-label="Days of the week">
-                          {WEEKDAY_LABELS.map((label, day) => (
-                            <button
-                              key={label}
-                              type="button"
-                              aria-pressed={trigger.weekdays.includes(day)}
-                              onClick={() => patchTrigger(setTriggers, trigger.id, {
-                                weekdays: trigger.weekdays.includes(day)
-                                  ? trigger.weekdays.filter((item) => item !== day)
-                                  : [...trigger.weekdays, day]
-                              })}
-                            >
-                              {label}
-                            </button>
-                          ))}
-                        </div>
-                      )}
-                      {trigger.repeat === 'once' && (
-                        <div className="builder-whenrow">
-                          <input
-                            type="date"
-                            className="st-input st-date"
-                            aria-label="Date"
-                            value={trigger.date}
-                            onChange={(e) => patchTrigger(setTriggers, trigger.id, { date: e.currentTarget.value })}
-                          />
-                        </div>
-                      )}
-                      {trigger.repeat === 'monthly' && (
-                        <div className="builder-whenrow">
-                          <span className="builder-sched-note">on day</span>
-                          <select
-                            aria-label="Day of the month"
-                            value={trigger.dayOfMonth}
-                            onChange={(e) => patchTrigger(setTriggers, trigger.id, { dayOfMonth: Number(e.target.value) })}
-                          >
-                            {Array.from({ length: 31 }, (_, i) => i + 1).map((day) => (
-                              <option key={day} value={day}>{day}</option>
-                            ))}
-                          </select>
-                        </div>
-                      )}
                       </Fragment>
                     )
                   })}

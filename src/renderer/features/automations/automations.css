@@ -2593,8 +2593,17 @@
   padding: 4px;
   display: flex;
   flex-direction: column;
+  transform-origin: top left;
   backdrop-filter: blur(40px);
-  animation: bmenu-pop 160ms cubic-bezier(0.16, 1, 0.3, 1);
+  animation: bmenu-pop 190ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+/* Day lists (7 weekdays, 31 month days) scroll inside the same menu. */
+.builder-repeat-popup.is-days {
+  min-width: 200px;
+  max-height: 264px;
+  overflow-y: auto;
+  scrollbar-width: thin;
 }
 
 .builder-repeat-item {
@@ -2612,6 +2621,7 @@
   line-height: 20px;
   cursor: pointer;
   text-align: left;
+  transition: background-color 120ms ease, color 120ms ease;
 }
 
 .builder-repeat-item:hover {
@@ -2643,8 +2653,9 @@
   border-radius: 12px;
   box-shadow: rgb(0 0 0 / 28%) 0 4px 11px;
   padding: 10px;
+  transform-origin: top left;
   backdrop-filter: blur(40px);
-  animation: bmenu-pop 160ms cubic-bezier(0.16, 1, 0.3, 1);
+  animation: bmenu-pop 190ms cubic-bezier(0.22, 1, 0.36, 1);
 }
 
 .builder-time-cols {
@@ -2692,11 +2703,21 @@
 @keyframes bmenu-pop {
   from {
     opacity: 0;
-    transform: translateY(-6px) scale(0.97);
+    transform: translateY(-6px) scale(0.94);
+  }
+  60% {
+    opacity: 1;
   }
   to {
     opacity: 1;
     transform: translateY(0) scale(1);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .builder-repeat-popup,
+  .builder-time-popup {
+    animation: none;
   }
 }
 
@@ -2981,6 +3002,8 @@
   padding-bottom: 12px;
   gap: 12px;
   position: relative;
+  /* Above .builder-pop-backdrop (40): the popups live inside this sheet. */
+  z-index: 45;
   border-radius: 22px;
   border: 0.555556px solid var(--border);
   background: var(--surface);
@@ -3104,6 +3127,25 @@
 }
 
 .builder-pillbtn.is-repeat { max-width: 192px; }
+
+.builder-pillbtn.is-day { max-width: 220px; }
+
+/* Once: the native date field wears the pill. */
+.builder-pillbtn.is-date {
+  padding: 0 8px;
+  color-scheme: dark;
+  cursor: pointer;
+}
+
+.builder-pillbtn.is-date::-webkit-calendar-picker-indicator {
+  opacity: 0.55;
+  cursor: pointer;
+}
+
+.builder-pillbtn.is-date:focus-visible {
+  outline: 2px solid var(--ember);
+  outline-offset: 1px;
+}
 
 .builder-pilltext {
   display: flex;

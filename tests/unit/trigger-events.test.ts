@@ -6,6 +6,7 @@ import {
   TRIGGER_APPS,
   gmailEventPhrase,
   triggerApp,
+  triggerEvent,
   triggerMention
 } from '../../src/renderer/features/automations/trigger-events.js'
 import { hasTriggerIcon } from '../../src/renderer/features/automations/trigger-icons.js'
@@ -75,7 +76,7 @@ describe('trigger events', () => {
     }
   })
 
-  it('folds a condition into the event check', () => {
+  it('folds Composio trigger config into the event check', () => {
     const compiled = draftToAutomation({
       ...blankDraft(),
       task: 'triage mail',
@@ -85,12 +86,22 @@ describe('trigger events', () => {
           ...blankTrigger('event'),
           app: 'gmail',
           event: 'a new email is received',
-          condition: 'from my manager'
+          config: { query: 'from:boss@company.com', labelIds: 'INBOX' }
         }
       ]
     })
     expect(compiled.valid).toBe(true)
-    expect(compiled.create?.prompt).toContain('check @gmail for a new email is received only when from my manager')
+    expect(compiled.create?.prompt).toContain(
+      'check @gmail for a new email is received with config query="from:boss@company.com", labelIds="INBOX"'
+    )
+  })
+
+  it('exposes only the config fields the Composio trigger declares', () => {
+    expect(triggerEvent('gmail', 'a new email is received')?.config?.map((field) => field.key)).toEqual(['query', 'labelIds'])
+    expect(triggerEvent('slack', 'a new message is posted in a channel')?.config?.map((field) => field.key)).toContain('channel_id')
+    expect(triggerEvent('github', 'a new pull request is opened')?.config?.map((field) => field.key)).toEqual(['owner', 'repo'])
+    expect(triggerEvent('instagram', 'a new post is published')?.config).toBeUndefined()
+    expect(triggerEvent('nope', 'anything')).toBeUndefined()
   })
 
   it('compiles non-native apps through the composio connector', () => {

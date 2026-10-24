@@ -1,10 +1,22 @@
 import { TOOL_IDS } from '../../../shared/types.js'
 
+/** One Composio trigger config parameter. */
+export interface TriggerConfigField {
+  /** Parameter name from the trigger type's config schema. */
+  key: string
+  label: string
+  placeholder: string
+  /** Fixed choices for enum-like parameters. */
+  options?: string[]
+}
+
 /** Trigger catalog for the Add Trigger picker. Phrases render as "When {phrase} …". */
 export interface TriggerEvent {
   id: string
   label: string
   phrase: string
+  /** Config params the Composio trigger type declares, when it declares any. */
+  config?: TriggerConfigField[]
 }
 
 export interface TriggerApp {
@@ -16,11 +28,48 @@ export interface TriggerApp {
   events: TriggerEvent[]
 }
 
+// Config fields mirror the trigger types in the Composio docs (toolkits/*.md).
+const GMAIL_FILTERS: TriggerConfigField[] = [
+  { key: 'query', label: 'Search', placeholder: 'from:boss@company.com is:unread' },
+  { key: 'labelIds', label: 'Label', placeholder: 'INBOX' }
+]
+
+const OUTLOOK_FILTERS: TriggerConfigField[] = [
+  { key: 'from_email', label: 'From', placeholder: 'boss@company.com' },
+  { key: 'subject_contains', label: 'Subject contains', placeholder: 'invoice' },
+  { key: 'has_attachments', label: 'Attachments', placeholder: 'Any', options: ['true', 'false'] }
+]
+
+const SLACK_CHANNEL: TriggerConfigField[] = [
+  { key: 'channel_id', label: 'Channel', placeholder: 'C0123456789' },
+  { key: 'channel_type', label: 'Type', placeholder: 'Any', options: ['channel', 'group', 'mpim'] },
+  { key: 'is_bot_message', label: 'From', placeholder: 'Anyone', options: ['false', 'true'] }
+]
+
+const SLACK_REACTION: TriggerConfigField[] = [
+  { key: 'channel_id', label: 'Channel', placeholder: 'C0123456789' },
+  { key: 'emoji_name', label: 'Emoji', placeholder: 'thumbsup' }
+]
+
+const CALENDAR_FILTERS: TriggerConfigField[] = [
+  { key: 'calendarId', label: 'Calendar', placeholder: 'primary' }
+]
+
+const DRIVE_FILTERS: TriggerConfigField[] = [
+  { key: 'folder_id', label: 'Folder ID', placeholder: '1AbCdEf…' },
+  { key: 'query', label: 'Search', placeholder: "name contains 'report'" }
+]
+
+const GITHUB_REPO: TriggerConfigField[] = [
+  { key: 'owner', label: 'Owner', placeholder: 'octocat' },
+  { key: 'repo', label: 'Repo', placeholder: 'hello-world' }
+]
+
 export const GMAIL_EVENTS: TriggerEvent[] = [
-  { id: 'new-email', label: 'New email', phrase: 'a new email is received' },
-  { id: 'new-attachment', label: 'New attachment', phrase: 'an attachment is received' },
-  { id: 'new-conversation', label: 'New conversation', phrase: 'a new conversation is started' },
-  { id: 'keyword-search', label: 'New email matching keyword search', phrase: 'a new email matching your keyword search is received' },
+  { id: 'new-email', label: 'New email', phrase: 'a new email is received', config: GMAIL_FILTERS },
+  { id: 'new-attachment', label: 'New attachment', phrase: 'an attachment is received', config: GMAIL_FILTERS },
+  { id: 'new-conversation', label: 'New conversation', phrase: 'a new conversation is started', config: GMAIL_FILTERS },
+  { id: 'keyword-search', label: 'New email matching keyword search', phrase: 'a new email matching your keyword search is received', config: GMAIL_FILTERS },
   { id: 'labeled-conversation', label: 'Newly labeled conversation', phrase: 'a conversation is newly labeled' },
   { id: 'labeled-email', label: 'Newly labeled email or reply', phrase: 'an email or reply is newly labeled' },
   { id: 'starred-email', label: 'Newly starred email', phrase: 'an email is newly starred' },
@@ -36,9 +85,9 @@ export const TRIGGER_APPS: TriggerApp[] = [
   {
     id: 'outlook', label: 'Outlook Mail', color: '#0F6CBD',
     events: [
-      { id: 'new-email', label: 'New email', phrase: 'a new email arrives' },
-      { id: 'new-attachment', label: 'New attachment', phrase: 'an attachment arrives' },
-      { id: 'keyword-search', label: 'New email matching keyword search', phrase: 'a new email matching your keyword search arrives' },
+      { id: 'new-email', label: 'New email', phrase: 'a new email arrives', config: OUTLOOK_FILTERS },
+      { id: 'new-attachment', label: 'New attachment', phrase: 'an attachment arrives', config: OUTLOOK_FILTERS },
+      { id: 'keyword-search', label: 'New email matching keyword search', phrase: 'a new email matching your keyword search arrives', config: OUTLOOK_FILTERS },
       { id: 'flagged-email', label: 'Newly flagged email', phrase: 'an email is newly flagged' },
       { id: 'moved-email', label: 'Email moved to a folder', phrase: 'an email is moved to a folder' }
     ]
@@ -53,9 +102,9 @@ export const TRIGGER_APPS: TriggerApp[] = [
   {
     id: 'slack', label: 'Slack', color: '#611F69',
     events: [
-      { id: 'new-message', label: 'New message in a channel', phrase: 'a new message is posted in a channel' },
+      { id: 'new-message', label: 'New message in a channel', phrase: 'a new message is posted in a channel', config: SLACK_CHANNEL },
       { id: 'new-mention', label: 'New mention', phrase: 'you are mentioned in a message' },
-      { id: 'new-reaction', label: 'New reaction', phrase: 'a message gets a new reaction' },
+      { id: 'new-reaction', label: 'New reaction', phrase: 'a message gets a new reaction', config: SLACK_REACTION },
       { id: 'new-file', label: 'New file shared', phrase: 'a file is shared' },
       { id: 'new-member', label: 'New member joins', phrase: 'a member joins the workspace' },
       { id: 'new-channel', label: 'New channel created', phrase: 'a channel is created' }
@@ -66,18 +115,23 @@ export const TRIGGER_APPS: TriggerApp[] = [
     events: [
       { id: 'new-page', label: 'New page in a database', phrase: 'a new page is added to a database' },
       { id: 'page-updated', label: 'Page updated', phrase: 'a page is updated' },
-      { id: 'new-comment', label: 'New comment', phrase: 'a new comment is added' },
+      { id: 'new-comment', label: 'New comment', phrase: 'a new comment is added', config: [{ key: 'page_id', label: 'Page', placeholder: 'Page ID' }] },
       { id: 'new-entry', label: 'New database entry', phrase: 'a new database entry is created' }
     ]
   },
   {
     id: 'googlecalendar', label: 'Google Calendar', color: '#4285F4',
     events: [
-      { id: 'new-event', label: 'New event', phrase: 'a new event is created' },
-      { id: 'updated-event', label: 'Event updated', phrase: 'an event is updated' },
-      { id: 'cancelled-event', label: 'Event cancelled', phrase: 'an event is cancelled' },
-      { id: 'starting-event', label: 'Event starting soon', phrase: 'an event is about to start' },
-      { id: 'attendee-response', label: 'Attendee response', phrase: 'an attendee responds to an invite' }
+      { id: 'new-event', label: 'New event', phrase: 'a new event is created', config: CALENDAR_FILTERS },
+      { id: 'updated-event', label: 'Event updated', phrase: 'an event is updated', config: CALENDAR_FILTERS },
+      { id: 'cancelled-event', label: 'Event cancelled', phrase: 'an event is cancelled', config: CALENDAR_FILTERS },
+      {
+        id: 'starting-event',
+        label: 'Event starting soon',
+        phrase: 'an event is about to start',
+        config: [...CALENDAR_FILTERS, { key: 'minutesBeforeStart', label: 'Minutes before', placeholder: '10' }]
+      },
+      { id: 'attendee-response', label: 'Attendee response', phrase: 'an attendee responds to an invite', config: CALENDAR_FILTERS }
     ]
   },
   {
@@ -92,12 +146,12 @@ export const TRIGGER_APPS: TriggerApp[] = [
   {
     id: 'github', label: 'GitHub', color: '#6E7681',
     events: [
-      { id: 'new-issue', label: 'New issue', phrase: 'a new issue is opened' },
-      { id: 'new-pr', label: 'New pull request', phrase: 'a new pull request is opened' },
-      { id: 'new-push', label: 'New push', phrase: 'commits are pushed to a repository' },
-      { id: 'new-release', label: 'New release', phrase: 'a release is published' },
-      { id: 'issue-comment', label: 'New issue comment', phrase: 'a comment is added to an issue' },
-      { id: 'new-star', label: 'New star', phrase: 'a repository is starred' }
+      { id: 'new-issue', label: 'New issue', phrase: 'a new issue is opened', config: GITHUB_REPO },
+      { id: 'new-pr', label: 'New pull request', phrase: 'a new pull request is opened', config: GITHUB_REPO },
+      { id: 'new-push', label: 'New push', phrase: 'commits are pushed to a repository', config: GITHUB_REPO },
+      { id: 'new-release', label: 'New release', phrase: 'a release is published', config: GITHUB_REPO },
+      { id: 'issue-comment', label: 'New issue comment', phrase: 'a comment is added to an issue', config: GITHUB_REPO },
+      { id: 'new-star', label: 'New star', phrase: 'a repository is starred', config: GITHUB_REPO }
     ]
   },
   {
@@ -128,10 +182,10 @@ export const TRIGGER_APPS: TriggerApp[] = [
   {
     id: 'googleworkspace', label: 'Google Workspace', color: '#34A853',
     events: [
-      { id: 'new-file', label: 'New file in Drive', phrase: 'a new file is added to Drive' },
-      { id: 'file-updated', label: 'File updated in Drive', phrase: 'a file is updated in Drive' },
+      { id: 'new-file', label: 'New file in Drive', phrase: 'a new file is added to Drive', config: DRIVE_FILTERS },
+      { id: 'file-updated', label: 'File updated in Drive', phrase: 'a file is updated in Drive', config: DRIVE_FILTERS },
       { id: 'new-share', label: 'File shared with you', phrase: 'a file is shared with you' },
-      { id: 'new-event', label: 'New Calendar event', phrase: 'a new event is created in Calendar' }
+      { id: 'new-event', label: 'New Calendar event', phrase: 'a new event is created in Calendar', config: CALENDAR_FILTERS }
     ]
   },
   {
@@ -165,6 +219,11 @@ export const TIMER_TRIGGER = { id: 'timer', label: 'Timer', color: '#E6E6E6' } a
 
 export function triggerApp(id: string): TriggerApp | undefined {
   return TRIGGER_APPS.find((app) => app.id === id)
+}
+
+/** The catalog event a stored phrase came from, for its config fields. */
+export function triggerEvent(appId: string, phrase: string): TriggerEvent | undefined {
+  return triggerApp(appId)?.events.find((event) => event.phrase === phrase)
 }
 
 /** @mention the compiled prompt should use: a native tool when there is one, otherwise @composio. */

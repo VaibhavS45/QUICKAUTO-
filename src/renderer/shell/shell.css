@@ -102,11 +102,8 @@
   height: 6px;
   border-radius: var(--radius-full);
   background: var(--ember);
-  box-shadow: 0 0 6px 0 var(--ember-glow);
   flex: 0 0 auto;
 }
-
-.light .shell-nav-dot { box-shadow: none; }
 
 .shell-topnav-item:hover {
   color: var(--ash-1);
@@ -116,7 +113,7 @@
 .shell-topnav-item.is-active {
   color: var(--text-on-accent);
   background: var(--ember);
-  box-shadow: 0 0 0 1px var(--ember-deep), 0 0 14px 0 var(--ember-glow);
+  box-shadow: 0 0 0 1px var(--ember-deep);
 }
 
 .shell-topnav-item.is-active:hover {
@@ -923,18 +920,6 @@
 
 .home-start-card .start-grid {
   padding: 12px;
-}
-
-.home-start-head {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  margin-bottom: 0;
-  padding: 12px 12px 0 16px;
-  color: var(--text);
-  font-size: var(--font-md);
-  font-weight: 500;
-  line-height: 20px;
 }
 
 .shell-home-automate .updates-day:first-of-type {
@@ -1914,8 +1899,6 @@
   background: #fff;
   box-shadow: 0 8px 24px rgb(0 0 0 / 6%);
 }
-
-.light .home-start-head { color: var(--text); }
 
 .light .shell-automations-placeholder nav { border-bottom-color: rgb(0 0 0 / 12%); }
 .light .shell-automations-placeholder [role="tab"] { color: var(--text-disabled); }

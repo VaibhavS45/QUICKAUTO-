@@ -294,11 +294,6 @@ code, kbd, pre, time {
 
 /* ------------------------------------------------------------ screens */
 
-/* Active nav pill: LED. Solid orange, dark ink, soft outer glow. */
-.shell-topnav-item.is-active {
-  box-shadow: 0 0 24px 0 var(--ember-glow);
-}
-
 /* Updates: sans day headers, matching the card list. */
 .updates-day > h3 {
   font-family: var(--font-sans);
@@ -357,7 +352,7 @@ code, kbd, pre, time {
   margin-inline: auto;
 }
 
-/* Start cards: equal 140px height, icon rested in a bg-3 square. */
+/* Start cards: equal 140px height, icon rested in a grey tile. */
 .start-opt {
   min-height: 140px;
   box-shadow: inset 0 1px 0 var(--highlight);
@@ -366,11 +361,16 @@ code, kbd, pre, time {
 .start-icon {
   width: 40px;
   height: 40px;
-  border-radius: var(--radius-md);
-  background: var(--black-3);
+  border-radius: 10px;
+  background: var(--black-4);
   border: 1px solid var(--line);
   display: grid;
   place-items: center;
+  color: var(--ash-1);
+}
+.start-icon svg {
+  width: 20px;
+  height: 20px;
 }
 .start-badge {
   font-family: var(--font-mono);

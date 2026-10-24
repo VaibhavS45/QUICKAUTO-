@@ -1,7 +1,7 @@
 import { Fragment, useEffect, useMemo, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { TOOL_IDS, TOOL_META, type ActiveToolId } from '../../../shared/types.js'
-import { TIMER_TRIGGER, TRIGGER_APPS, triggerApp, triggerMention } from './trigger-events.js'
+import { TIMER_TRIGGER, TRIGGER_APPS, triggerApp, triggerEvent, triggerMention } from './trigger-events.js'
 import { TriggerAppIcon } from './trigger-icons.js'
 import { blankTrigger, draftToAutomation, makeTriggerId, type BuilderDraft, type BuilderRepeat, type BuilderTrigger } from './builder-compile.js'
 import { attachmentPromptText, needsComposioTools, useAttachments } from '../../lib/attachments.js'
@@ -351,7 +351,7 @@ export default function Builder(props: BuilderProps): React.JSX.Element {
   const [connectorOptions, setConnectorOptions] = useState<string[]>([])
   const [pickerOpen, setPickerOpen] = useState(false)
   const [pickerApp, setPickerApp] = useState<string | null>(null)
-  const [conditionEditingId, setConditionEditingId] = useState<string | null>(null)
+  const [configEditingId, setConfigEditingId] = useState<string | null>(null)
   const [pickerBox, setPickerBox] = useState<{ top: number; left: number; width: number } | null>(null)
   const triggerAnchorRef = useRef<HTMLDivElement>(null)
   const pickerRef = useRef<HTMLDivElement>(null)
@@ -875,10 +875,13 @@ export default function Builder(props: BuilderProps): React.JSX.Element {
                   {/* Triggers: Event */}
                   {triggers.filter((t) => t.kind === 'event').map((trigger, i) => {
                     const app = triggerApp(trigger.app)
+                    const fields = triggerEvent(trigger.app, trigger.event)?.config ?? []
                     const connection = triggerConnection(trigger.app)
                     const status = connection === undefined ? 'Via Composio' : connection ? 'Connected' : 'Not connected'
                     const tone = connection === undefined ? 'is-muted' : connection ? 'is-on' : 'is-off'
-                    const conditionOpen = conditionEditingId === trigger.id || Boolean(trigger.condition?.trim())
+                    const filled = Object.values(trigger.config ?? {}).some((value) => value.trim())
+                    const configOpen = configEditingId === trigger.id || filled
+                    const firstInput = fields.findIndex((field) => !field.options)
                     return (
                       <div key={trigger.id} className="builder-trig">
                         <div className="builder-trig-line">
@@ -888,7 +891,6 @@ export default function Builder(props: BuilderProps): React.JSX.Element {
                             <span className="builder-status-dot" aria-hidden="true" />
                             {status}
                           </span>
-                          <span className="builder-trig-text">of the account</span>
                           {connection !== true && (
                             <button type="button" className="builder-connect" onClick={props.onConnect}>Connect</button>
                           )}
@@ -901,43 +903,64 @@ export default function Builder(props: BuilderProps): React.JSX.Element {
                             <TrashIcon />
                           </button>
                         </div>
-                        <div className="builder-trig-line indent">
-                          {conditionOpen ? (
-                            <div className="builder-cond-field">
-                              <span className="builder-sched-note">Only when</span>
-                              <input
-                                autoFocus={conditionEditingId === trigger.id}
-                                className="builder-pill-input"
-                                aria-label="Trigger condition"
-                                placeholder="e.g. from someone in my contacts"
-                                value={trigger.condition ?? ''}
-                                onChange={(event) => patchTrigger(setTriggers, trigger.id, { condition: event.currentTarget.value })}
-                                onBlur={() => {
-                                  if (!trigger.condition?.trim()) setConditionEditingId(null)
-                                }}
-                              />
+                        {fields.length > 0 && (
+                          <div className="builder-trig-line indent">
+                            {configOpen ? (
+                              <div className="builder-cfg">
+                                <span className="builder-sched-note">Only when</span>
+                                <div className="builder-cfg-fields">
+                                  {fields.map((field, index) => (
+                                    <label key={field.key} className="builder-cfg-field">
+                                      <span>{field.label}</span>
+                                      {field.options ? (
+                                        <select
+                                          value={trigger.config?.[field.key] ?? ''}
+                                          onChange={(event) => patchTrigger(setTriggers, trigger.id, {
+                                            config: { ...trigger.config, [field.key]: event.currentTarget.value }
+                                          })}
+                                        >
+                                          <option value="">{field.placeholder}</option>
+                                          {field.options.map((option) => <option key={option} value={option}>{option}</option>)}
+                                        </select>
+                                      ) : (
+                                        <input
+                                          autoFocus={configEditingId === trigger.id && index === firstInput}
+                                          className="builder-pill-input"
+                                          aria-label={field.label}
+                                          placeholder={field.placeholder}
+                                          value={trigger.config?.[field.key] ?? ''}
+                                          onChange={(event) => patchTrigger(setTriggers, trigger.id, {
+                                            config: { ...trigger.config, [field.key]: event.currentTarget.value }
+                                          })}
+                                        />
+                                      )}
+                                    </label>
+                                  ))}
+                                </div>
+                                <button
+                                  type="button"
+                                  className="builder-cond-remove"
+                                  aria-label="Clear conditions"
+                                  onClick={() => {
+                                    patchTrigger(setTriggers, trigger.id, { config: {} })
+                                    setConfigEditingId(null)
+                                  }}
+                                >
+                                  ×
+                                </button>
+                              </div>
+                            ) : (
                               <button
                                 type="button"
-                                className="builder-cond-remove"
-                                aria-label="Remove condition"
-                                onClick={() => {
-                                  patchTrigger(setTriggers, trigger.id, { condition: '' })
-                                  setConditionEditingId(null)
-                                }}
+                                className="builder-cond"
+                                title="Optional filters from the Composio trigger config."
+                                onClick={() => setConfigEditingId(trigger.id)}
                               >
-                                ×
+                                + Add conditions <span className="builder-q" aria-hidden="true">?</span>
                               </button>
-                            </div>
-                          ) : (
-                            <button
-                              type="button"
-                              className="builder-cond"
-                              onClick={() => setConditionEditingId(trigger.id)}
-                            >
-                              + Add conditions <span className="builder-q" aria-hidden="true">?</span>
-                            </button>
-                          )}
-                        </div>
+                            )}
+                          </div>
+                        )}
                       </div>
                     )
                   })}

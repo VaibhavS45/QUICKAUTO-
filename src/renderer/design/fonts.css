@@ -1,0 +1,81 @@
+/*
+ * Type faces. Bundled locally so the app is offline-capable.
+ * - Display/headings: Bricolage Grotesque
+ * - Dot-matrix numerals (the signature detail): Doto
+ * - Body/UI: Instrument Sans
+ * - Data/timestamps/micro-labels: JetBrains Mono (uppercase 11px, 0.08em)
+ */
+
+@font-face {
+  font-family: 'Doto';
+  font-style: normal;
+  font-weight: 400 900;
+  font-display: swap;
+  src: url('../assets/fonts/Doto-Bold.woff2') format('woff2');
+  unicode-range: U+0000-00FF, U+2000-206F;
+}
+
+@font-face {
+  font-family: 'Bricolage Grotesque';
+  font-style: normal;
+  font-weight: 600 700;
+  font-display: swap;
+  src: url('../assets/fonts/BricolageGrotesque-600.woff2') format('woff2');
+  unicode-range: U+0000-00FF, U+2000-206F, U+2190-21BB, U+2212, U+2215;
+}
+
+/* Bricolage ships as static weights; 700 reuses the 600 file as a fallback
+   synthetic when unavailable. */
+@font-face {
+  font-family: 'Bricolage Grotesque';
+  font-style: normal;
+  font-weight: 700;
+  font-display: swap;
+  src: url('../assets/fonts/BricolageGrotesque-700.woff2') format('woff2');
+  unicode-range: U+0000-00FF, U+2000-206F, U+2190-21BB, U+2212, U+2215;
+}
+
+@font-face {
+  font-family: 'Instrument Sans';
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url('../assets/fonts/InstrumentSans-400.woff2') format('woff2');
+  unicode-range: U+0000-00FF, U+2000-206F, U+2190-21BB, U+2212, U+2215;
+}
+
+@font-face {
+  font-family: 'Instrument Sans';
+  font-style: normal;
+  font-weight: 500;
+  font-display: swap;
+  src: url('../assets/fonts/InstrumentSans-500.woff2') format('woff2');
+  unicode-range: U+0000-00FF, U+2000-206F, U+2190-21BB, U+2212, U+2215;
+}
+
+@font-face {
+  font-family: 'Instrument Sans';
+  font-style: normal;
+  font-weight: 600;
+  font-display: swap;
+  src: url('../assets/fonts/InstrumentSans-600.woff2') format('woff2');
+  unicode-range: U+0000-00FF, U+2000-206F, U+2190-21BB, U+2212, U+2215;
+}
+
+@font-face {
+  font-family: 'JetBrains Mono';
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url('../assets/fonts/JetBrainsMono-400.woff2') format('woff2');
+  unicode-range: U+0000-00FF, U+2000-206F, U+2190-21BB, U+2212, U+2215;
+}
+
+@font-face {
+  font-family: 'JetBrains Mono';
+  font-style: normal;
+  font-weight: 500;
+  font-display: swap;
+  src: url('../assets/fonts/JetBrainsMono-500.woff2') format('woff2');
+  unicode-range: U+0000-00FF, U+2000-206F, U+2190-21BB, U+2212, U+2215;
+}

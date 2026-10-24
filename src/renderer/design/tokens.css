@@ -1,0 +1,138 @@
+/*
+ * Design-token roles — "instrument panel" night is the default.
+ * Raw palette primitives (--black-*, --line*, --ash-*, --ember*) live in
+ * theme-ember.css (imported last, owned there). This file maps them onto
+ * the role names every stylesheet consumes and carries type/spacing/radius.
+ * Day (.light) re-points the roles at warm paper — functional, polished later.
+ */
+
+:root {
+  /* Surfaces (role names the stylesheets consume) */
+  --bg: var(--black-0);
+  --bg-elevated: var(--black-1);
+  --surface: var(--black-2);
+  --surface-2: var(--black-3);
+  --surface-3: var(--black-4);
+  --overlay: rgb(0 0 0 / 62%);
+
+  /* Hairlines */
+  --border: var(--line);
+  --border-strong: var(--line-2);
+  --line-accent: rgb(255 90 31 / 45%);
+
+  /* Text. AA on --surface: text 15.9:1 · secondary 11.2:1 · muted 8.1:1 ·
+     disabled (labels 12px+) 4.9:1 */
+  --text: var(--ash-1);
+  --text-secondary: #c8c5c0;
+  --text-muted: var(--ash-2);
+  --text-disabled: var(--ash-3);
+  --text-on-accent: #0a0a0a;
+
+  /* Ember aliases for the generic roles */
+  --accent: var(--ember);
+  --accent-hover: var(--ember-hot);
+  --accent-pressed: var(--ember-deep);
+  --accent-soft: var(--ember-dim);
+  --accent-ring: rgb(255 90 31 / 55%);
+
+  /* Status — running = ember (slow pulse) · succeeded = text-1 + check ·
+     failed = alarm red · paused = ash dashed · missed = hollow ash · idle ash */
+  --success: #f2f0ed;
+  --success-bright: #f2f0ed;
+  --success-soft: rgb(255 255 255 / 7%);
+  --warning: var(--ash-2);
+  --warning-bright: var(--ash-2);
+  --warning-soft: rgb(168 165 160 / 10%);
+  --danger: #ff4d4d;
+  --danger-bright: #ff6b6b;
+  --danger-soft: rgb(255 77 77 / 12%);
+  --info: var(--ember);
+  --info-bright: var(--ember-hot);
+  --info-soft: var(--ember-dim);
+  --neutral: var(--ash-3);
+  --neutral-soft: rgb(255 255 255 / 7%);
+
+  /* Fixed-contrast pair (switch knobs, avatar tiles). */
+  --ink: #f2f0ed;
+  --on-bright: #0a0a0a;
+
+  /* Spacing: 8pt grid; everything is a multiple of 4/8. */
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-6: 24px;
+  --space-8: 32px;
+  --page-pad: 32px;
+  --card-pad: 20px;
+  --card-gap: 16px;
+  --section-gap: 32px;
+  --content-max: 960px;
+
+  /* Radius: 10px cards, 8px buttons/inputs, 6px chips, 999 dots/pills. */
+  --radius-sm: 6px;
+  --radius-md: 8px;
+  --radius-lg: 10px;
+  --radius-xl: 12px;
+  --radius-full: 9999px;
+
+  /* Type scale (px / line-height tracked in components):
+     11 · 12 · 13 · 15 · 20 · 32 with the micro captions in mono. */
+  --font-display: 'Bricolage Grotesque', 'Instrument Sans', sans-serif;
+  --font-sans: 'Instrument Sans', sans-serif;
+  --font-mono: 'JetBrains Mono', monospace;
+  --font-num: 'Doto', var(--font-display);
+  --font-2xs: 11px;
+  --font-xs: 12px;
+  --font-sm: 13px;
+  --font-md: 14px;
+  --font-lg: 15px;
+  --font-xl: 20px;
+  --font-hero: 32px;
+
+  /* Depth comes from hairlines + the 1px top highlight, not from blobs. */
+  --shadow-card: none;
+  --shadow-pop: 0 1px 0 rgb(0 0 0 / 40%);
+  --shadow-overlay: 0 24px 60px rgb(0 0 0 / 60%);
+}
+
+/* Day theme — warm paper, deeper ember; functional fallback, polished later. */
+.light {
+  --overlay: rgb(20 15 10 / 45%);
+
+  --border: rgb(26 20 15 / 13%);
+  --border-strong: rgb(26 20 15 / 19%);
+  --line-accent: rgb(184 67 10 / 45%);
+
+  --text: var(--ash-1);
+  --text-secondary: #443b32;
+  --text-muted: #554c43;
+  --text-disabled: #7a7168;
+  --text-on-accent: #ffffff;
+
+  --accent: var(--ember);
+  --accent-hover: var(--ember-hot);
+  --accent-pressed: var(--ember-deep);
+  --accent-soft: var(--ember-dim);
+  --accent-ring: rgb(184 67 10 / 55%);
+
+  --success: #241c15;
+  --success-bright: #241c15;
+  --success-soft: rgb(26 20 15 / 7%);
+  --warning: var(--ash-2);
+  --warning-bright: var(--ash-2);
+  --warning-soft: rgb(85 76 67 / 10%);
+  --danger: #b02a24;
+  --danger-bright: #8f231d;
+  --danger-soft: rgb(214 52 44 / 10%);
+  --info: var(--ember);
+  --info-bright: var(--ember-hot);
+  --info-soft: var(--ember-dim);
+  --neutral: var(--ash-3);
+  --neutral-soft: rgb(122 113 104 / 14%);
+
+  --ink: #ffffff;
+  --on-bright: #1a140f;
+
+  --shadow-overlay: 0 12px 40px rgb(20 15 10 / 18%);
+}

@@ -1,0 +1,238 @@
+/* Shared primitives on the ember token system. */
+
+/* Heat: the running chip glows; everything else is ash. */
+.p-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 2px 8px;
+  border-radius: var(--radius-full);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  font-weight: 500;
+  line-height: 1.4;
+  white-space: nowrap;
+  color: var(--ash-2);
+  background: transparent;
+  border: 1px solid transparent;
+}
+
+.p-status-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--ash-3);
+  flex: 0 0 auto;
+}
+
+.p-status--running {
+  color: var(--ember-hot);
+  background: var(--ember-dim);
+  border-color: transparent;
+}
+.p-status--running .p-status-dot {
+  background: var(--ember);
+  animation: p-pulse 2.4s ease-in-out infinite;
+  box-shadow: 0 0 8px 0 var(--ember-glow);
+}
+
+.p-status--succeeded, .p-status--active { color: var(--ash-1); background: var(--success-soft); }
+.p-status--active .p-status-dot { background: var(--ember); }
+.p-status-check { color: var(--ash-1); flex: 0 0 auto; margin-top: 1px; }
+
+.p-status--failed {
+  color: var(--danger-bright);
+  background: var(--danger-soft);
+  box-shadow: inset 2px 0 0 var(--danger);
+  border-radius: 2px var(--radius-full) var(--radius-full) 2px;
+}
+.p-status--failed .p-status-dot { background: var(--danger); }
+
+.p-status--paused {
+  color: var(--ash-3);
+  border: 1px dashed var(--border-strong);
+  background: transparent;
+}
+.p-status--paused .p-status-dot { background: transparent; border: 1px solid var(--ash-3); }
+
+.p-status--missed { color: var(--ember-deep); background: transparent; border-color: transparent; }
+.p-status--missed .p-status-dot { background: transparent; border: 1.5px solid var(--ember-deep); }
+
+.p-status--skipped, .p-status--idle, .p-status--cancelled, .p-status--skipped_budget {
+  color: var(--ash-3);
+  background: var(--neutral-soft);
+}
+.p-status--skipped .p-status-dot,
+.p-status--idle .p-status-dot,
+.p-status--cancelled .p-status-dot,
+.p-status--skipped_budget .p-status-dot { background: var(--ash-3); }
+
+.p-status--waiting-approval { color: var(--ash-1); background: var(--black-3); }
+.p-status--waiting-approval .p-status-dot { background: var(--ash-2); }
+
+@keyframes p-pulse {
+  0%, 100% { opacity: 1; box-shadow: 0 0 8px 0 var(--ember-glow); }
+  50% { opacity: 0.45; box-shadow: 0 0 2px 0 transparent; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .p-status--running .p-status-dot { animation: none; }
+}
+
+/* Thin ember sweep along the top edge of a running card. */
+.p-heatbar {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 2px;
+  border-radius: var(--radius-md) var(--radius-md) 0 0;
+  overflow: hidden;
+  background: linear-gradient(90deg, transparent, var(--ember) 40%, var(--ember) 60%, transparent);
+  background-size: 220% 100%;
+  background-position: 100% 0;
+  animation: p-heat 2.8s linear infinite;
+}
+
+@keyframes p-heat {
+  from { background-position: 110% 0; }
+  to { background-position: -110% 0; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .p-heatbar { animation: none; background: var(--ember); background-size: 100% 100%; }
+}
+
+/* Mono micro-label: uppercase, tracked, ash-2. */
+.p-monolabel {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--ash-2);
+}
+
+/* Gauge readout: mono label above a display-font number. */
+.p-metric {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 72px;
+}
+
+.p-metric-value {
+  font-family: var(--font-display);
+  font-weight: 600;
+  font-size: var(--font-xl);
+  line-height: 1.1;
+  color: var(--ash-1);
+  letter-spacing: -0.01em;
+}
+
+.p-metric-value.is-heat { color: var(--ember-hot); }
+.p-metric-value.is-cold { color: var(--danger); }
+
+/* Empty state: one line icon in ash-3, one sentence. */
+.p-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-8) var(--space-4);
+  text-align: center;
+  color: var(--ash-3);
+}
+
+.p-empty-title {
+  margin: 0;
+  font-size: var(--font-sm);
+  font-weight: 500;
+  color: var(--ash-2);
+}
+
+.p-empty-body {
+  margin: 0;
+  font-size: var(--font-sm);
+  color: var(--ash-3);
+}
+
+/* Page header: title left (display font), actions right. */
+.p-page-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  padding: var(--space-1) var(--space-1) var(--space-4);
+}
+
+.p-page-head-kicker {
+  margin: 0 0 2px;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--ash-3);
+}
+
+.p-page-head-title {
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: var(--font-xl);
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  color: var(--ash-1);
+  line-height: 1.2;
+}
+
+.p-page-head-actions {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+/* Timeline rail: dots + vertical hairline, for the updates feed. */
+.p-rail {
+  position: relative;
+  padding-left: 20px;
+}
+
+.p-rail::before {
+  content: '';
+  position: absolute;
+  left: 5px;
+  top: 6px;
+  bottom: 6px;
+  width: 1px;
+  background: var(--line);
+}
+
+.p-rail-item {
+  position: relative;
+}
+
+.p-rail-dot {
+  position: absolute;
+  left: -20px;
+  top: 6px;
+  width: 11px;
+  height: 11px;
+  border-radius: 50%;
+  border: 1px solid var(--line);
+  background: var(--bg);
+  display: grid;
+  place-items: center;
+}
+
+.p-rail-dot::after {
+  content: '';
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: var(--ash-3);
+}
+
+.p-rail-dot.is-heat::after { background: var(--ember); box-shadow: 0 0 8px 0 var(--ember-glow); }
+.p-rail-dot.is-drawn::after { background: var(--ash-1); }
+.p-rail-dot.is-failed::after { background: var(--danger); }

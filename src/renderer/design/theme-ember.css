@@ -1,0 +1,650 @@
+/**
+ * theme-ember.css — imported LAST; the override layer for the visual pass.
+ * Aesthetic: "instrument panel" — true neutral deep blacks with a 1-2% warm
+ * cast, one LED orange used like light, dot-matrix numerals, hairlines.
+ * NOT brown, NOT purple, NOT glassy-blob.additive-only: no existing selector
+ * is removed; no animation/transition/view-transition line is touched.
+ *
+ * Night is the hero: :root and .dark carry the full instrument palette.
+ * .light keeps a working Day fallback (polish lands in a later task).
+ */
+
+/* ---------------------------------------------------------------- tokens */
+
+:root,
+.dark {
+  /* True-neutral blacks with a 1-2% warm cast (not brown). */
+  --black-0: #060606;
+  --black-1: #0a0a0a;
+  --black-2: #101010;
+  --black-3: #161616;
+  --black-4: #1d1d1d;
+  --black-5: #262626;
+
+  /* Hairline family: white at low alpha, like etched glass. */
+  --line: rgb(255 255 255 / 6%);
+  --line-2: rgb(255 255 255 / 10%);
+  --line-3: rgb(255 255 255 / 16%);
+  --line-hot: var(--line-3);
+  --highlight: rgb(255 255 255 / 4%);
+
+  /* Ink ladder (AA-checked on bg-1: text-1 16.1:1 · text-2 7.9:1) */
+  --ash-1: #f2f0ed;
+  --ash-2: #a8a5a0;
+  --ash-3: #7a7874;
+
+  /* LED orange: used like light, rarely. */
+  --ember: #ff5a1f;
+  --ember-hot: #ff7a3d;
+  --ember-deep: #d9420b;
+  --ember-dim: rgb(255 90 31 / 10%);
+  --ember-glow: rgb(255 90 31 / 45%);
+  --ember-dark-ink: #0a0a0a;
+
+  /* Status: running = ember (pulse) · succeeded = text-1 + check
+     failed = alarm red (failures only) · paused/missed = cold */
+  --status-running: var(--ember);
+  --status-succeeded: var(--ash-1);
+  --status-failed: #ff4d4d;
+  --status-paused: var(--ash-3);
+  --status-missed: var(--ash-3);
+
+  /* Legacy shadcn tokens → instrument panel. */
+  --background: var(--black-0);
+  --foreground: var(--ash-1);
+  --card: var(--black-2);
+  --card-foreground: var(--ash-1);
+  --popover: var(--black-2);
+  --popover-foreground: var(--ash-1);
+  --primary: var(--ember);
+  --primary-foreground: var(--ember-dark-ink);
+  --secondary: var(--black-3);
+  --secondary-foreground: var(--ash-1);
+  --muted: var(--black-3);
+  --muted-foreground: var(--ash-2);
+  --accent: var(--ember-dim);
+  --accent-foreground: var(--ash-1);
+  --destructive: #ff4d4d;
+  --border: var(--line);
+  --input: rgb(255 255 255 / 10%);
+  --ring: var(--ember);
+  --chart-1: #ff5a1f;
+  --chart-2: #d9420b;
+  --chart-3: #ff7a3d;
+  --chart-4: #7a7874;
+  --chart-5: #ff4d4d;
+  --sidebar: var(--black-1);
+  --sidebar-foreground: var(--ash-1);
+  --sidebar-primary: var(--ember);
+  --sidebar-primary-foreground: var(--ember-dark-ink);
+  --sidebar-accent: var(--black-3);
+  --sidebar-accent-foreground: var(--ash-1);
+  --sidebar-border: var(--line);
+  --sidebar-ring: var(--ember);
+}
+
+/* Day: warm paper, fully light, nothing dark, no cool greys.
+   Paper ladder: window paper-0 · sidebar paper-2 · content paper-1 ·
+   elevated paper-3. Deep ember #C2480A for accents/focus. */
+.light {
+  --black-0: #f6f1ea;
+  --black-1: #efe8de;
+  --black-2: #fbf8f3;
+  --black-3: #e5dccf;
+  --black-4: #ded3c4;
+  --black-5: #d3c6b4;
+  --line: #ddd2c4;
+  --line-2: #cfc3b3;
+  --line-3: #b9ac9c;
+  --line-hot: #c2480a;
+  --highlight: rgb(255 255 255 / 40%);
+
+  --ash-1: #1e1915;
+  --ash-2: #5e544a;
+  --ash-3: #8a7f73;
+
+  --ember: #c2480a;
+  --ember-hot: #b93f00;
+  --ember-deep: #a03c00;
+  --ember-dim: rgb(194 72 10 / 8%);
+  --ember-glow: rgb(194 72 10 / 25%);
+
+  --status-running: var(--ember);
+  --status-succeeded: var(--ash-1);
+  --status-failed: #b02a24;
+  --status-paused: var(--ash-3);
+  --status-missed: var(--ember-deep);
+
+  --background: var(--black-0);
+  --foreground: var(--ash-1);
+  --card: var(--black-2);
+  --card-foreground: var(--ash-1);
+  --popover: var(--black-2);
+  --popover-foreground: var(--ash-1);
+  --primary: var(--ember);
+  --primary-foreground: #ffffff;
+  --secondary: var(--black-3);
+  --secondary-foreground: var(--ash-1);
+  --muted: var(--black-3);
+  --muted-foreground: var(--ash-2);
+  --accent: var(--ember-dim);
+  --accent-foreground: var(--ash-1);
+  --destructive: #b02a24;
+  --border: var(--line);
+  --input: rgb(26 20 15 / 12%);
+  --ring: var(--ember);
+  --chart-1: #b8430a;
+  --chart-2: #8f3400;
+  --chart-3: #a93b00;
+  --chart-4: #6f665d;
+  --chart-5: #b02a24;
+  --sidebar: var(--black-1);
+  --sidebar-foreground: var(--ash-1);
+  --sidebar-primary: var(--ember);
+  --sidebar-primary-foreground: #ffffff;
+  --sidebar-accent: var(--black-3);
+  --sidebar-accent-foreground: var(--ash-1);
+  --sidebar-border: var(--line);
+  --sidebar-ring: var(--ember);
+}
+
+/* ------------------------------------------------------------------ type */
+
+/* Doto = the signature dot-matrix numeral face. Big numbers only. */
+@supports (font-size: 1px) {
+  :root { --font-num: 'Doto', var(--font-display); }
+}
+
+h1, h2, h3, h4, h5, h6 {
+  font-family: var(--font-display);
+  font-optical-sizing: auto;
+  letter-spacing: -0.01em;
+}
+
+code, kbd, pre, time {
+  font-family: var(--font-mono);
+}
+
+.ember-micro {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 500;
+  line-height: 16px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+/* Dot-matrix numeral: running counts, clocks, big percentages. */
+.p-num {
+  font-family: var(--font-num);
+  font-weight: 700;
+  font-size: 28px;
+  line-height: 1;
+  letter-spacing: 0.01em;
+  color: var(--ash-1);
+  font-feature-settings: 'tnum';
+}
+.p-num.is-heat { color: var(--ember-hot); }
+
+/* ---------------------------------------------------------------- depth */
+
+/* 1px inner top highlight + hairline: every raised surface reads layered.
+   Grouped by existing class so nothing is rewritten downstream. */
+.automations-card,
+.updates-row,
+.st-card,
+.shell-panel,
+.builder-sheet,
+.set-panel,
+.shell-notification-card {
+  box-shadow: inset 0 1px 0 var(--highlight);
+}
+
+/* Cursor spotlight on cards (CSS vars --mx/--my set by spotlight.ts). */
+.sp-spot {
+  position: relative;
+  overflow: hidden;
+}
+.sp-spot::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  pointer-events: none;
+  background: radial-gradient(
+    140px circle at var(--mx, 50%) var(--my, 0%),
+    rgb(255 255 255 / 5%),
+    transparent 70%
+  );
+  opacity: 0;
+  transition: opacity 200ms ease;
+}
+.sp-spot:hover::after { opacity: 1; }
+
+/* Dialogs & popovers: bg-2 @ 92% + backdrop blur, hairline, deep shadow. */
+.builder-sheet,
+.shell-notifications,
+.shell-profile-menu,
+.builder-connector-popover .bconn-panel,
+.bmenu-panel {
+  background: rgb(16 16 16 / 92%);
+  -webkit-backdrop-filter: blur(24px);
+  backdrop-filter: blur(24px);
+  border: 1px solid var(--line-2);
+  box-shadow: 0 24px 60px rgb(0 0 0 / 60%), inset 0 1px 0 var(--highlight);
+}
+
+/* Dot grid: empty states + canvas share one 24px-pitch dot. */
+.automations-empty,
+.p-empty {
+  background-image: radial-gradient(rgb(255 255 255 / 5%) 1px, transparent 1px);
+  background-size: 24px 24px;
+  background-position: center 20%;
+  border-radius: 10px;
+}
+
+/* Status chips: tiny dot + mono label, no filled pills. */
+.p-status {
+  background: transparent;
+  border-color: transparent;
+  color: var(--ash-2);
+}
+.p-status--running {
+  background: transparent;
+  color: var(--ember-hot);
+}
+.p-status--succeeded,
+.p-status--active {
+  background: transparent;
+  color: var(--ash-1);
+}
+.p-status--failed {
+  background: transparent;
+  color: var(--status-failed);
+  box-shadow: none;
+  border-radius: var(--radius-full);
+}
+.p-status--paused {
+  background: transparent;
+}
+.p-status--missed,
+.p-status--skipped,
+.p-status--idle,
+.p-status--cancelled,
+.p-status--skipped_budget,
+.p-status--waiting-approval {
+  background: transparent;
+  color: var(--ash-3);
+}
+
+/* Focus: 2px orange, keyboard-only (styles.css sets the ring token). */
+:root, .dark {
+  --focus-ink: 2px;
+}
+
+/* Heat sweep on running rows: thin 1px orange edge (was 2px). */
+.p-heatbar {
+  height: 1px;
+  background: linear-gradient(90deg, transparent, var(--ember) 40%, var(--ember) 60%, transparent);
+  animation: p-heat 2.8s linear infinite;
+}
+
+/* ---------------------------------------------------------------- extras */
+
+.card-hover-line {
+  border: 1px solid var(--line);
+  transition: border-color 160ms ease;
+}
+.card-hover-line:hover {
+  border-color: var(--line-3);
+}
+
+/* ------------------------------------------------------------ screens */
+
+/* Active nav pill: LED. Solid orange, dark ink, soft outer glow. */
+.shell-topnav-item.is-active {
+  box-shadow: 0 0 24px 0 var(--ember-glow);
+}
+
+/* Updates: mono day headers, no serif echoes. */
+.updates-day > h3 {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 500;
+  line-height: 16px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text-disabled);
+}
+.updates-day > h3 span { color: var(--text-muted); font-weight: 400; }
+
+/* Summary strip: one bg-2 band, hairline between cells, dot-matrix figures. */
+.updates-summary {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(120px, 1fr));
+  width: 100%;
+  margin: 0 0 24px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--black-2);
+  box-shadow: inset 0 1px 0 var(--highlight);
+  overflow: hidden;
+}
+.updates-summary-cell {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 16px 20px;
+}
+.updates-summary-cell + .updates-summary-cell {
+  border-left: 1px solid var(--line);
+}
+.updates-summary-cell .p-num { font-size: 32px; }
+.p-num.is-fail { color: var(--danger-bright); }
+.updates-summary-cell .p-monolabel {
+  color: var(--text-disabled);
+}
+.updates-body {
+  max-width: var(--content-max);
+  margin-inline: auto;
+}
+
+/* Automate hero: display face 32px, calm. Serif retired (Bricolage reads
+   sharper at this size); the layout/spacing are untouched. */
+.shell-home-automate > h2 {
+  font-family: var(--font-display);
+  font-size: var(--font-hero);
+  font-weight: 600;
+  line-height: 36px;
+  letter-spacing: -0.01em;
+  color: var(--ash-1);
+}
+.home-start-card {
+  max-width: var(--content-max);
+  margin-inline: auto;
+}
+
+/* Start cards: equal 140px height, icon rested in a bg-3 square. */
+.start-opt {
+  min-height: 140px;
+  box-shadow: inset 0 1px 0 var(--highlight);
+  align-items: stretch;
+}
+.start-icon {
+  width: 40px;
+  height: 40px;
+  border-radius: var(--radius-md);
+  background: var(--black-3);
+  border: 1px solid var(--line);
+  display: grid;
+  place-items: center;
+}
+.start-badge {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--ash-2);
+  border: 1px solid var(--line-2);
+  border-radius: 6px;
+  padding: 2px 6px;
+  background: var(--black-4);
+}
+
+/* Settings window chrome lives in settings/owner settings.css (full-bleed
+   frame, width/height/margin/border/radius/background). Earlier this file
+   re-declared a centered 880px frame here, which fought the full-bleed fix
+   and left a background strip right of the panel — the duplicate is gone. */
+.settings-nav-item.is-active {
+  background: var(--black-4);
+  color: var(--ash-1);
+  box-shadow: inset 2px 0 0 var(--ember);
+}
+.settings-nav-item.is-active svg {
+  color: var(--ember);
+}
+.set-theme-option.is-active {
+  background: var(--black-5);
+  color: var(--ash-1);
+  box-shadow: 0 0 0 1px var(--line-2);
+}
+/* Switch knob: fixed-contrast pair — white in night, ink in day. */
+[role='switch'] > span {
+  background: var(--ash-1);
+}
+
+/* Segmented controls already covered; filters read as chips: */
+.automations-filter {
+  border: 1px solid var(--line);
+  background: var(--black-2);
+}
+.automations-filter.is-on {
+  border-color: var(--line-3);
+  background: var(--black-4);
+  color: var(--ash-1);
+  box-shadow: inset 0 -2px 0 var(--ember);
+}
+
+/* Manage cards: mono meta line, 15px titles, two-line prompt preview,
+   icon tile in a bg-3 square. Data layout unchanged. */
+.st-title {
+  font-size: var(--font-lg);
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  color: var(--ash-1);
+  line-height: 22px;
+}
+.st-meta {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 500;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--ash-3);
+}
+.st-preview {
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  font-size: var(--font-xs);
+  line-height: 18px;
+  color: var(--ash-2);
+}
+.st-icon-tile {
+  width: 36px;
+  height: 36px;
+  border-radius: var(--radius-md);
+  background: var(--black-3);
+  border: 1px solid var(--line);
+  display: grid;
+  place-items: center;
+}
+.st-card {
+  box-shadow: inset 0 1px 0 var(--highlight);
+}
+
+/* Detail form: bare field labels become mono micro; textarea gets the same
+   bg-4 field surface; schedule dropdowns stay in one bg-2 band. */
+.st-field > label {
+  display: block;
+  margin-bottom: 8px;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 500;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--ash-3);
+}
+.st-detail-kind {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 500;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--ash-3);
+}
+.st-detail-headings {
+  gap: 6px;
+}
+.st-detail-title {
+  font-size: var(--font-xl);
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  line-height: 24px;
+  color: var(--ash-1);
+}
+.st-textarea {
+  border-color: var(--line);
+  background: var(--black-4);
+  border-radius: var(--radius-md);
+}
+.st-at {
+  color: var(--ash-3);
+  font-size: var(--font-sm);
+}
+.st-pill {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--ash-2);
+}
+.st-panel {
+  background: var(--black-2);
+  border-color: var(--line);
+  border-radius: var(--radius-md);
+}
+.st-panel-text h3, .st-panel-text strong {
+  font-weight: 600;
+}
+.st-error {
+  color: var(--danger-bright);
+  font-size: var(--font-xs);
+}
+.st-select, .st-input {
+  border-radius: var(--radius-md);
+}
+
+/* Run detail: mono labels, inputs read bg-4, quiet until dirty. */
+.automations-detail-kicker,
+.md-kicker {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 500;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--ash-3);
+}
+.automations-detail-label,
+.md-label {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 500;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--ash-3);
+}
+.automations-detail-body,
+.md-input,
+.st-select,
+.st-input {
+  border-color: var(--line);
+  background: var(--black-4);
+}
+.md-desc {
+  color: var(--ash-2);
+  font-size: var(--font-xs);
+  line-height: 18px;
+}
+/* Manage detail: single 720px column. */
+.automations-detail,
+.automations-run {
+  max-width: 720px;
+  margin-inline: auto;
+  width: 100%;
+}
+
+/* Page headers: the breadcrumb current page is the page title.
+   Lift it to 20/600 display; parents stay quiet mono chips. */
+.shell-breadcrumbs-current {
+  font-family: var(--font-display);
+  font-size: var(--font-xl);
+  font-weight: 600;
+  line-height: 24px;
+  letter-spacing: -0.01em;
+  color: var(--ash-1);
+}
+.shell-breadcrumbs {
+  max-width: min(420px, calc(50vw - var(--shell-titlebar-left, 98px) - 256px));
+}
+.shell-breadcrumbs-parent {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--ash-3);
+}
+
+/* Automations page: cards grid centered with the nav content width. */
+.automations .st-grid,
+.manage-body {
+  max-width: var(--content-max);
+  margin-inline: auto;
+  width: 100%;
+}
+
+/* Canvas: bg-0, unified 24px dot pitch behind nodes. Ports and edge "+" stay
+   neutral hairline — orange is reserved for the active nav and status. */
+.n8n-viewport {
+  background-image: radial-gradient(rgb(255 255 255 / 5%) 1px, transparent 1px);
+  background-size: 24px 24px;
+}
+.n8n-handle {
+  border-color: var(--line-3);
+  background: var(--black-4);
+}
+.n8n-handle.out {
+  border-color: var(--ash-3);
+}
+.n8n-edge-add > button {
+  border-color: var(--line-2);
+  color: var(--ash-2);
+  background: var(--black-3);
+}
+.n8n-edge-add > button:hover {
+  border-color: var(--line-3);
+  color: var(--ash-1);
+  background: var(--black-4);
+}
+.n8n-node {
+  border-color: var(--line);
+  background: var(--black-2);
+  border-radius: var(--radius-md);
+  box-shadow: inset 0 1px 0 var(--highlight);
+}
+.n8n-num {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--ash-3);
+}
+.n8n-title {
+  color: var(--ash-1);
+}
+.n8n-sub {
+  color: var(--ash-3);
+  font-size: var(--font-xs);
+}
+.n8n-status {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--ash-3);
+}
+
+/* Day fallback: keep surfaces legible while the day polish task is pending.
+   The night tag on html wins for scrollbars/focus; day explicitly neutral. */
+.light ::-webkit-scrollbar-thumb {
+  background: rgb(0 0 0 / 12%);
+}

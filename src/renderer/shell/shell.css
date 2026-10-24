@@ -892,6 +892,12 @@
 .shell-content.is-home {
   place-items: start center;
   overflow-y: auto;
+  overflow-x: hidden;
+  scrollbar-width: none;
+}
+
+.shell-content.is-home::-webkit-scrollbar {
+  display: none;
 }
 
 .shell-home-automate {

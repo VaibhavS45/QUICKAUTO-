@@ -626,6 +626,12 @@
   overflow-y: auto;
   overflow-x: hidden;
   padding-bottom: 24px;
+  /* Scrolls without showing a bar: the feed is the page. */
+  scrollbar-width: none;
+}
+
+.automations-body::-webkit-scrollbar {
+  display: none;
 }
 
 .automations:not(.is-canvas-mode) > .automations-body,
@@ -1487,6 +1493,12 @@
   min-height: 0;
   margin: 0 auto;
   overflow-y: auto;
+  overflow-x: hidden;
+  scrollbar-width: none;
+}
+
+.builder-overlay::-webkit-scrollbar {
+  display: none;
 }
 
 .builder-card {
@@ -3093,7 +3105,8 @@
 .builder-whenline {
   display: flex;
   align-items: center;
-  width: max-content;
+  flex-wrap: wrap;
+  width: auto;
   min-width: 100%;
   gap: 4px;
 }

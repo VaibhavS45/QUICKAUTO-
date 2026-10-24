@@ -75,41 +75,6 @@ export function stepsForRoutine(routine: Routine | undefined): ZapStep[] {
   }))
 }
 
-/**
- * Instrument strip above the Updates feed: dot-matrix numbers for the day.
- * One emissive orange figure (runs today); failures read alarm red; the next
- * scheduled run is a clock. Mirrors the run/schedule data already loaded.
- */
-export function UpdatesSummary({ runs, todayItems, todayKey }: {
-  runs: RunRecord[]
-  todayItems: ScheduleItem[]
-  todayKey: string
-}): React.JSX.Element {
-  const runsToday = runs.filter((run) => localDayKey(new Date(run.startedAt)) === todayKey).length
-  const failures = runs.filter((run) => run.status === 'failed').length
-  const now = Date.now()
-  const todayNext = (todayItems ?? [])
-    .map((item) => item.at)
-    .filter((at) => at > now)
-    .sort((a, b) => a - b)[0]
-  return (
-    <div className="updates-summary" role="group" aria-label="Run summary">
-      <div className="updates-summary-cell">
-        <span className="p-monolabel">Runs today</span>
-        <span className={`p-num${runsToday > 0 ? ' is-heat' : ''}`}>{runsToday}</span>
-      </div>
-      <div className="updates-summary-cell">
-        <span className="p-monolabel">Failures</span>
-        <span className={`p-num${failures > 0 ? ' is-fail' : ''}`}>{failures}</span>
-      </div>
-      <div className="updates-summary-cell">
-        <span className="p-monolabel">Next run</span>
-        <span className="p-num">{typeof todayNext === 'number' ? timeLabel(todayNext) : '—'}</span>
-      </div>
-    </div>
-  )
-}
-
 export function UpdatesList({ runs, todayKey, onSelect }: {
   runs: RunRecord[]
   todayKey: string
@@ -634,7 +599,6 @@ export default function AutomationsView(props: FeatureProps): React.JSX.Element 
 
       {!loading && !error && tab === 'updates' && (
         <div className="automations-body updates-body">
-          <UpdatesSummary runs={runs} todayItems={todayItems} todayKey={todayKey} />
           <UpdatesList
             runs={runs}
             todayKey={todayKey}

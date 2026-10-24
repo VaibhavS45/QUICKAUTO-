@@ -597,19 +597,9 @@ code, kbd, pre, time {
   font-size: 11px;
   color: var(--ash-3);
 }
-.n8n-title {
-  color: var(--ash-1);
-}
 .n8n-sub {
   color: var(--ash-3);
   font-size: var(--font-xs);
-}
-.n8n-status {
-  font-family: var(--font-mono);
-  font-size: 11px;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-  color: var(--ash-3);
 }
 
 /* Day fallback: keep surfaces legible while the day polish task is pending.

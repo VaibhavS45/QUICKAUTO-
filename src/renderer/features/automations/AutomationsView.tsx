@@ -27,6 +27,7 @@ import { formatDateTime } from '../../lib/format.js'
 import ScheduledTasks from './ScheduledTasks.js'
 import { ConfirmDialog } from './ConfirmDialog.js'
 import { StatusBadge, UpdatesGlyph } from '../../components/ui/primitives.js'
+import { CanvasNodeIcon, CanvasStepPicker, type CanvasPick, type CanvasPickTarget } from './canvas-picker.js'
 import './automations.css'
 
 interface Routine {
@@ -434,6 +435,20 @@ export default function AutomationsView(props: FeatureProps): React.JSX.Element 
     )
   }
 
+  /** Add-step panel picks: a trigger retargets step 1, the rest insert a node. */
+  function addPickedStep(at: number, target: CanvasPickTarget, pick: CanvasPick): void {
+    if (target === 'trigger') {
+      const trigger = canvasSteps.find((step) => step.kind === 'trigger') ?? canvasSteps[0]
+      if (trigger) {
+        setCanvasSteps((steps) => updateCanvasStep(steps, trigger.id, { kind: 'trigger', title: pick.title, subtitle: pick.subtitle }))
+      }
+      setAddAt(null)
+      return
+    }
+    setCanvasSteps((steps) => insertCanvasStep(steps, at, pick.kind, undefined, { title: pick.title, subtitle: pick.subtitle }))
+    setAddAt(null)
+  }
+
   useEffect(() => {
     if (tab !== 'canvas') return
     const onKey = (e: KeyboardEvent): void => {
@@ -537,6 +552,18 @@ export default function AutomationsView(props: FeatureProps): React.JSX.Element 
     return () => el.removeEventListener('wheel', onWheel)
   }, [tab])
 
+  // Frame the chain the first time the canvas is shown, so it never opens
+  // jammed into the top-left corner.
+  const fittedRef = useRef(false)
+  useEffect(() => {
+    if (tab !== 'canvas' || fittedRef.current || canvasSteps.length === 0) return
+    const id = requestAnimationFrame(() => {
+      fittedRef.current = true
+      fitCanvas()
+    })
+    return () => cancelAnimationFrame(id)
+  }, [tab, canvasSteps.length]) // eslint-disable-line react-hooks/exhaustive-deps
+
   const runId = props.focusRunId ?? ''
   const goUpdates = (): void => {
     props.shell.navigate('automations', { automationTab: 'updates' })
@@ -626,17 +653,22 @@ export default function AutomationsView(props: FeatureProps): React.JSX.Element 
           <div
             className="n8n-viewport"
             ref={viewportRef}
-            onPointerDown={beginPan}
+            onPointerDown={(e) => {
+              if (!(e.target as HTMLElement).closest('.n8n-picker, .n8n-edge-add, .n8n-end')) setAddAt(null)
+              beginPan(e)
+            }}
             onDoubleClick={(e) => {
-              if ((e.target as HTMLElement).closest('.n8n-node, .n8n-menu, .n8n-edge-add, .n8n-end, button, .n8n-toolbar, .n8n-topbar, .n8n-inspector, .n8n-describe')) return
+              if ((e.target as HTMLElement).closest('.n8n-node, .n8n-menu, .n8n-picker, .n8n-edge-add, .n8n-end, button, .n8n-toolbar, .n8n-topbar, .n8n-inspector, .n8n-describe')) return
               addAtPoint(e.clientX, e.clientY)
             }}
             aria-label={canvasRoutine ? `Canvas for ${routineTitle(canvasRoutine.prompt)}` : 'Canvas builder'}
           >
             <div className="n8n-topbar">
-              <span className="n8n-status">
-                {canvasRoutine ? `${routineTitle(canvasRoutine.prompt)} · ${canvasRoutine.repeat} · ${timeLabel(canvasRoutine.runAt)}` : 'Blank canvas'}
-              </span>
+              <div className="n8n-name">
+                <span className="n8n-name-label">Automation</span>
+                <strong>{canvasRoutine ? routineTitle(canvasRoutine.prompt) : 'Blank canvas'}</strong>
+                {canvasRoutine && <small>{canvasRoutine.repeat} · {timeLabel(canvasRoutine.runAt)}</small>}
+              </div>
               <button type="button" className="n8n-create" title="Describe an automation for the agent to create" onClick={() => setCanvasDescribe(true)}>Create</button>
             </div>
             <div className="n8n-toolbar" role="toolbar" aria-label="Canvas controls">
@@ -671,7 +703,7 @@ export default function AutomationsView(props: FeatureProps): React.JSX.Element 
                   <span className="n8n-handle in" aria-hidden="true" />
                   <button type="button" className="n8n-head" onClick={() => pickStep(step)} aria-label={`Configure step ${i + 1} ${step.title}`}>
                     <span className="n8n-icon" aria-hidden="true">
-                      {step.kind === 'trigger' ? '⚡' : step.kind === 'gmail' ? '✉' : step.kind === 'filter' ? '⧩' : step.kind === 'delay' ? '◷' : '◆'}
+                      <CanvasNodeIcon step={step} />
                     </span>
                     <span className="n8n-titles">
                       <strong>{step.title}</strong>
@@ -718,18 +750,11 @@ export default function AutomationsView(props: FeatureProps): React.JSX.Element 
                       +
                     </button>
                     {addAt === edgeIndex && (
-                      <div className="n8n-menu" role="menu" aria-label={`Add step before step ${edgeIndex + 1}`}>
-                        {CANVAS_KINDS.map((kk) => (
-                          <button
-                            key={kk.kind}
-                            type="button"
-                            role="menuitem"
-                            onClick={() => { setCanvasSteps((s) => insertCanvasStep(s, edgeIndex, kk.kind)); setAddAt(null) }}
-                          >
-                            <strong>{kk.label}</strong><small>{kk.hint}</small>
-                          </button>
-                        ))}
-                      </div>
+                      <CanvasStepPicker
+                        ariaLabel={`Add step before step ${edgeIndex + 1}`}
+                        onPick={(target, pick) => addPickedStep(edgeIndex, target, pick)}
+                        onClose={() => setAddAt(null)}
+                      />
                     )}
                   </div>
                 )
@@ -744,18 +769,11 @@ export default function AutomationsView(props: FeatureProps): React.JSX.Element 
                       <span aria-hidden="true">+</span> Add step
                     </button>
                     {addAt === canvasSteps.length && (
-                      <div className="n8n-menu" role="menu" aria-label="Add step at the end">
-                        {CANVAS_KINDS.map((kk) => (
-                          <button
-                            key={kk.kind}
-                            type="button"
-                            role="menuitem"
-                            onClick={() => { setCanvasSteps((s) => insertCanvasStep(s, s.length, kk.kind)); setAddAt(null) }}
-                          >
-                            <strong>{kk.label}</strong><small>{kk.hint}</small>
-                          </button>
-                        ))}
-                      </div>
+                      <CanvasStepPicker
+                        ariaLabel="Add step at the end"
+                        onPick={(target, pick) => addPickedStep(canvasSteps.length, target, pick)}
+                        onClose={() => setAddAt(null)}
+                      />
                     )}
                   </div>
                 )

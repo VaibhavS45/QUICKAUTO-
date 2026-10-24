@@ -206,9 +206,19 @@ export function blankStep(kind: CanvasKind = 'action', pos?: { x: number; y: num
   return { id: makeStepId(), kind, title, subtitle, filled: false, pos: pos ?? layoutPos(0) }
 }
 
-export function insertCanvasStep(steps: CanvasStep[], index: number, kind: CanvasKind = 'action', pos?: { x: number; y: number }): CanvasStep[] {
+export function insertCanvasStep(
+  steps: CanvasStep[],
+  index: number,
+  kind: CanvasKind = 'action',
+  pos?: { x: number; y: number },
+  preset?: { title?: string; subtitle?: string }
+): CanvasStep[] {
   const at = Math.max(0, Math.min(index, steps.length))
-  if (pos) return [...steps.slice(0, at), blankStep(kind, pos), ...steps.slice(at)]
+  const make = (place?: { x: number; y: number }): CanvasStep => {
+    const step = blankStep(kind, place)
+    return preset ? { ...step, title: preset.title ?? step.title, subtitle: preset.subtitle ?? step.subtitle } : step
+  }
+  if (pos) return [...steps.slice(0, at), make(pos), ...steps.slice(at)]
   // Make room: slide later nodes right so the new (empty) node never overlaps.
   const prev = steps[at - 1]
   const next = steps[at]
@@ -218,7 +228,7 @@ export function insertCanvasStep(steps: CanvasStep[], index: number, kind: Canva
       ? { x: next.pos.x - STEP_X, y: next.pos.y }
       : layoutPos(0)
   const shifted = steps.map((s, i) => (i >= at ? { ...s, pos: { x: s.pos.x + STEP_X, y: s.pos.y } } : s))
-  return [...shifted.slice(0, at), blankStep(kind, newPos), ...shifted.slice(at)]
+  return [...shifted.slice(0, at), make(newPos), ...shifted.slice(at)]
 }
 
 /** Re-lay the chain left → right in order. Manual drags are kept until this runs. */

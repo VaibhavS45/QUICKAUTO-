@@ -1,8 +1,20 @@
-/** Gmail event catalog for the Add Trigger picker. Phrases render as "When {phrase} in mailbox …". */
+import { TOOL_IDS } from '../../../shared/types.js'
+
+/** Trigger catalog for the Add Trigger picker. Phrases render as "When {phrase} …". */
 export interface TriggerEvent {
   id: string
   label: string
   phrase: string
+}
+
+export interface TriggerApp {
+  /** Connector/toolkit id used by the compiled automation. */
+  id: string
+  label: string
+  /** Tile glyph and brand color (same pattern as Settings → Connectors). */
+  glyph: string
+  color: string
+  events: TriggerEvent[]
 }
 
 export const GMAIL_EVENTS: TriggerEvent[] = [
@@ -15,6 +27,151 @@ export const GMAIL_EVENTS: TriggerEvent[] = [
   { id: 'starred-email', label: 'Newly starred email', phrase: 'an email is newly starred' },
   { id: 'new-label', label: 'New label', phrase: 'a new label is created' }
 ]
+
+/** Every app with event triggers, in the same order as the Composio picker grid. */
+export const TRIGGER_APPS: TriggerApp[] = [
+  {
+    id: 'gmail', label: 'Gmail', glyph: 'M', color: '#EA4335',
+    events: GMAIL_EVENTS
+  },
+  {
+    id: 'outlook', label: 'Outlook Mail', glyph: 'O', color: '#0F6CBD',
+    events: [
+      { id: 'new-email', label: 'New email', phrase: 'a new email arrives' },
+      { id: 'new-attachment', label: 'New attachment', phrase: 'an attachment arrives' },
+      { id: 'keyword-search', label: 'New email matching keyword search', phrase: 'a new email matching your keyword search arrives' },
+      { id: 'flagged-email', label: 'Newly flagged email', phrase: 'an email is newly flagged' },
+      { id: 'moved-email', label: 'Email moved to a folder', phrase: 'an email is moved to a folder' }
+    ]
+  },
+  {
+    id: 'mailmanus', label: 'Mail Manus', glyph: '✉', color: '#8B5CF6',
+    events: [
+      { id: 'new-email', label: 'New email', phrase: 'a new email arrives' },
+      { id: 'new-reply', label: 'New reply', phrase: 'a reply is received' }
+    ]
+  },
+  {
+    id: 'slack', label: 'Slack', glyph: '#', color: '#611F69',
+    events: [
+      { id: 'new-message', label: 'New message in a channel', phrase: 'a new message is posted in a channel' },
+      { id: 'new-mention', label: 'New mention', phrase: 'you are mentioned in a message' },
+      { id: 'new-reaction', label: 'New reaction', phrase: 'a message gets a new reaction' },
+      { id: 'new-file', label: 'New file shared', phrase: 'a file is shared' },
+      { id: 'new-member', label: 'New member joins', phrase: 'a member joins the workspace' },
+      { id: 'new-channel', label: 'New channel created', phrase: 'a channel is created' }
+    ]
+  },
+  {
+    id: 'notion', label: 'Notion', glyph: 'N', color: '#E8E8E8',
+    events: [
+      { id: 'new-page', label: 'New page in a database', phrase: 'a new page is added to a database' },
+      { id: 'page-updated', label: 'Page updated', phrase: 'a page is updated' },
+      { id: 'new-comment', label: 'New comment', phrase: 'a new comment is added' },
+      { id: 'new-entry', label: 'New database entry', phrase: 'a new database entry is created' }
+    ]
+  },
+  {
+    id: 'googlecalendar', label: 'Google Calendar', glyph: '31', color: '#4285F4',
+    events: [
+      { id: 'new-event', label: 'New event', phrase: 'a new event is created' },
+      { id: 'updated-event', label: 'Event updated', phrase: 'an event is updated' },
+      { id: 'cancelled-event', label: 'Event cancelled', phrase: 'an event is cancelled' },
+      { id: 'starting-event', label: 'Event starting soon', phrase: 'an event is about to start' },
+      { id: 'attendee-response', label: 'Attendee response', phrase: 'an attendee responds to an invite' }
+    ]
+  },
+  {
+    id: 'outlookcalendar', label: 'Outlook Calendar', glyph: '31', color: '#0F6CBD',
+    events: [
+      { id: 'new-event', label: 'New event', phrase: 'a new event is created' },
+      { id: 'updated-event', label: 'Event updated', phrase: 'an event is updated' },
+      { id: 'cancelled-event', label: 'Event cancelled', phrase: 'an event is cancelled' },
+      { id: 'starting-event', label: 'Event starting soon', phrase: 'an event is about to start' }
+    ]
+  },
+  {
+    id: 'github', label: 'GitHub', glyph: 'O', color: '#6E7681',
+    events: [
+      { id: 'new-issue', label: 'New issue', phrase: 'a new issue is opened' },
+      { id: 'new-pr', label: 'New pull request', phrase: 'a new pull request is opened' },
+      { id: 'new-push', label: 'New push', phrase: 'commits are pushed to a repository' },
+      { id: 'new-release', label: 'New release', phrase: 'a release is published' },
+      { id: 'issue-comment', label: 'New issue comment', phrase: 'a comment is added to an issue' },
+      { id: 'new-star', label: 'New star', phrase: 'a repository is starred' }
+    ]
+  },
+  {
+    id: 'instagram', label: 'Instagram', glyph: '◎', color: '#E1306C',
+    events: [
+      { id: 'new-post', label: 'New post', phrase: 'a new post is published' },
+      { id: 'new-story', label: 'New story', phrase: 'a new story is posted' },
+      { id: 'new-comment', label: 'New comment', phrase: 'a new comment is added' },
+      { id: 'new-mention', label: 'New mention', phrase: 'your account is mentioned' }
+    ]
+  },
+  {
+    id: 'metaads', label: 'Meta Ads', glyph: '∞', color: '#0866FF',
+    events: [
+      { id: 'new-lead', label: 'New lead', phrase: 'a new lead is captured' },
+      { id: 'campaign-status', label: 'Campaign status changed', phrase: 'a campaign changes status' },
+      { id: 'spend-threshold', label: 'Spend threshold reached', phrase: 'an ad account reaches its spend threshold' }
+    ]
+  },
+  {
+    id: 'googleads', label: 'Google Ads', glyph: 'G', color: '#4285F4',
+    events: [
+      { id: 'new-lead', label: 'New lead form submission', phrase: 'a new lead form is submitted' },
+      { id: 'campaign-status', label: 'Campaign status changed', phrase: 'a campaign changes status' },
+      { id: 'budget-threshold', label: 'Budget threshold reached', phrase: 'a campaign reaches its budget threshold' }
+    ]
+  },
+  {
+    id: 'googleworkspace', label: 'Google Workspace', glyph: 'G', color: '#34A853',
+    events: [
+      { id: 'new-file', label: 'New file in Drive', phrase: 'a new file is added to Drive' },
+      { id: 'file-updated', label: 'File updated in Drive', phrase: 'a file is updated in Drive' },
+      { id: 'new-share', label: 'File shared with you', phrase: 'a file is shared with you' },
+      { id: 'new-event', label: 'New Calendar event', phrase: 'a new event is created in Calendar' }
+    ]
+  },
+  {
+    id: 'shopify', label: 'Shopify', glyph: 'S', color: '#95BF47',
+    events: [
+      { id: 'new-order', label: 'New order', phrase: 'a new order is placed' },
+      { id: 'order-paid', label: 'Order paid', phrase: 'an order is paid' },
+      { id: 'order-fulfilled', label: 'Order fulfilled', phrase: 'an order is fulfilled' },
+      { id: 'order-cancelled', label: 'Order cancelled', phrase: 'an order is cancelled' },
+      { id: 'new-customer', label: 'New customer', phrase: 'a new customer signs up' },
+      { id: 'abandoned-checkout', label: 'Abandoned checkout', phrase: 'a checkout is abandoned' }
+    ]
+  },
+  {
+    id: 'rss', label: 'RSS', glyph: 'R', color: '#FF6B35',
+    events: [
+      { id: 'new-item', label: 'New item in feed', phrase: 'a new item appears in the feed' },
+      { id: 'feed-updated', label: 'Feed updated', phrase: 'the feed is updated' }
+    ]
+  },
+  {
+    id: 'webhook', label: 'Webhook', glyph: '⇢', color: '#8B5CF6',
+    events: [
+      { id: 'incoming', label: 'Incoming request', phrase: 'an incoming webhook request arrives' }
+    ]
+  }
+]
+
+/** Timer always maps to the schedule trigger instead of an app event. */
+export const TIMER_TRIGGER = { id: 'timer', label: 'Timer', glyph: '◷', color: '#E6E6E6' } as const
+
+export function triggerApp(id: string): TriggerApp | undefined {
+  return TRIGGER_APPS.find((app) => app.id === id)
+}
+
+/** @mention the compiled prompt should use: a native tool when there is one, otherwise @composio. */
+export function triggerMention(appId: string): string {
+  return (TOOL_IDS as readonly string[]).includes(appId) ? appId : 'composio'
+}
 
 export function gmailEventPhrase(id: string): string {
   return GMAIL_EVENTS.find((e) => e.id === id)?.phrase ?? 'a new conversation is started'

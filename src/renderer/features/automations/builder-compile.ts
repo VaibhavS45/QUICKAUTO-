@@ -1,5 +1,6 @@
 import type { AutomationTemplate } from '../../../shared/contracts/automation-templates.js'
 import type { AutomationCreate, AutomationSchedule, ScheduleType } from '../../../shared/contracts/automations.js'
+import { triggerMention } from './trigger-events.js'
 
 /** The schedule types the contract supports. */
 export type BuilderRepeat = ScheduleType
@@ -115,7 +116,7 @@ export function draftToAutomation(draft: BuilderDraft): CompiledAutomation {
 
   const eventPhrases = draft.triggers
     .filter((t) => t.kind === 'event' && t.app && t.event.trim())
-    .map((t) => `check @${t.app} for ${t.event.trim()}`)
+    .map((t) => `check @${triggerMention(t.app)} for ${t.event.trim()}`)
   const prompt = [task, ...eventPhrases].filter(Boolean).join('. ')
   if (!prompt.trim()) return fail('Describe what the agent should do.')
 

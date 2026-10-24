@@ -1,6 +1,6 @@
 import { Fragment, useEffect, useMemo, useState } from 'react'
 import { TOOL_IDS, TOOL_META, type ActiveToolId } from '../../../shared/types.js'
-import { GMAIL_EVENTS } from './trigger-events.js'
+import { TIMER_TRIGGER, TRIGGER_APPS, triggerApp, triggerMention, type TriggerApp } from './trigger-events.js'
 import { blankTrigger, draftToAutomation, makeTriggerId, type BuilderDraft, type BuilderRepeat, type BuilderTrigger } from './builder-compile.js'
 import { attachmentPromptText, needsComposioTools, useAttachments } from '../../lib/attachments.js'
 import type { AutomationCreate } from '../../../shared/contracts/automations.js'
@@ -347,6 +347,13 @@ export function BuilderSettingsMenu(props: BuilderSettingsMenuProps): React.JSX.
   )
 }
 
+function TriggerAppMark({ app }: { app: TriggerApp }): React.JSX.Element {
+  if (app.id === 'gmail') return <GmailMark />
+  return (
+    <span className="builder-trig-glyph" style={{ color: app.color }} aria-hidden="true">{app.glyph}</span>
+  )
+}
+
 function patchTrigger(setTriggers: React.Dispatch<React.SetStateAction<BuilderTrigger[]>>, id: string, patch: Partial<BuilderTrigger>): void {
   setTriggers((cur) => cur.map((t) => (t.id === id ? { ...t, ...patch } : t)))
 }
@@ -360,6 +367,7 @@ export default function Builder(props: BuilderProps): React.JSX.Element {
   const [agents, setAgents] = useState<AgentProfile[]>([])
   const [connectorOptions, setConnectorOptions] = useState<string[]>([])
   const [pickerOpen, setPickerOpen] = useState(false)
+  const [pickerApp, setPickerApp] = useState<string | null>(null)
   const [addMenuOpen, setAddMenuOpen] = useState(false)
   const [skillsSubmenuOpen, setSkillsSubmenuOpen] = useState(false)
   const [recentTasksSubmenuOpen, setRecentTasksSubmenuOpen] = useState(false)
@@ -441,9 +449,28 @@ export default function Builder(props: BuilderProps): React.JSX.Element {
     setTools((cur) => (cur.includes(id) ? cur.filter((t) => t !== id) : [...cur, id]))
   }
 
-  function addEventTrigger(phrase: string): void {
-    setTriggers((cur) => [...cur, { ...blankTrigger('event'), id: makeTriggerId(), event: phrase }])
+  function addEventTrigger(app: string, phrase: string): void {
+    setTriggers((cur) => [...cur, { ...blankTrigger('event'), id: makeTriggerId(), app, event: phrase }])
     setPickerOpen(false)
+    setPickerApp(null)
+  }
+
+  function addScheduleTrigger(): void {
+    setTriggers((cur) => cur.some((t) => t.kind === 'schedule') ? cur : [...cur, blankTrigger('schedule')])
+    setPickerOpen(false)
+    setPickerApp(null)
+  }
+
+  function toggleTriggerPicker(): void {
+    setPickerOpen((open) => !open)
+    setPickerApp(null)
+  }
+
+  /** true/false when this app can read the status, undefined for Composio-backed toolkits. */
+  function triggerConnection(appId: string): boolean | undefined {
+    if (appId === 'gmail') return props.gmailConnected === true
+    if (triggerMention(appId) === appId) return connectorOptions.includes(appId)
+    return undefined
   }
 
   async function handleLocalFilesClick(): Promise<void> {
@@ -547,16 +574,47 @@ export default function Builder(props: BuilderProps): React.JSX.Element {
   // No trigger yet means the event picker is what the user picks next.
   const heading = hasEvent || triggers.length === 0 ? 'When this happens' : 'When'
 
+  const selectedApp = pickerApp ? triggerApp(pickerApp) : undefined
+
   const picker = pickerOpen && (
     <div className="picker-panel" role="menu" aria-label="Choose a trigger">
-      <button type="button" className="picker-head" onClick={() => setPickerOpen(false)}>
-        <span aria-hidden="true">‹</span> Gmail
-      </button>
-      {GMAIL_EVENTS.map((item) => (
-        <button key={item.id} type="button" role="menuitem" className="picker-item" onClick={() => addEventTrigger(item.phrase)}>
-          {item.label}
-        </button>
-      ))}
+      {selectedApp ? (
+        <>
+          <button type="button" className="picker-head" onClick={() => setPickerApp(null)}>
+            <span aria-hidden="true">‹</span> {selectedApp.label}
+          </button>
+          {selectedApp.events.map((item) => (
+            <button
+              key={item.id}
+              type="button"
+              role="menuitem"
+              className="picker-item"
+              onClick={() => addEventTrigger(selectedApp.id, item.phrase)}
+            >
+              {item.label}
+            </button>
+          ))}
+        </>
+      ) : (
+        <div className="picker-grid">
+          {TRIGGER_APPS.map((app) => (
+            <button
+              key={app.id}
+              type="button"
+              role="menuitem"
+              className="picker-card"
+              onClick={() => setPickerApp(app.id)}
+            >
+              <span className="picker-card-glyph" style={{ color: app.color }} aria-hidden="true">{app.glyph}</span>
+              <span className="picker-card-label">{app.label}</span>
+            </button>
+          ))}
+          <button type="button" role="menuitem" className="picker-card" onClick={addScheduleTrigger}>
+            <span className="picker-card-glyph" style={{ color: TIMER_TRIGGER.color }} aria-hidden="true">{TIMER_TRIGGER.glyph}</span>
+            <span className="picker-card-label">{TIMER_TRIGGER.label}</span>
+          </button>
+        </div>
+      )}
     </div>
   )
 
@@ -778,42 +836,47 @@ export default function Builder(props: BuilderProps): React.JSX.Element {
                   })}
 
                   {/* Triggers: Event */}
-                  {triggers.filter((t) => t.kind === 'event').map((trigger, i) => (
-                    <div key={trigger.id} className="builder-trig">
-                      <div className="builder-trig-line">
-                        <GmailMark />
-                        <span className="builder-trig-text">When {trigger.event || 'something happens'} in mailbox</span>
-                        <span className="builder-pill">{props.gmailConnected ? 'Connected' : 'Not Connected'} <span aria-hidden="true">▾</span></span>
-                        <span className="builder-trig-text">of the account</span>
-                        {!props.gmailConnected && (
-                          <button type="button" className="builder-connect" onClick={props.onConnect}>Connect</button>
-                        )}
-                        <button
-                          type="button"
-                          className="builder-iconbtn"
-                          aria-label={`Remove trigger ${i + 1}`}
-                          onClick={() => setTriggers((cur) => cur.filter((t) => t.id !== trigger.id))}
-                        >
-                          <TrashIcon />
-                        </button>
+                  {triggers.filter((t) => t.kind === 'event').map((trigger, i) => {
+                    const app = triggerApp(trigger.app)
+                    const connection = triggerConnection(trigger.app)
+                    const pill = connection === undefined ? 'Composio' : connection ? 'Connected' : 'Not Connected'
+                    return (
+                      <div key={trigger.id} className="builder-trig">
+                        <div className="builder-trig-line">
+                          {app ? <TriggerAppMark app={app} /> : null}
+                          <span className="builder-trig-text">When {trigger.event || 'something happens'} in {app?.label ?? trigger.app}</span>
+                          <span className="builder-pill">{pill} <span aria-hidden="true">▾</span></span>
+                          <span className="builder-trig-text">of the account</span>
+                          {connection !== true && (
+                            <button type="button" className="builder-connect" onClick={props.onConnect}>Connect</button>
+                          )}
+                          <button
+                            type="button"
+                            className="builder-iconbtn"
+                            aria-label={`Remove trigger ${i + 1}`}
+                            onClick={() => setTriggers((cur) => cur.filter((t) => t.id !== trigger.id))}
+                          >
+                            <TrashIcon />
+                          </button>
+                        </div>
+                        <div className="builder-trig-line indent">
+                          <span className="builder-pill">{pill} <span aria-hidden="true">▾</span></span>
+                        </div>
+                        <div className="builder-trig-line indent">
+                          <span className="builder-cond" title="Conditions are not evaluated yet">+ Add conditions <span className="builder-q" aria-hidden="true">?</span></span>
+                        </div>
                       </div>
-                      <div className="builder-trig-line indent">
-                        <span className="builder-pill">{props.gmailConnected ? 'Connected' : 'Not Connected'} <span aria-hidden="true">▾</span></span>
-                      </div>
-                      <div className="builder-trig-line indent">
-                        <span className="builder-cond" title="Conditions are not evaluated yet">+ Add conditions <span className="builder-q" aria-hidden="true">?</span></span>
-                      </div>
-                    </div>
-                  ))}
+                    )
+                  })}
 
                   {triggers.length === 0 && (
-                    <button type="button" className="builder-addtrig" onClick={() => setPickerOpen((v) => !v)} aria-expanded={pickerOpen}>
+                    <button type="button" className="builder-addtrig" onClick={toggleTriggerPicker} aria-expanded={pickerOpen}>
                       + Add Trigger
                     </button>
                   )}
                   {picker}
                   {hasEvent && (
-                    <button type="button" className="builder-addtrig" onClick={() => setPickerOpen((v) => !v)} aria-expanded={pickerOpen}>
+                    <button type="button" className="builder-addtrig" onClick={toggleTriggerPicker} aria-expanded={pickerOpen}>
                       + Add another trigger
                     </button>
                   )}

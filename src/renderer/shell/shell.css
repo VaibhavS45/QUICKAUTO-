@@ -942,13 +942,8 @@
 }
 
 .shell-home-automate .updates-row {
-  border-color: var(--border-strong);
+  border-color: var(--line-2);
   background: transparent;
-}
-
-.shell-home-automate .updates-row-meta {
-  border-color: var(--border-strong);
-  background: var(--surface);
 }
 
 .shell-home-automate .automations-empty {

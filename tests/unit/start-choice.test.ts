@@ -28,7 +28,7 @@ describe('start choice', () => {
       })
     )
     expect(html).toContain('When this happens')
-    expect(html).toContain('mailbox')
+    expect(html).toContain('in Gmail')
     expect(html).toContain('a new conversation is started')
   })
 

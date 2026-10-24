@@ -19,7 +19,7 @@ export function dayLabel(key: string, todayKey: string): string {
   const date = new Date(`${key}T00:00:00`)
   return Number.isNaN(date.getTime())
     ? key
-    : date.toLocaleDateString([], { weekday: 'short', month: 'short', day: 'numeric' })
+    : date.toLocaleDateString([], { month: 'short', day: 'numeric' })
 }
 
 export function timeLabel(at: number | Date): string {

@@ -26,7 +26,7 @@ import CanvasDescribeBar from './canvas-describe.js'
 import { formatDateTime } from '../../lib/format.js'
 import ScheduledTasks from './ScheduledTasks.js'
 import { ConfirmDialog } from './ConfirmDialog.js'
-import { StatusBadge } from '../../components/ui/primitives.js'
+import { StatusBadge, UpdatesGlyph } from '../../components/ui/primitives.js'
 import './automations.css'
 
 interface Routine {
@@ -142,7 +142,7 @@ export function UpdatesList({ runs, todayKey, onSelect }: {
                   aria-hidden="true"
                 />
                 <span className="updates-row-meta">
-                  <span className="updates-row-icon" aria-hidden="true">⟁</span>
+                  <span className="updates-row-icon" aria-hidden="true"><UpdatesGlyph /></span>
                   <strong>{routineTitle(run.title)}</strong>
                   <small>{timeLabel(run.endedAt ?? run.startedAt)}</small>
                 </span>

@@ -306,17 +306,17 @@ code, kbd, pre, time {
   box-shadow: 0 0 24px 0 var(--ember-glow);
 }
 
-/* Updates: mono day headers, no serif echoes. */
+/* Updates: sans day headers, matching the card list. */
 .updates-day > h3 {
-  font-family: var(--font-mono);
-  font-size: 11px;
+  font-family: var(--font-sans);
+  font-size: 16px;
   font-weight: 500;
-  line-height: 16px;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-  color: var(--text-disabled);
+  line-height: 22px;
+  letter-spacing: 0;
+  text-transform: none;
+  color: var(--text);
 }
-.updates-day > h3 span { color: var(--text-muted); font-weight: 400; }
+.updates-day > h3 span { color: var(--text-muted); font-size: 14px; font-weight: 500; }
 
 /* Summary strip: one bg-2 band, hairline between cells, dot-matrix figures. */
 .updates-summary {

@@ -1,6 +1,12 @@
 import { describe, expect, it } from 'vitest'
 import { blankDraft, blankTrigger, draftToAutomation } from '../../src/renderer/features/automations/builder-compile.js'
-import { GMAIL_EVENTS, gmailEventPhrase } from '../../src/renderer/features/automations/trigger-events.js'
+import {
+  GMAIL_EVENTS,
+  TRIGGER_APPS,
+  gmailEventPhrase,
+  triggerApp,
+  triggerMention
+} from '../../src/renderer/features/automations/trigger-events.js'
 
 describe('trigger events', () => {
   it('catalogs every Gmail event with a label and phrase', () => {
@@ -19,6 +25,34 @@ describe('trigger events', () => {
     expect(gmailEventPhrase('new-attachment')).toContain('attachment')
   })
 
+  it('lists every app once with a glyph and at least one event', () => {
+    const ids = new Set(TRIGGER_APPS.map((app) => app.id))
+    expect(ids.size).toBe(TRIGGER_APPS.length)
+    const labels = TRIGGER_APPS.map((app) => app.label)
+    expect(labels).toContain('Slack')
+    expect(labels).toContain('Shopify')
+    expect(labels).toContain('Webhook')
+    for (const app of TRIGGER_APPS) {
+      expect(app.label.trim()).toBeTruthy()
+      expect(app.glyph.trim()).toBeTruthy()
+      expect(app.events.length).toBeGreaterThan(0)
+      const eventIds = new Set(app.events.map((event) => event.id))
+      expect(eventIds.size).toBe(app.events.length)
+      for (const event of app.events) {
+        expect(event.label.trim()).toBeTruthy()
+        expect(event.phrase.trim()).toBeTruthy()
+      }
+    }
+  })
+
+  it('routes native toolkits to their own mention and the rest to @composio', () => {
+    expect(triggerMention('gmail')).toBe('gmail')
+    expect(triggerMention('notion')).toBe('notion')
+    expect(triggerMention('slack')).toBe('composio')
+    expect(triggerApp('slack')?.label).toBe('Slack')
+    expect(triggerApp('nope')).toBeUndefined()
+  })
+
   it('compiles every event into a check the prompt can run', () => {
     for (const item of GMAIL_EVENTS) {
       const compiled = draftToAutomation({
@@ -35,5 +69,19 @@ describe('trigger events', () => {
       expect(compiled.create?.prompt).toContain(item.phrase)
       expect(compiled.create?.connectors).toContain('gmail')
     }
+  })
+
+  it('compiles non-native apps through the composio connector', () => {
+    const compiled = draftToAutomation({
+      ...blankDraft(),
+      task: 'post a summary',
+      triggers: [
+        { ...blankTrigger('schedule'), repeat: 'daily', time: '09:00' },
+        { ...blankTrigger('event'), app: 'slack', event: 'you are mentioned in a message' }
+      ]
+    })
+    expect(compiled.valid).toBe(true)
+    expect(compiled.create?.prompt).toContain('check @composio for you are mentioned in a message')
+    expect(compiled.create?.connectors).toContain('composio')
   })
 })

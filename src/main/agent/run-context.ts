@@ -6,6 +6,10 @@ export interface RunContext {
   runId: string
   source: RunSource
   signal?: AbortSignal
+  /** Folders shared with the task (@/path mentions); absent = legacy permit. */
+  sharedFolders?: string[]
+  /** True once the run ingested web/email content (untrusted). */
+  untrustedIngested?: boolean
 }
 
 const storage = new AsyncLocalStorage<RunContext>()

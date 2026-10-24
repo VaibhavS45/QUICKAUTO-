@@ -21,6 +21,8 @@ export const RoutineSchema = z.object({
   enabled: z.boolean(),
   createdAt: z.number().int(),
   lastRunAt: z.number().int().optional(),
+  /** Epoch ms of the last occurrence handled (fired or scanned-skip). Additive. */
+  lastFiredAt: z.number().int().optional(),
   lastStatus: z.string().max(200).optional(),
   // Scheduled Tasks fields (additive; older routines simply lack them).
   /** Display title, stored apart from the prompt. */
@@ -155,6 +157,10 @@ export interface SchedulerCallbacks {
   /** True while a routine id still has a live run (skip-if-running). */
   isRunning?: (routineId: string) => boolean
   now?: () => number
+  /** Called when an occurrence is skipped because its time already passed
+   * (app was closed / occurrence moved into the past) so the run log can
+   * record a 'missed' entry. */
+  missed?: (routine: Routine, reason: string) => void
 }
 
 const MAX_TIMER_MS = 2_147_483_647 // ponytail: setTimeout ceiling; longer waits re-arm when the clamped timer elapses.
@@ -302,6 +308,7 @@ export class Scheduler {
 
   private arm(r: Routine): void {
     this.disarm(r.id)
+    this.reportSkippedOccurrences(r)
     const next = nextFire(r, this.nowMs())
     if (next === null) {
       // One-shot whose time already passed (e.g. app was closed): it can
@@ -311,6 +318,7 @@ export class Scheduler {
         r.enabled = false
         r.lastStatus = 'missed: scheduled time passed'
         this.persist()
+        this.cb.missed?.({ ...r }, 'missed: scheduled time passed')
       }
       return
     }
@@ -319,6 +327,30 @@ export class Scheduler {
       r.id,
       setTimeout(() => this.onTimer(r.id), delay)
     )
+  }
+
+  /**
+   * Occurrences that would have fired between the last handled occurrence
+   * (lastFiredAt) and now — i.e. the app was quit/slept through them. Records
+   * one 'missed' callback per occurrence (max 7 per arm; outages drain
+   * across restarts) and advances lastFiredAt so restarts do not duplicate.
+   */
+  private reportSkippedOccurrences(r: Routine): void {
+    if (r.repeat === 'once' || !r.enabled || !r.lastFiredAt) return
+    let t = Math.max(r.lastFiredAt, r.runAt)
+    const found: number[] = []
+    for (let i = 0; i < 7; i += 1) {
+      const occ = nextFire(r, t)
+      if (occ === null || occ > this.nowMs()) break
+      found.push(occ)
+      t = occ
+    }
+    if (found.length === 0) return
+    r.lastFiredAt = found[found.length - 1]
+    this.persist()
+    for (const occ of found) {
+      this.cb.missed?.({ ...r, runAt: occ }, 'missed: app not running at scheduled time')
+    }
   }
 
   private onTimer(id: string): void {
@@ -335,11 +367,16 @@ export class Scheduler {
         return
       }
     }
+    // Durably mark this occurrence handled now (crash mid-run must not make
+    // a restart re-report it as missed); runs that end still update
+    // lastRunAt/lastStatus via markRan.
+    r.lastFiredAt = this.nowMs()
     // Skip an occurrence when the previous run is still active (no queue build-up).
     if (this.cb.isRunning?.(id)) {
       this.markRan(id, 'skipped: previous run still active')
       return
     }
+    this.persist()
     this.cb.fire({ ...r })
   }
 }

@@ -5,6 +5,7 @@ import type { ChatThread } from '../../shared/chat.js'
 import type { AgentEvent } from '../../shared/agent.js'
 import type { AppNotification } from '../../shared/contracts/notifications.js'
 import { TITLEBAR_LEFT } from '../../shared/titlebar.js'
+import { formatDateTime } from '../lib/format.js'
 import { parseMentionedTools } from '../../shared/types.js'
 import { ChatView } from './ChatView.js'
 import { HomeView } from './HomeView.js'
@@ -119,6 +120,10 @@ export default function ShellApp(): React.JSX.Element {
     : ''
   const activeThread = threads.find((thread) => thread.id === activeChatId)
   const unreadCount = notifications.filter((notification) => !notification.read).length
+  // Unread dot on the Updates tab while runs streamed since the last visit.
+  const [updatesUnread, setUpdatesUnread] = useState(false)
+  const routeRef = useRef(route)
+  routeRef.current = route
 
   const refreshThreads = useCallback(async (): Promise<ChatThread[]> => {
     const result = await window.app.chatList()
@@ -156,6 +161,32 @@ export default function ShellApp(): React.JSX.Element {
   useEffect(() => window.app.onNotificationsChanged(() => {
     void refreshNotifications().catch((error: unknown) => setDashboardError(errorText(error)))
   }), [refreshNotifications])
+
+  useEffect(() => {
+    const SEEN_KEY = 'palette:updates-since'
+    // Only the stream matters: on any new run, flip the dot unless the user
+    // is on Updates right now (then we just re-baseline).
+    const viewingUpdates = (): boolean =>
+      routeRef.current.view === 'automations' && routeRef.current.params['automationTab'] === 'updates'
+    const off = window.app.onUpdatesChanged(() => {
+      if (viewingUpdates()) {
+        window.localStorage.setItem(SEEN_KEY, String(Date.now()))
+        setUpdatesUnread(false)
+        return
+      }
+      setUpdatesUnread(true)
+    })
+    return () => {
+      off?.()
+    }
+  }, [])
+
+  useEffect(() => {
+    if (route.view === 'automations' && route.params['automationTab'] === 'updates') {
+      window.localStorage.setItem('palette:updates-since', String(Date.now()))
+      setUpdatesUnread(false)
+    }
+  }, [route.view, route.params['automationTab']])
 
   useEffect(() => {
     const onNotification = (event: Event): void => {
@@ -382,7 +413,8 @@ export default function ShellApp(): React.JSX.Element {
   const isCanvasView = route.view === 'automations' && automationTab === 'canvas'
 
   // Top bar nav. The pill splits around the active entry, which turns orange
-  // in place (see .shell-topnav in shell.css).
+  // in place (see .shell-topnav in shell.css). The Updates row carries an
+  // unread dot while runs streamed since the last visit.
   const navItems = [
     ...PRIMARY_NAV.map((item) => ({
       id: item.id,
@@ -405,6 +437,7 @@ export default function ShellApp(): React.JSX.Element {
 
   function renderItem(item: typeof navItems[number]): React.JSX.Element {
     const active = item.id === activeNav.id
+    const unread = item.id === 'updates' && updatesUnread
     return (
       <button
         key={item.id}
@@ -418,6 +451,7 @@ export default function ShellApp(): React.JSX.Element {
       >
         <Icon name={item.icon} />
         <span>{item.label}</span>
+        {unread && <span className="shell-nav-dot" aria-hidden="true" />}
       </button>
     )
   }
@@ -479,7 +513,7 @@ export default function ShellApp(): React.JSX.Element {
                         <button type="button" className="shell-notification-body" onClick={() => void readNotification(notification)}>
                           <span>{notification.title}</span>
                           {notification.body && <small>{notification.body}</small>}
-                          <time>{new Date(notification.createdAt).toLocaleString()}</time>
+                          <time>{formatDateTime(notification.createdAt)}</time>
                         </button>
                         <button type="button" className="shell-notification-dismiss" aria-label={`${t('shell.dismiss')} ${notification.title}`} onClick={() => void dismissNotification(notification.id)}>×</button>
                       </article>

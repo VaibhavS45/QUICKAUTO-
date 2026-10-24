@@ -23,8 +23,10 @@ import {
 import { parseAutomationCreate, parseAutomationTab, type AutomationTabId } from '../../shell/nav.js'
 import { useBreadcrumbs, type BreadcrumbItem } from '../../components/layout/Breadcrumbs.js'
 import CanvasDescribeBar from './canvas-describe.js'
+import { formatDateTime } from '../../lib/format.js'
 import ScheduledTasks from './ScheduledTasks.js'
 import { ConfirmDialog } from './ConfirmDialog.js'
+import { StatusBadge } from '../../components/ui/primitives.js'
 import './automations.css'
 
 interface Routine {
@@ -73,6 +75,41 @@ export function stepsForRoutine(routine: Routine | undefined): ZapStep[] {
   }))
 }
 
+/**
+ * Instrument strip above the Updates feed: dot-matrix numbers for the day.
+ * One emissive orange figure (runs today); failures read alarm red; the next
+ * scheduled run is a clock. Mirrors the run/schedule data already loaded.
+ */
+export function UpdatesSummary({ runs, todayItems, todayKey }: {
+  runs: RunRecord[]
+  todayItems: ScheduleItem[]
+  todayKey: string
+}): React.JSX.Element {
+  const runsToday = runs.filter((run) => localDayKey(new Date(run.startedAt)) === todayKey).length
+  const failures = runs.filter((run) => run.status === 'failed').length
+  const now = Date.now()
+  const todayNext = (todayItems ?? [])
+    .map((item) => item.at)
+    .filter((at) => at > now)
+    .sort((a, b) => a - b)[0]
+  return (
+    <div className="updates-summary" role="group" aria-label="Run summary">
+      <div className="updates-summary-cell">
+        <span className="p-monolabel">Runs today</span>
+        <span className={`p-num${runsToday > 0 ? ' is-heat' : ''}`}>{runsToday}</span>
+      </div>
+      <div className="updates-summary-cell">
+        <span className="p-monolabel">Failures</span>
+        <span className={`p-num${failures > 0 ? ' is-fail' : ''}`}>{failures}</span>
+      </div>
+      <div className="updates-summary-cell">
+        <span className="p-monolabel">Next run</span>
+        <span className="p-num">{typeof todayNext === 'number' ? timeLabel(todayNext) : '—'}</span>
+      </div>
+    </div>
+  )
+}
+
 export function UpdatesList({ runs, todayKey, onSelect }: {
   runs: RunRecord[]
   todayKey: string
@@ -92,21 +129,28 @@ export function UpdatesList({ runs, todayKey, onSelect }: {
       {days.map(([key, dayRuns]) => (
         <section key={key} className="updates-day" aria-label={pastDayLabel(key, todayKey)}>
           <h3>{pastDayLabel(key, todayKey)} <span>({dayRuns.length})</span></h3>
-          {dayRuns.map((run) => (
-            <button
-              key={run.id}
-              type="button"
-              className="updates-row"
-              onClick={() => onSelect(run)}
-            >
-              <span className="updates-row-meta">
-                <span className="updates-row-icon" aria-hidden="true">⟁</span>
-                <strong>{routineTitle(run.title)}</strong>
-                <small>{timeLabel(run.endedAt ?? run.startedAt)}</small>
-              </span>
-              <span className="updates-row-body">{run.summary || 'No output recorded yet.'}</span>
-            </button>
-          ))}
+          <div className="p-rail">
+            {dayRuns.map((run) => (
+              <button
+                key={run.id}
+                type="button"
+                className={`p-rail-item updates-row${run.status === 'running' ? ' is-running' : ''}`}
+                onClick={() => onSelect(run)}
+              >
+                <span
+                  className={`p-rail-dot${run.status === 'running' ? ' is-heat' : run.status === 'failed' ? ' is-failed' : run.status === 'succeeded' ? ' is-drawn' : ''}`}
+                  aria-hidden="true"
+                />
+                <span className="updates-row-meta">
+                  <span className="updates-row-icon" aria-hidden="true">⟁</span>
+                  <strong>{routineTitle(run.title)}</strong>
+                  <small>{timeLabel(run.endedAt ?? run.startedAt)}</small>
+                </span>
+                <span className="updates-row-body">{run.summary || 'No output recorded yet.'}</span>
+                {run.status === 'running' && <span className="p-heatbar" aria-hidden="true" />}
+              </button>
+            ))}
+          </div>
         </section>
       ))}
     </>
@@ -128,10 +172,11 @@ export function RunDetailPage({ run, runs, onSelect, onBack }: {
       <div className="automations-run">
         <article className="automations-run-main" aria-label={routineTitle(run.title)}>
           <p className="automations-detail-kicker">
-            Output · {new Date(run.startedAt).toLocaleString()}
+            Output · {formatDateTime(run.startedAt)}
           </p>
           <h3>{routineTitle(run.title)}</h3>
           <p className={`automations-status is-${run.status}`}>{run.status.replaceAll('_', ' ')}</p>
+          <StatusBadge status={run.status} />
           <p className="automations-detail-body">{run.summary || 'No output recorded yet.'}</p>
         </article>
         <aside className="automations-run-rail" aria-label="All runs">
@@ -590,6 +635,7 @@ export default function AutomationsView(props: FeatureProps): React.JSX.Element 
 
       {!loading && !error && tab === 'updates' && (
         <div className="automations-body updates-body">
+          <UpdatesSummary runs={runs} todayItems={todayItems} todayKey={todayKey} />
           <UpdatesList
             runs={runs}
             todayKey={todayKey}

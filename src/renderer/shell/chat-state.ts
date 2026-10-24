@@ -38,6 +38,8 @@ export function reduceChatRun(state: ChatRunState, event: AgentEvent): ChatRunSt
       return upsertTool(state, event.toolCallId, event.toolName, 'running')
     case 'tool-result':
       return upsertTool(state, event.toolCallId, event.toolName, 'done')
+    case 'tool-error':
+      return upsertTool(state, event.toolCallId, event.toolName, 'done')
     case 'approval-requested':
       return {
         ...upsertTool(state, event.toolCallId, event.toolName, 'needs-approval'),

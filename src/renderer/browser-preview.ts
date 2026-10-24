@@ -15,12 +15,23 @@ const noPreview = (): Promise<{ ok: false; error: string }> =>
 /** Listener subscriptions must return an unsubscribe function, not a promise. */
 const noopOff = (): (() => void) => () => {}
 
+/**
+ * Dev-only theme override for reliable screenshots: `?theme=light|dark|system`
+ * on the preview URL wins over the stub's default night. Electron renderers
+ * never run this shim, so it cannot affect production.
+ */
+const previewTheme = (): 'system' | 'light' | 'dark' => {
+  const value = new URLSearchParams(window.location.search ?? '').get('theme')
+  if (value === 'light' || value === 'dark' || value === 'system') return value
+  return 'dark'
+}
+
 const openSettings = (tab?: string): void => {
   window.location.hash = tab ? `#settings?tab=${tab}` : '#settings'
 }
 
 const replies: Record<string, unknown> = {
-  getAppBehavior: async () => ({ ok: true, keepBackground: false, shader: true, theme: 'dark' }),
+  getAppBehavior: async () => ({ ok: true, keepBackground: false, shader: true, theme: previewTheme() }),
   setAppBehavior: async () => ({ ok: true }),
   getProfile: async () => ({ name: 'Browser Preview', email: 'preview@local', about: '', language: 'en' }),
   setProfile: async () => ({ ok: true }),
@@ -116,6 +127,7 @@ const replies: Record<string, unknown> = {
   // No-op: the renderer pushes the hash itself, which is the route that opens it.
   onOpenSettings: noopOff,
   onSettingsClose: noopOff,
+  onUpdatesChanged: noopOff,
   onAgentEvent: noopOff,
   onNotificationsChanged: noopOff,
   onScheduleChanged: noopOff

@@ -1,3 +1,5 @@
+import { formatAt, formatMonth, formatTime } from '../../lib/format.js'
+
 export function localDayKey(date = new Date()): string {
   const year = date.getFullYear()
   const month = String(date.getMonth() + 1).padStart(2, '0')
@@ -20,8 +22,13 @@ export function dayLabel(key: string, todayKey: string): string {
     : date.toLocaleDateString([], { weekday: 'short', month: 'short', day: 'numeric' })
 }
 
-export function timeLabel(at: number): string {
-  return new Date(at).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })
+export function timeLabel(at: number | Date): string {
+  return formatTime(at)
+}
+
+/** "Scheduled · at 9:45 AM" style used in schedule meta lines. */
+export function atLabel(at: number | Date): string {
+  return formatAt(at)
 }
 
 export function pastDayLabel(key: string, todayKey: string): string {
@@ -53,7 +60,7 @@ export function monthGrid(year: number, monthIndex: number): MonthCell[] {
 }
 
 export function monthLabel(year: number, monthIndex: number): string {
-  return new Date(year, monthIndex, 1).toLocaleDateString([], { month: 'short', year: 'numeric' })
+  return formatMonth(year, monthIndex)
 }
 
 // ponytail: naive repeat heuristic (daily → every day, weekly → same weekday), expand if scheduler exposes real occurrences

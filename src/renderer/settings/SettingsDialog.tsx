@@ -412,8 +412,12 @@ function NavGlyph({ id }: { id: SettingsTabId }): React.JSX.Element {
   if (id === 'general') {
     return (
       <svg viewBox="0 0 16 16" fill="none" aria-hidden>
-        <circle cx="8" cy="6" r="2.2" stroke="currentColor" strokeWidth="1.3" />
-        <path d="M3.5 13c.8-2.2 2.4-3.3 4.5-3.3S11.7 10.8 12.5 13" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" />
+        <path d="M2.8 4.4h6.4M11.6 4.4h1.6" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" />
+        <circle cx="10.2" cy="4.4" r="1.35" stroke="currentColor" strokeWidth="1.3" />
+        <path d="M2.8 8h1.6M6.8 8h6.4" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" />
+        <circle cx="5.6" cy="8" r="1.35" stroke="currentColor" strokeWidth="1.3" />
+        <path d="M2.8 11.6h5.4M10.6 11.6h2.6" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" />
+        <circle cx="9.4" cy="11.6" r="1.35" stroke="currentColor" strokeWidth="1.3" />
       </svg>
     )
   }
@@ -422,6 +426,14 @@ function NavGlyph({ id }: { id: SettingsTabId }): React.JSX.Element {
       <svg viewBox="0 0 16 16" fill="none" aria-hidden>
         <circle cx="8" cy="8" r="5" stroke="currentColor" strokeWidth="1.3" />
         <path d="M8 3v10A5 5 0 0 0 8 3Z" fill="currentColor" />
+      </svg>
+    )
+  }
+  if (id === 'account') {
+    return (
+      <svg viewBox="0 0 16 16" fill="none" aria-hidden>
+        <circle cx="8" cy="6" r="2.2" stroke="currentColor" strokeWidth="1.3" />
+        <path d="M3.5 13c.8-2.2 2.4-3.3 4.5-3.3S11.7 10.8 12.5 13" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" />
       </svg>
     )
   }
@@ -442,9 +454,18 @@ function NavGlyph({ id }: { id: SettingsTabId }): React.JSX.Element {
       </svg>
     )
   }
+  if (id === 'usage') {
+    return (
+      <svg viewBox="0 0 16 16" fill="none" aria-hidden>
+        <path d="M4 13.2V8.8M8 13.2V4.4M12 13.2V6.8" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
+      </svg>
+    )
+  }
   return (
     <svg viewBox="0 0 16 16" fill="none" aria-hidden>
-      <path d="M3 12.5 6.2 6.5 8 10l1.6-2.8L13 12.5" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round" />
+      <rect x="2.5" y="4.5" width="11" height="7" rx="1.6" stroke="currentColor" strokeWidth="1.3" />
+      <path d="M5 8h2.4" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" />
+      <circle cx="11.1" cy="8" r="0.55" fill="currentColor" />
     </svg>
   )
 }

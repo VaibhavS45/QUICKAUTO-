@@ -10,6 +10,7 @@ export type AgentEvent =
   | { type: 'text-delta'; runId: string; delta: string }
   | { type: 'tool-call'; runId: string; toolCallId: string; toolName: string; input: unknown }
   | { type: 'tool-result'; runId: string; toolCallId: string; toolName: string; output: unknown }
+  | { type: 'tool-error'; runId: string; toolCallId: string; toolName: string; message: string }
   | {
       type: 'approval-requested'
       runId: string
@@ -39,6 +40,13 @@ export const AgentEventSchema = z.discriminatedUnion('type', [
     toolCallId: z.string(),
     toolName: z.string(),
     output: z.unknown()
+  }).strict(),
+  z.object({
+    type: z.literal('tool-error'),
+    ...AgentEventBase,
+    toolCallId: z.string(),
+    toolName: z.string(),
+    message: z.string()
   }).strict(),
   z.object({
     type: z.literal('approval-requested'),

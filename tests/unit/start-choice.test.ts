@@ -13,7 +13,7 @@ describe('start choice', () => {
     expect(html).toContain('Triggered task')
     expect(html).toContain('Advanced automation')
     expect(html).toContain('Beta')
-    expect(html).toContain('Describe when Manus should act')
+    expect(html).toContain('Describe when Palette should act')
     expect(html).toContain('<svg')
   })
 
@@ -72,8 +72,8 @@ describe('start choice', () => {
         onSubmit: async () => null
       })
     )
-    expect(html).toContain('Manus will')
-    expect(html).toContain('Describe what Manus should do')
+    expect(html).toContain('Palette will')
+    expect(html).toContain('Describe what Palette should do')
     expect(html).not.toContain('What should it do')
     expect(html).toContain('Add connector or tool')
     expect(html).toContain('Automation settings')

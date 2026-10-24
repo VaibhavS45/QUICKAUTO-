@@ -31,7 +31,36 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
   )
 }
 
+/** Install command lifted from the engine hint line ("Install: <cmd>"). */
+function installCommand(hint?: string): string | null {
+  if (!hint || !hint.startsWith('Install: ')) return null
+  return hint.slice('Install: '.length).trim()
+}
+
+/** Mono code block + copy button; the write is a local clipboard action only. */
+function InstallBlock({ text }: { text: string }): React.JSX.Element {
+  const [copied, setCopied] = useState(false)
+  return (
+    <div className="set-code">
+      <code>{text}</code>
+      <button
+        type="button"
+        className="set-copy"
+        aria-label="Copy install command"
+        onClick={() => {
+          void navigator.clipboard.writeText(text).then(() => {
+            setCopied(true)
+          })
+        }}
+      >
+        {copied ? 'Copied' : 'Copy'}
+      </button>
+    </div>
+  )
+}
+
 function EngineCard({ engine, active, onUse }: { engine: EngineInfo; active: boolean; onUse?: () => void }): React.JSX.Element {
+  const install = installCommand(engine.hint)
   const inner = (
     <>
       <div className="flex items-center gap-3">
@@ -46,17 +75,17 @@ function EngineCard({ engine, active, onUse }: { engine: EngineInfo; active: boo
       </div>
       <div className="flex items-center justify-between pt-3">
         {engine.ready ? (
-          <span className="rounded-md bg-emerald-950 px-2.5 py-1 text-xs text-emerald-300">✓ Ready</span>
+          <span className="set-status is-ready">Ready</span>
         ) : (
-          <span className="rounded-md bg-neutral-800 px-2.5 py-1 text-xs text-amber-300">● Needs setup</span>
+          <span className="set-status is-setup">Needs setup</span>
         )}
         {active ? (
-          <span className="text-xs font-medium text-sky-300">In use</span>
+          <span className="set-active-inline">In use</span>
         ) : engine.version ? (
           <span className="font-mono text-xs text-neutral-400">v{engine.version}</span>
         ) : null}
       </div>
-      {!engine.ready && engine.hint && <p className="pt-2 font-mono text-[11px] text-neutral-500">{engine.hint}</p>}
+      {!engine.ready && engine.hint && (install ? <InstallBlock text={install} /> : <p className="pt-2 font-mono text-[11px] text-neutral-500">{engine.hint}</p>)}
     </>
   )
   const cls = `rounded-lg border bg-neutral-900 p-4 text-left transition-colors ${

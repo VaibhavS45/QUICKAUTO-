@@ -31,10 +31,10 @@ describe('home view', () => {
     expect(choice).toContain('Choose how it starts')
     expect(choice).not.toContain('aria-label="Breadcrumb"')
     const builder = renderToStaticMarkup(createElement(HomeView, { shell, params: { startKind: 'schedule' } }))
-    expect(builder).toContain('Manus will')
+    expect(builder).toContain('Palette will')
     expect(builder).not.toContain('aria-label="Breadcrumb"')
     const home = renderToStaticMarkup(createElement(HomeView, { shell }))
-    expect(home).not.toContain('Manus will')
+    expect(home).not.toContain('Palette will')
   })
 
   it('opens the schedule and the trigger as separate forms', () => {

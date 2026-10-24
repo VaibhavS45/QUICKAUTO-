@@ -2,8 +2,8 @@
   display: flex;
   flex-direction: column;
   margin-top: 14px;
-  background: #131316;
-  border: 1px solid #232326;
+  background: var(--bg);
+  border: 1px solid var(--surface);
   border-radius: 12px;
   overflow: hidden;
   flex: 1;
@@ -18,17 +18,17 @@
   gap: 8px;
   padding: 0 12px;
   flex: none;
-  border-bottom: 1px solid #232326;
+  border-bottom: 1px solid var(--surface);
 }
 
 .wc-today {
-  border: 1px solid #2c2c32;
-  background: #1b1b1e;
+  border: 1px solid var(--surface-2);
+  background: var(--bg);
   border-radius: 8px;
   padding: 4px 11px;
   font-size: 12px;
   font-weight: 600;
-  color: #e7e7e9;
+  color: var(--text-secondary);
   font: inherit;
   font-size: 12px;
   font-weight: 600;
@@ -37,32 +37,32 @@
 
 .wc-today:hover,
 .wc-nav:hover {
-  background: #252528;
+  background: var(--surface);
 }
 
 .wc-nav {
   border: none;
   background: transparent;
-  color: #929299;
+  color: var(--text-muted);
   cursor: pointer;
   padding: 3px 7px;
   border-radius: 6px;
-  font-size: 14px;
+  font-size: var(--font-md);
   line-height: 1;
   font: inherit;
 }
 
 .wc-month {
-  font-size: 13px;
+  font-size: var(--font-sm);
   font-weight: 650;
-  color: #e7e7e9;
+  color: var(--text-secondary);
   margin-left: 2px;
 }
 
 .wc-skipped {
   margin-left: auto;
-  font-size: 11px;
-  color: #77777f;
+  font-size: var(--font-xs);
+  color: var(--text-disabled);
 }
 
 .wc-grid {
@@ -84,7 +84,7 @@
   top: 0;
   bottom: 0;
   width: 1px;
-  background: #232326;
+  background: var(--surface);
 }
 
 .wc-hourline {
@@ -92,7 +92,7 @@
   left: 64px;
   right: 0;
   height: 1px;
-  background: #1d1d20;
+  background: var(--surface);
 }
 
 .wc-hourlabel {
@@ -102,7 +102,7 @@
   text-align: right;
   font-size: 10.5px;
   font-weight: 500;
-  color: #77777f;
+  color: var(--text-disabled);
   line-height: 1;
 }
 
@@ -116,20 +116,20 @@
   gap: 6px;
   height: 34px;
   z-index: 30;
-  background: linear-gradient(#131316 70%, rgb(19 19 22 / 0%));
+  background: linear-gradient(var(--bg) 70%, rgb(7 6 5 / 0%));
 }
 
 .wc-dayname {
-  font-size: 11px;
+  font-size: var(--font-xs);
   font-weight: 600;
   letter-spacing: 0.06em;
-  color: #77777f;
+  color: var(--text-disabled);
 }
 
 .wc-daynum {
-  font-size: 14px;
+  font-size: var(--font-md);
   font-weight: 550;
-  color: #e7e7e9;
+  color: var(--text-secondary);
   width: auto;
   height: auto;
   display: flex;
@@ -140,8 +140,8 @@
 }
 
 .wc-daynum.is-today {
-  background: #c8c8ce;
-  color: #111113;
+  background: var(--ink);
+  color: var(--on-bright);
   font-weight: 650;
 }
 
@@ -150,7 +150,7 @@
   height: 2px;
   left: 56px;
   right: 0;
-  background: #7c86f5;
+  background: var(--info);
   border-radius: 2px;
   z-index: 6;
   pointer-events: none;
@@ -164,16 +164,16 @@
   width: 8px;
   height: 8px;
   border-radius: 999px;
-  background: #7c86f5;
+  background: var(--info);
 }
 
 .wc-nowpill {
   position: absolute;
   left: 6px;
   z-index: 7;
-  background: #7c86f5;
-  color: #111113;
-  font-size: 10px;
+  background: var(--info);
+  color: var(--on-bright);
+  font-size: var(--font-2xs);
   font-weight: 650;
   padding: 3px 7px;
   border-radius: 999px;
@@ -195,7 +195,7 @@
   text-align: left;
   font: inherit;
   color: inherit;
-  background-color: rgb(52 189 144 / 0.82);
+  background-color: var(--ash-2);
   border-radius: 14px;
   display: flex;
   overflow: hidden;
@@ -208,7 +208,7 @@
 }
 
 .wc-card:focus-visible {
-  outline: 2px solid #7c86f5;
+  outline: 2px solid var(--info);
   outline-offset: 2px;
 }
 
@@ -235,8 +235,8 @@
 }
 
 .wc-card-dots {
-  color: rgba(20, 20, 26, 0.55);
-  font-size: 10px;
+  color: rgb(242 240 237 / 55%);
+  font-size: var(--font-2xs);
   letter-spacing: 1px;
   margin: -1px -2px 0 0;
 }
@@ -245,7 +245,7 @@
   margin-top: 7px;
   font-size: 9.5px;
   font-weight: 550;
-  color: rgba(20, 20, 26, 0.6);
+  color: rgb(242 240 237 / 60%);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -255,7 +255,7 @@
   margin-top: 3px;
   font-size: 12.5px;
   font-weight: 700;
-  color: #16161a;
+  color: var(--on-bright);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -266,9 +266,9 @@
   top: 7px;
   left: 50%;
   transform: translateX(-50%);
-  background: #0c0c0e;
-  border: 1px solid rgb(255 255 255 / 14%);
-  color: #f4f4f5;
+  background: var(--bg);
+  border: 1px solid var(--border-strong);
+  color: var(--ink);
   font-size: 9.5px;
   font-weight: 650;
   padding: 3px 8px;
@@ -289,15 +289,15 @@
 }
 
 .wc-draglabel span {
-  background: #1b1b1e;
-  border: 1px solid rgb(255 255 255 / 12%);
-  color: #f4f4f5;
+  background: var(--bg);
+  border: 1px solid var(--border-strong);
+  color: var(--ink);
   font-size: 13.5px;
   font-weight: 700;
   padding: 8px 13px;
   border-radius: 11px;
   white-space: nowrap;
-  box-shadow: 0 10px 26px rgb(0 0 0 / 45%);
+  box-shadow: 0 10px 26px var(--overlay);
 }
 
 .wc-tooltip {
@@ -305,9 +305,9 @@
   z-index: 2000;
   pointer-events: none;
   transform: translate(-50%, 0);
-  background: #1b1b1e;
-  border: 1px solid rgb(255 255 255 / 12%);
-  color: #f4f4f5;
+  background: var(--bg);
+  border: 1px solid var(--border-strong);
+  color: var(--ink);
   font-size: 10.5px;
   font-weight: 600;
   padding: 5px 10px;
@@ -322,7 +322,7 @@
 
 /* Day mode: match the light surfaces of the automations pages. */
 .light .wc {
-  background: #fff;
+  background: var(--ink);
   border-color: rgb(0 0 0 / 12%);
 }
 
@@ -331,32 +331,32 @@
 }
 
 .light .wc-today {
-  background: #fff;
+  background: var(--ink);
   border-color: rgb(0 0 0 / 12%);
-  color: #17191e;
+  color: var(--text);
 }
 
 .light .wc-today:hover,
 .light .wc-nav:hover {
-  background: #eef0f4;
+  background: var(--surface-2);
 }
 
 .light .wc-nav {
-  color: #5b6270;
+  color: var(--text-disabled);
 }
 
 .light .wc-month {
-  color: #17191e;
+  color: var(--text);
 }
 
 .light .wc-skipped,
 .light .wc-hourlabel,
 .light .wc-dayname {
-  color: #5b6270;
+  color: var(--text-disabled);
 }
 
 .light .wc-hourline {
-  background: #ece9ef;
+  background: var(--surface-2);
 }
 
 .light .wc-colsep {
@@ -364,34 +364,34 @@
 }
 
 .light .wc-daynum {
-  color: #17191e;
+  color: var(--text);
 }
 
 .light .wc-daynum.is-today {
-  background: #3a3f47;
-  color: #fafafa;
+  background: var(--border-strong);
+  color: var(--on-bright);
 }
 
 .light .wc-nowline,
 .light .wc-nowpill {
-  background: #e1485b;
+  background: var(--danger);
 }
 
 .light .wc-nowline::after {
-  background: #e1485b;
+  background: var(--danger);
 }
 
 .light .wc-nowpill {
-  color: #fff;
+  color: var(--on-bright);
 }
 
 .light .wc-card {
-  background-color: rgb(243 245 250 / 0.8);
+  background-color: rgb(255 255 255 / 82%);
   box-shadow: 0 2px 6px rgb(0 0 0 / 8%);
 }
 
 .light .wc-card-title {
-  color: #17191e;
+  color: var(--text);
 }
 
 .light .wc-card-meta,
@@ -406,13 +406,13 @@
 .light .wc-hiddenbadge,
 .light .wc-draglabel span,
 .light .wc-tooltip {
-  background: #23262d;
+  background: var(--surface);
   border-color: transparent;
-  color: #fafafa;
+  color: var(--on-bright);
 }
 
 .light .wc-card:focus-visible {
-  outline-color: #3b46b8;
+  outline-color: var(--info);
 }
 
 @media (prefers-reduced-motion: reduce) {

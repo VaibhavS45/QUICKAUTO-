@@ -1,3 +1,5 @@
+@import './design/fonts.css';
+@import './design/tokens.css';
 @import 'tailwindcss';
 @import 'shadcn/tailwind.css';
 
@@ -168,24 +170,22 @@
 /* Premium finish: sharp 6px geometry, hairline top-highlight on surfaces,
    quiet focus ring, tinted selection + slim scrollbars. */
 ::selection {
-  background: rgb(255 255 255 / 18%);
+  background: var(--ember-dim);
 }
 :focus-visible {
-  outline: 1px solid rgb(255 255 255 / 28%);
+  outline: 2px solid var(--accent-ring);
   outline-offset: 1px;
-}
-*::-webkit-scrollbar {
-  width: 10px;
-  height: 10px;
+}*::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
 }
 *::-webkit-scrollbar-thumb {
-  border: 3px solid transparent;
   border-radius: 6px;
+  background-color: rgb(255 255 255 / 12%);
   background-clip: content-box;
-  background-color: rgb(255 255 255 / 14%);
 }
-*::-webkit-scrollbar-track {
-  background: transparent;
+*::-webkit-scrollbar-thumb:hover {
+  background-color: rgb(255 255 255 / 20%);
 }
 
 @source inline("flex grid h-screen bg-black text-neutral-200");
@@ -199,8 +199,9 @@ body,
   height: 100%;
   overflow: hidden;
   border-radius: 14px;
-  font-family:
-    -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  font-family: var(--font-sans);
+  font-size: var(--font-sm);
+  color: var(--text);
 }
 
 .window-titlebar {
@@ -276,29 +277,29 @@ body,
 [class~='mt-1'] { margin-top: 0.25rem; }
 [class~='mx-auto'] { margin-left: auto; margin-right: auto; }
 
-[class~='bg-black'] { background-color: #050608; }
+[class~='bg-black'] { background-color: var(--bg); }
 [class~='bg-black/70'] { background-color: rgb(0 0 0 / 70%); }
-[class~='bg-neutral-950'] { background-color: #090a0c; }
-[class~='bg-neutral-900'] { background-color: #111316; }
-[class~='bg-neutral-900/95'] { background-color: rgb(17 19 22 / 95%); }
-[class~='bg-blue-500'] { background-color: #3b82f6; }
-[class~='text-white'] { color: #f5f7fa; }
-[class~='text-neutral-200'] { color: #d7dbe2; }
-[class~='text-neutral-300'] { color: #b8bec9; }
-[class~='text-neutral-400'] { color: #9299a6; }
-[class~='text-neutral-500'] { color: #6f7785; }
-[class~='text-neutral-600'] { color: #555d6b; }
-[class~='text-blue-400'] { color: #60a5fa; }
+[class~='bg-neutral-950'] { background-color: var(--bg); }
+[class~='bg-neutral-900'] { background-color: var(--surface); }
+[class~='bg-neutral-900/95'] { background-color: var(--surface); }
+[class~='bg-blue-500'] { background-color: var(--ember); }
+[class~='text-white'] { color: var(--text); }
+[class~='text-neutral-200'] { color: var(--text-secondary); }
+[class~='text-neutral-300'] { color: var(--text-muted); }
+[class~='text-neutral-400'] { color: var(--text-muted); }
+[class~='text-neutral-500'] { color: var(--text-disabled); }
+[class~='text-neutral-600'] { color: var(--text-disabled); }
+[class~='text-blue-400'] { color: var(--ember-hot); }
 [class~='font-medium'] { font-weight: 500; }
 [class~='font-semibold'] { font-weight: 600; }
 [class~='text-sm'] { font-size: 0.875rem; line-height: 1.25rem; }
-[class~='text-[13px]'] { font-size: 13px; }
-[class~='text-[11px]'] { font-size: 11px; }
-[class~='text-[10px]'] { font-size: 10px; }
-[class~='text-[15px]'] { font-size: 15px; }
-[class~='text-[17px]'] { font-size: 17px; }
-[class~='border-neutral-900'] { border-color: #20242b; }
-[class~='border-neutral-800'] { border-color: #2a303a; }
+[class~='text-[13px]'] { font-size: var(--font-sm); }
+[class~='text-[11px]'] { font-size: var(--font-xs); }
+[class~='text-[10px]'] { font-size: var(--font-2xs); }
+[class~='text-[15px]'] { font-size: var(--font-lg); }
+[class~='text-[17px]'] { font-size: var(--font-xl); }
+[class~='border-neutral-900'] { border-color: var(--border-strong); }
+[class~='border-neutral-800'] { border-color: var(--border-strong); }
 [class~='border-y'] { border-top-width: 1px; border-bottom-width: 1px; border-style: solid; }
 [class~='border-r'] { border-right-width: 1px; border-style: solid; }
 [class~='border-b'] { border-bottom-width: 1px; border-style: solid; }
@@ -321,14 +322,17 @@ body,
 button, select, input { font: inherit; }
 button { color: inherit; }
 
+/* Instrument panel: the mesh keeps its original geometry, blur and drift
+   keyframes; only the gradient stops were retinted to a lazy flame-plasma
+   in #FF5A1F over neutral black (kept under 14% opacity). */
 .shader-mesh {
   position: absolute;
   inset: -40%;
   background:
-    radial-gradient(ellipse 50% 40% at 20% 20%, rgba(80, 120, 255, 0.28), transparent 55%),
-    radial-gradient(ellipse 45% 50% at 82% 8%, rgba(160, 90, 255, 0.22), transparent 50%),
-    radial-gradient(ellipse 55% 40% at 70% 90%, rgba(40, 180, 255, 0.16), transparent 55%),
-    radial-gradient(ellipse 40% 35% at 10% 85%, rgba(90, 70, 220, 0.14), transparent 50%);
+    radial-gradient(ellipse 55% 45% at 20% 92%, rgb(255 90 31 / 0.12), transparent 55%),
+    radial-gradient(ellipse 45% 42% at 82% 96%, rgb(255 122 61 / 0.08), transparent 50%),
+    radial-gradient(ellipse 60% 38% at 70% 104%, rgb(217 66 11 / 0.10), transparent 55%),
+    radial-gradient(ellipse 40% 35% at 10% 100%, rgb(168 165 160 / 0.06), transparent 50%);
   filter: blur(28px);
   animation: shader-drift 18s ease-in-out infinite alternate;
 }
@@ -344,4 +348,20 @@ button { color: inherit; }
 @keyframes shader-drift {
   from { transform: translate3d(-2%, -1%, 0) scale(1); }
   to { transform: translate3d(3%, 2%, 0) scale(1.08); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .shader-mesh { animation: none; }
+}
+
+/* Film grain: static warm noise on the black so it feels physical.
+   Rendered once per frame, never animated, and cheap enough to keep always. */
+.grain-overlay {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  opacity: 0.03;
+  mix-blend-mode: overlay;
+  background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='160' height='160'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='4' stitchTiles='stitch'/></filter><rect width='100%' height='100%' filter='url(%23n)' opacity='0.5'/></svg>");
 }

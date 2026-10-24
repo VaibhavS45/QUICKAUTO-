@@ -7,7 +7,7 @@ import '../features/automations/automations.css'
 const POLL_MS = 7000
 const PAGE_LIMIT = 100
 
-const STATUS_OPTIONS: RunLogRecord['status'][] = ['running', 'succeeded', 'failed', 'skipped', 'missed']
+const STATUS_OPTIONS: RunLogRecord['status'][] = ['running', 'succeeded', 'failed', 'cancelled', 'skipped', 'missed']
 const SOURCE_OPTIONS: RunLogRecord['sourceType'][] = ['schedule', 'trigger']
 
 function statusColor(status: RunLogRecord['status']): string {
@@ -15,6 +15,7 @@ function statusColor(status: RunLogRecord['status']): string {
     case 'running': return '124 134 245'
     case 'succeeded': return '129 169 137'
     case 'failed': return '194 118 126'
+    case 'cancelled': return '143 143 161'
     case 'skipped': return '108 110 120'
     case 'missed': return '108 110 120'
   }

@@ -4,6 +4,7 @@ import { homedir } from 'node:os'
 import path from 'node:path'
 import { z } from 'zod'
 import type { RunSource } from '../../shared/agent.js'
+import { guardRead } from './read-guard.js'
 
 /**
  * Built-in proof tools. `echo` is a read (auto-runs). `echo_write` is a fake
@@ -123,6 +124,9 @@ export function createBuiltinTools() {
     execute: async ({ path: filePath }) => {
       const error = validateReadPath(filePath)
       if (error) throw new Error(error)
+      // W3 sensitive-path + shared-folder guard (symlink-aware, may ask for
+      // an approval card when the run has ingested untrusted content).
+      await guardRead(filePath)
       const resolved = path.resolve(filePath)
       let size = 0
       try {

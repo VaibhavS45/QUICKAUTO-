@@ -1,4 +1,5 @@
 import type { Automation, AutomationSchedule } from '../../../shared/contracts/automations.js'
+import { formatTime } from '../../lib/format.js'
 
 export type CanvasKind = 'trigger' | 'action' | 'gmail' | 'filter' | 'delay'
 
@@ -25,7 +26,7 @@ export function makeStepId(): string {
 }
 
 function timeLabelLocal(at: number): string {
-  return new Date(at).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })
+  return formatTime(at)
 }
 
 function titleOf(prompt: string): string {

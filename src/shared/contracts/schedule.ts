@@ -42,7 +42,7 @@ export const RunRecordSchema = z.object({
 })
 export type RunRecord = z.infer<typeof RunRecordSchema>
 
-export const RunLogStatusSchema = z.enum(['running', 'succeeded', 'failed', 'skipped', 'missed'])
+export const RunLogStatusSchema = z.enum(['running', 'succeeded', 'failed', 'skipped', 'missed', 'cancelled'])
 export type RunLogStatus = z.infer<typeof RunLogStatusSchema>
 
 export const RunLogSourceSchema = z.enum(['schedule', 'trigger'])

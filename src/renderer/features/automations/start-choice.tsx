@@ -46,7 +46,7 @@ function CloseIcon(): React.JSX.Element {
 export const START_OPTIONS: { kind: StartKind; title: string; subtitle: string; icon: React.ReactNode; badge?: string }[] = [
   { kind: 'schedule', title: 'Schedule', subtitle: 'Run at a time you choose', icon: <ScheduleIcon /> },
   { kind: 'triggered', title: 'Triggered task', subtitle: 'Start from activity in your apps', icon: <TriggeredIcon /> },
-  { kind: 'advanced', title: 'Advanced automation', subtitle: 'Describe when Manus should act', icon: <AdvancedIcon />, badge: 'Beta' }
+  { kind: 'advanced', title: 'Advanced automation', subtitle: 'Describe when Palette should act', icon: <AdvancedIcon />, badge: 'Beta' }
 ]
 
 export default function StartChoice(props: StartChoiceProps): React.JSX.Element {

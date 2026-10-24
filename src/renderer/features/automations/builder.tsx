@@ -821,14 +821,14 @@ export default function Builder(props: BuilderProps): React.JSX.Element {
                   </div>
                   <div className="builder-sheet-section">
                     <div className="builder-willlabel">
-                      Manus will
+                      Palette will
                     </div>
                     <textarea
                       className="builder-taskbox"
                       rows={3}
                       value={task}
                       onChange={(e) => setTask(e.currentTarget.value)}
-                      placeholder="Describe what Manus should do, e.g. summarize the latest AI news and send me the highlights"
+                      placeholder="Describe what Palette should do, e.g. summarize the latest AI news and send me the highlights"
                     />
                     {attachments.files.length > 0 && (
                       <div className="builder-attached-files">

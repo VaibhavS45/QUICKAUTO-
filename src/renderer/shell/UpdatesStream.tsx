@@ -44,6 +44,38 @@ export function groupStreamRows(rows: StreamRow[]): { key: string; rows: StreamR
     .map(([key, dayRows]) => ({ key, rows: dayRows }))
 }
 
+/**
+ * Loads the recent-run stream and keeps it live (W6): reloads whenever
+ * updates change so a session-long view sees new runs without a remount.
+ * Returns the cleanup that unsubscribes and freezes further loads.
+ */
+export function watchStreamRuns(
+  load: (n: number) => Promise<{ ok: boolean; runs?: RunRecord[] }>,
+  onUpdatesChanged: (cb: () => void) => () => void,
+  setState: (runs: RunRecord[], failed: boolean) => void
+): () => void {
+  let active = true
+  const go = (): void => {
+    void load(20)
+      .then((result) => {
+        if (!active) return
+        if (result.ok && result.runs) setState(result.runs, false)
+        else setState([], true)
+      })
+      .catch(() => {
+        if (active) setState([], true)
+      })
+  }
+  go()
+  const off = onUpdatesChanged(() => {
+    if (active) go()
+  })
+  return () => {
+    active = false
+    off()
+  }
+}
+
 function readSeenAt(): number {
   if (typeof window === 'undefined') return 0
   const raw = window.localStorage.getItem(SEEN_KEY)
@@ -59,19 +91,14 @@ export function UpdatesStream({ shell }: { shell: ShellApi }): React.JSX.Element
   const rows = useMemo(() => filterNewRuns(updateStreamRows(runs), seenAt), [runs, seenAt])
 
   useEffect(() => {
-    let active = true
-    window.app.recentTasks(20)
-      .then((result) => {
-        if (!active) return
-        if (result.ok && result.runs) setRuns(result.runs)
-        else setFailed(true)
-      })
-      .catch(() => {
-        if (active) setFailed(true)
-      })
-    return () => {
-      active = false
-    }
+    return watchStreamRuns(
+      window.app.recentTasks.bind(window.app),
+      window.app.onUpdatesChanged.bind(window.app),
+      (next, isFailed) => {
+        setRuns(next)
+        setFailed(isFailed)
+      }
+    )
   }, [])
 
   useEffect(() => {

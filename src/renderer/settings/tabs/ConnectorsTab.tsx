@@ -298,7 +298,7 @@ export default function ConnectorsTab(): React.JSX.Element {
     {
       id: 'outlook',
       name: 'Outlook Mail',
-      description: 'Write, search, and manage your Outlook emails seamlessly within Manus',
+      description: 'Write, search, and manage your Outlook emails seamlessly within Palette',
       category: 'Productivity',
       logoSrc: getConnectorLogo('outlook'),
       connected: false
@@ -306,7 +306,7 @@ export default function ConnectorsTab(): React.JSX.Element {
     {
       id: 'google-workspace',
       name: 'Google Workspace',
-      description: 'Access your files, search instantly, and let Manus help you manage documents...',
+      description: 'Access your files, search instantly, and let Palette help you manage documents...',
       category: 'Business',
       logoSrc: getConnectorLogo('google-workspace'),
       connected: false

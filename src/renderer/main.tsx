@@ -7,6 +7,9 @@ import { applyTheme } from './settings/theme'
 // No-op under Electron (preload already defined window.app); stubs it for `npm run web`.
 import './browser-preview.js'
 import './styles.css'
+import './design/theme-ember.css'
+// Cursor spotlight: additive depth for cards. No-op under reduced motion.
+import './design/spotlight.js'
 
 /** Single renderer entry; app and settings share hash-based routing. */
 function Root(): React.JSX.Element {

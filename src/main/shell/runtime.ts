@@ -87,6 +87,23 @@ export interface ShellRuntime {
   notificationsChanged(): void
 }
 
+export type RunLogStatusLike = import('../../shared/contracts/schedule.js').RunLogRecord['status']
+export type RunStatusLike = import('../../shared/contracts/schedule.js').RunRecord['status']
+
+/**
+ * Map a live run status onto the run-log (Updates feed) status. Cancelled
+ * stays cancelled (W12) — a user stopping a run is not a failure;
+ * budget-skips are skips; a run waiting on approval is still running.
+ */
+export function runLogStatusFor(status: RunStatusLike): RunLogStatusLike {
+  switch (status) {
+    case 'cancelled': return 'cancelled'
+    case 'skipped_budget': return 'skipped'
+    case 'waiting-approval': return 'running'
+    default: return status
+  }
+}
+
 export function createShellRuntime(
   ipc: IpcMain,
   getRoutines: () => Routine[],

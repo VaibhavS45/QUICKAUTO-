@@ -8,6 +8,7 @@ import type { ToolId } from '../../shared/types.js'
 import { buildInstructions, getToolsForMentions } from './registry.js'
 import { runWithContext } from './run-context.js'
 import { buildToolApproval } from './tools.js'
+import { noteUntrustedIngested } from './read-guard.js'
 import type { ModelSettings } from '../settings/model-settings.js'
 import { DEFAULT_ACP_MODEL, type AgentProvider } from './agent-provider.js'
 import { runAcpPrompt } from './acp-client.js'
@@ -21,6 +22,13 @@ import { runPiPrompt } from './pi-run.js'
  */
 
 export const AGENT_STEP_LIMIT = 20
+
+/**
+ * Whole-run wall-clock cap for scheduled (headless) runs. Without it a hung
+ * provider stream leaves `scheduledActive` set forever and the scheduler
+ * skips every future occurrence of that automation (scheduler onTimer).
+ */
+export const SCHEDULED_RUN_TIMEOUT_MS = 15 * 60_000
 
 export interface ApprovalDecision {
   approved: boolean
@@ -48,6 +56,8 @@ export interface RunAgentOptions {
   /** Called for each manual approval request. Must resolve true/false. */
   decideApproval?: (req: ApprovalRequest) => Promise<ApprovalDecision>
   deps?: RunnerDeps
+  /** Folders shared with the task (@/path mentions from prompt/history). */
+  sharedFolders?: string[]
 }
 
 export interface RunnerDeps {
@@ -70,6 +80,8 @@ export interface RunnerDeps {
     source: RunSource
     instructions: string
   }) => AgentLike
+  /** Scheduled-run wall-clock cap; injected in tests, 0 disables. */
+  scheduledTimeoutMs?: number
 }
 
 /** Minimal surface of ToolLoopAgent used here (structural — fakes conform). */
@@ -102,6 +114,50 @@ function asRecord(v: unknown): Record<string, unknown> {
   return typeof v === 'object' && v !== null ? (v as Record<string, unknown>) : {}
 }
 
+/**
+ * Binds a whole scheduled run in wall-clock time. Only scheduled (headless)
+ * runs are capped — interactive chat may legitimately run arbitrarily long.
+ * `onTimeout` aborts the controller the provider stream (and ACP/pi child
+ * processes) are bound to. If the provider honors the abort and settles the
+ * run shortly after, the run's own outcome wins. Otherwise the race rejects,
+ * letting the IPC layer's run-level catch record a failed RunLog and clear
+ * `scheduledActive` (finally), so the scheduler resumes firing the next
+ * occurrence. Without the cap a hung stream would keep `scheduledActive` set
+ * forever and the scheduler would skip every subsequent occurrence.
+ */
+function withScheduledTimeout(
+  source: RunSource,
+  run: Promise<{ text: string; steps: number }>,
+  timeoutMs?: number,
+  onTimeout?: () => void
+): Promise<{ text: string; steps: number }> {
+  if (source !== 'scheduled') return run
+  const ms = timeoutMs ?? SCHEDULED_RUN_TIMEOUT_MS
+  if (!(ms > 0)) return run
+  let settled = false
+  void run.then(() => { settled = true }, () => { settled = true })
+  return Promise.race([
+    run,
+    new Promise<never>((_, reject) => {
+      const timer = setTimeout(() => {
+        onTimeout?.()
+        // Abort-responsive providers settle the run in this tick; the
+        // grace delay lets that outcome win. A non-responsive (hung)
+        // provider still gets the rejection right after.
+        setTimeout(
+          () => {
+            if (!settled) {
+              reject(new Error(`Scheduled run timed out after ${Math.round(ms / 60000)} minutes without completing.`))
+            }
+          },
+          50
+        )
+      }, ms)
+      timer.unref?.()
+    })
+  ])
+}
+
 interface HarnessRunArgs {
   harness: 'opencode' | 'pi'
   prompt: string
@@ -112,6 +168,7 @@ interface HarnessRunArgs {
   systemPrompt?: string
   decideApproval?: RunAgentOptions['decideApproval']
   deps: RunnerDeps
+  sharedFolders?: string[]
 }
 
 /** Whole-run delegation to an external harness. Always emits done/error/aborted. */
@@ -125,7 +182,9 @@ async function runViaHarness(args: HarnessRunArgs): Promise<{ text: string; step
     emit({ type: 'aborted', runId })
     return { text: '', steps: 0 }
   }
-  return runWithContext({ runId, source: args.source, signal }, async () => {
+  return runWithContext(
+    { runId, source: args.source, signal, sharedFolders: args.sharedFolders, untrustedIngested: false },
+    async () => {
     try {
       if (harness === 'pi') {
         const runPi = deps.runPi ?? ((r) => runPiPrompt({ ...r, cwd: deps.getHarnessDirectory?.() }))
@@ -172,7 +231,8 @@ async function runViaHarness(args: HarnessRunArgs): Promise<{ text: string; step
       }
       return fail(err instanceof Error ? err.message : String(err))
     }
-  })
+    }
+  )
 }
 
 export async function runAgent(opts: RunAgentOptions): Promise<{ text: string; steps: number }> {
@@ -192,6 +252,15 @@ export async function runAgent(opts: RunAgentOptions): Promise<{ text: string; s
   const config = deps.getConfig()
   const harness = deps.getAgentProvider?.() ?? 'builtin'
 
+  // Scheduled runs get an internal ctrl that the timeout fires on, so the
+  // abort reaches the underlying provider stream (AI SDK abortSignal) and
+  // any hung socket unblocks. Caller cancel/completion composes through.
+  const scheduledController = source === 'scheduled' ? new AbortController() : null
+  if (scheduledController && signal) {
+    signal.addEventListener('abort', () => scheduledController.abort(), { once: true })
+  }
+  const runSignal = scheduledController?.signal ?? signal
+
   // Harness runs bring their own models + auth (opencode config, pi /login),
   // so no model API key is needed. Scheduled runs go through opencode: its
   // ACP permission protocol is fail-closed (deny without approval, see
@@ -205,7 +274,12 @@ export async function runAgent(opts: RunAgentOptions): Promise<{ text: string; s
       source === 'scheduled'
         ? [opts.systemPrompt?.trim() ?? '', buildInstructions('scheduled', tools)].filter(Boolean).join('\n\n')
         : opts.systemPrompt
-    return runViaHarness({ harness, prompt, source, signal, runId, emit, systemPrompt: harnessSystemPrompt, decideApproval: opts.decideApproval, deps })
+    return withScheduledTimeout(
+      source,
+      runViaHarness({ harness, prompt, source, signal: runSignal, runId, emit, systemPrompt: harnessSystemPrompt, decideApproval: opts.decideApproval, deps, sharedFolders: opts.sharedFolders }),
+      deps.scheduledTimeoutMs,
+      () => scheduledController?.abort()
+    )
   }
 
   const apiKey = await deps.getApiKey()
@@ -233,9 +307,13 @@ export async function runAgent(opts: RunAgentOptions): Promise<{ text: string; s
       toolApproval: buildToolApproval(source, toolNames, new Set(config.autoApprove ?? [])) as never
     })
 
-  // Carry { runId, source, signal } to tool execute functions (BudgetGuard
-  // metering, nested approvals, abort checks).
-  return runWithContext({ runId, source, signal }, async () => {
+  // Carry { runId, source, runSignal } to tool execute functions
+  // (BudgetGuard metering, nested approvals, abort checks, read guard).
+  return withScheduledTimeout(
+    source,
+    runWithContext(
+      { runId, source, signal: runSignal, sharedFolders: opts.sharedFolders, untrustedIngested: false },
+      async () => {
     const messages: ModelMessage[] = [
       ...(opts.history ?? []).slice(-MAX_HISTORY_MESSAGES)
         .map((message) => ({ role: message.role, content: message.text }) as ModelMessage),
@@ -243,16 +321,16 @@ export async function runAgent(opts: RunAgentOptions): Promise<{ text: string; s
     ]
   // eslint-disable-next-line no-constant-condition
   while (true) {
-    if (signal?.aborted) {
+    if (runSignal?.aborted) {
       emit({ type: 'aborted', runId })
       return { text: '', steps: 0 }
     }
 
     let result: Awaited<ReturnType<AgentLike['stream']>>
     try {
-      result = await agent.stream({ messages, abortSignal: signal })
+      result = await agent.stream({ messages, abortSignal: runSignal })
     } catch (err) {
-      if (signal?.aborted || (err instanceof Error && err.name === 'AbortError')) {
+      if (runSignal?.aborted || (err instanceof Error && err.name === 'AbortError')) {
         emit({ type: 'aborted', runId })
         return { text: '', steps: 0 }
       }
@@ -270,6 +348,7 @@ export async function runAgent(opts: RunAgentOptions): Promise<{ text: string; s
             break
           case 'tool-call': {
             const call = asRecord(p['toolCall'] ?? p)
+            noteUntrustedIngested(String(call['toolName'] ?? p['toolName'] ?? ''))
             emit({
               type: 'tool-call',
               runId,
@@ -281,6 +360,7 @@ export async function runAgent(opts: RunAgentOptions): Promise<{ text: string; s
           }
           case 'tool-result': {
             const res = asRecord(p['toolResult'] ?? p)
+            noteUntrustedIngested(String(res['toolName'] ?? p['toolName'] ?? ''))
             emit({
               type: 'tool-result',
               runId,
@@ -290,12 +370,38 @@ export async function runAgent(opts: RunAgentOptions): Promise<{ text: string; s
             })
             break
           }
+          case 'tool-error': {
+            // W9: a throwing tool execute shows up as a tool-error part, not
+            // tool-result. Surface it so the failing step lands in the run log.
+            const res = asRecord(p)
+            const rawError = res['error']
+            let detail: string
+            if (typeof res['errorText'] === 'string' && res['errorText'].length) {
+              detail = res['errorText']
+            } else if (rawError instanceof Error) {
+              detail = rawError.message
+            } else if (typeof rawError === 'string' && rawError.length) {
+              detail = rawError
+            } else if (rawError && typeof rawError === 'object' && Object.keys(rawError).length) {
+              detail = JSON.stringify(rawError)
+            } else {
+              detail = 'tool failed'
+            }
+            emit({
+              type: 'tool-error',
+              runId,
+              toolCallId: String(res['toolCallId'] ?? p['toolCallId'] ?? ''),
+              toolName: String(res['toolName'] ?? p['toolName'] ?? 'unknown'),
+              message: detail.slice(0, 300)
+            })
+            break
+          }
           default:
             break
         }
       }
     } catch (err) {
-      if (signal?.aborted || (err instanceof Error && err.name === 'AbortError')) {
+      if (runSignal?.aborted || (err instanceof Error && err.name === 'AbortError')) {
         emit({ type: 'aborted', runId })
         return { text: '', steps: 0 }
       }
@@ -348,6 +454,10 @@ export async function runAgent(opts: RunAgentOptions): Promise<{ text: string; s
     }
     messages.push(...(await result.responseMessages))
     messages.push({ role: 'tool', content: responses } as unknown as ModelMessage)
-  }
-  })
+    }
+    }
+  ),
+    deps.scheduledTimeoutMs,
+    () => scheduledController?.abort()
+  )
 }

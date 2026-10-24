@@ -29,6 +29,8 @@ import {
 import { TOOL_IDS, type ToolId } from '../shared/types.js'
 import type { AgentEvent } from '../shared/agent.js'
 import { runAgent, type ApprovalDecision } from './agent/runner.js'
+import { sharedPathsForRun } from './agent/read-guard.js'
+import { coordinateQuit } from './shell/quit-coordinator.js'
 import { ModelSettingsService, type SettingsStore } from './settings/model-settings.js'
 import { AgentProviderService, AcpModelService, DEFAULT_ACP_MODEL, detectHarnesses, pickAutoEngine } from './agent/agent-provider.js'
 import { ProfileSettingsService } from './agent/profile-settings.js'
@@ -65,7 +67,7 @@ import { ChatStore, type ChatStoreStorage } from './shell/chat-store.js'
 import { registerChatIpc } from './shell/chat-ipc.js'
 import { AutomationService } from './automations/automation-service.js'
 import { registerAutomationIpc } from './automations/automation-ipc.js'
-import { createShellRuntime } from './shell/runtime.js'
+import { createShellRuntime, runLogStatusFor } from './shell/runtime.js'
 import { createSettingsShellRuntime } from './shell/settings-runtime.js'
 
 // Launched without a console, stdio writes hit EPIPE and kill main — swallow it first.
@@ -236,10 +238,13 @@ const scheduledActive = new Set<string>()
 let fireRoutine: (r: Routine) => void = () => {}
 /** Assigned inside wireIpc (needs startAgentRun scope). */
 let runAutomationTest: (r: Routine) => string = () => ''
+/** Assigned inside wireIpc (needs shellRuntime scope); writes a 'missed' run-log record. */
+let missedRoutine: (r: Routine, reason: string) => void = () => {}
 
 const scheduler = new Scheduler(new ElectronRoutineStore(), {
   isRunning: (id) => scheduledActive.has(id),
-  fire: (routine) => fireRoutine(routine)
+  fire: (routine) => fireRoutine(routine),
+  missed: (routine, reason) => missedRoutine(routine, reason)
 })
 
 const automationService = new AutomationService({
@@ -356,6 +361,21 @@ function applyStrictCsp(): void {
 function wireIpc(): void {
   const shellRuntime = createShellRuntime(ipcMain, () => scheduler.list(), getShellAppWindow, (id, status) => scheduler.markRan(id, status))
   routineChangeHook = () => shellRuntime.scheduleChanged()
+  missedRoutine = (routine) => {
+    // Scheduler skips an occurrence whose time already passed (re-arm after
+    // quit / resume / edit into the past): record it in the activity feed so
+    // the 'missed' filter actually shows anything.
+    const logRunId = `missed-${routine.id}-${routine.runAt}`.slice(0, 128)
+    shellRuntime.startRunLog({
+      taskId: routine.id,
+      taskTitle: (routine.title ?? routine.prompt).slice(0, 200),
+      sourceType: 'schedule',
+      scheduledFor: routine.runAt,
+      startedAt: Date.now(),
+      agentRunId: logRunId
+    })
+    shellRuntime.finishRunLog(logRunId, { status: 'missed', finishedAt: Date.now() })
+  }
   registerChatIpc(ipcMain, chatStore)
   settingsShellRuntime.registerIpc(ipcMain)
   fireRoutine = (routine) => {
@@ -548,6 +568,10 @@ function wireIpc(): void {
       systemPrompt,
       signal: controller.signal,
       runId,
+      // W3: folders the user shared with this run via @/path mentions
+      // (attachments/references in the prompt and recent USER history only —
+      // assistant/tool text never widens access).
+      sharedFolders: sharedPathsForRun(prompt, history),
       emit: (event) => {
         shellRuntime.observeRunEvent(event)
         emitToApp(event)
@@ -556,6 +580,8 @@ function wireIpc(): void {
           shellRuntime.appendRunLogStep(logRunId, { tool: event.toolName, input: event.input })
         } else if (event.type === 'tool-result') {
           shellRuntime.appendRunLogStep(logRunId, { tool: event.toolName, outputPreview: String(event.output ?? '').slice(0, 300) })
+        } else if (event.type === 'tool-error') {
+          shellRuntime.appendRunLogStep(logRunId, { tool: event.toolName, outputPreview: `Error: ${event.message}` })
         }
       },
       decideApproval: (req) =>
@@ -607,10 +633,7 @@ function wireIpc(): void {
       getGuard().endRun(runId)
       const finished = shellRuntime.finishRun(runId)
       if (logRunId) {
-        const logStatus: RunLogRecord['status'] =
-          finished.status === 'cancelled' || finished.status === 'skipped_budget' ? 'failed'
-          : finished.status === 'waiting-approval' ? 'running'
-          : finished.status
+        const logStatus: RunLogRecord['status'] = runLogStatusFor(finished.status)
         shellRuntime.finishRunLog(logRunId, {
           status: logStatus,
           finishedAt: Date.now(),
@@ -944,11 +967,28 @@ app.on('window-all-closed', () => {
   // Otherwise do not quit — tray keeps the app alive.
 })
 
-app.on('will-quit', () => {
+app.on('will-quit', (event) => {
+  // W7: run child cleanup to completion (bounded) instead of fire-and-forget,
+  // and abort live runs first so ACP/pi/opencode/MCP children never outlive
+  // the app. Electron itself does not await will-quit, so exit explicitly.
+  if ((app as unknown as { __quitHandled?: boolean }).__quitHandled) return
+  ;(app as unknown as { __quitHandled?: boolean }).__quitHandled = true
+  event.preventDefault()
   setNestedApprovalHandler(null)
-  void opencodeManager.stop()
-  void settingsShellRuntime.stopAll()
-    .catch((error: unknown) => console.error('Could not stop MCP servers cleanly.', error))
+  const timeoutMs = 3000
+  void coordinateQuit({
+    runs: [...activeRuns.values()].map((active) => active.controller),
+    stops: [
+      () => opencodeManager.stop(),
+      () =>
+        settingsShellRuntime.stopAll().catch((error: unknown) =>
+          console.error('Could not stop MCP servers cleanly.', error)
+        )
+    ],
+    timeoutMs
+  })
+    .catch(() => {})
+    .finally(() => app.exit())
 })
 
 export { store }

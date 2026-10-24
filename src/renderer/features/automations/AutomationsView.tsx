@@ -8,6 +8,7 @@ import {
   NODE_W,
   WORLD,
   canvasStepsForRoutine,
+  canvasToCreate,
   canvasToPatch,
   edgePath,
   insertCanvasStep,
@@ -47,6 +48,15 @@ interface ZapStep {
 
 function errorText(reason: unknown): string {
   return reason instanceof Error ? reason.message : String(reason)
+}
+
+/** Canvas header title: the prompt without its @tool mentions. */
+function canvasHeadTitle(prompt: string): string {
+  const clean = routineTitle(prompt)
+    .replace(/\s*@[a-z-]+/gi, ' ')
+    .replace(/\s{2,}/g, ' ')
+    .trim()
+  return clean || 'Untitled automation'
 }
 
 function FilterIcon(): React.JSX.Element {
@@ -184,6 +194,8 @@ export default function AutomationsView(props: FeatureProps): React.JSX.Element 
   const [addAt, setAddAt] = useState<number | null>(null)
   const [vp, setVp] = useState({ x: 24, y: 0, z: 1 })
   const viewportRef = useRef<HTMLDivElement | null>(null)
+  /** The canvas that was just created keeps the nodes it was built from. */
+  const keepCanvasRef = useRef('')
   const dragRef = useRef<
     | { mode: 'pan'; sx: number; sy: number; ox: number; oy: number }
     | { mode: 'node'; id: string; dx: number; dy: number }
@@ -296,6 +308,8 @@ export default function AutomationsView(props: FeatureProps): React.JSX.Element 
 
   useEffect(() => {
     if (!props.focusId || routines.length === 0) return
+    // Canvas-built automations open on the canvas, not in the Manage detail.
+    if (automations.some((automation) => automation.id === props.focusId && automation.kind === 'advanced')) return
     const known =
       routines.some((routine) => routine.id === props.focusId) ||
       todayItems.some((item) => item.routineId === props.focusId) ||
@@ -304,7 +318,7 @@ export default function AutomationsView(props: FeatureProps): React.JSX.Element 
     if (tab !== 'manage') {
       props.shell.navigate('automations', { automationTab: 'manage', focusId: props.focusId })
     }
-  }, [props.focusId, routines, todayItems, tomorrowItems, tab, props.shell])
+  }, [props.focusId, routines, automations, todayItems, tomorrowItems, tab, props.shell])
 
   /** "+ Create" belongs to the Automate section, not to Manage. */
   function goCreate(): void {
@@ -312,35 +326,45 @@ export default function AutomationsView(props: FeatureProps): React.JSX.Element 
   }
 
   /**
-   * The canvas takes free text, so it goes through the prose path: the
-   * scheduler reads the time and the @tools out of the sentence and stores a
-   * routine the automation view reads back.
+   * The canvas takes free text, so the sentence becomes the first action and
+   * the trigger node keeps the schedule. The result is a real automation, so
+   * it shows up in Manage and reopens here when edited.
    */
-  async function submitCanvasDescribe(): Promise<void> {
+  async function createCanvasAutomation(): Promise<void> {
+    if (canvasBusy) return
     const text = canvasPrompt.trim()
-    if (!text || canvasBusy) return
     setCanvasBusy(true)
     setCanvasError('')
     try {
-      const res = await window.app.routineCreate(text)
-      if (!res.ok) {
+      const firstAction = canvasSteps.find((step) => step.kind !== 'trigger')
+      const steps = text && firstAction ? updateCanvasStep(canvasSteps, firstAction.id, { subtitle: text }) : canvasSteps
+      const title = canvasHeadTitle(text || firstAction?.subtitle || '')
+      const input = canvasToCreate(steps, title)
+      const res = await window.app.automationsCreate(text ? { ...input, prompt: text.slice(0, 20000) } : input)
+      if (!res.ok || !res.automation) {
         setCanvasError(res.error || 'Could not create the automation.')
         return
       }
       await refresh()
-      const id = (res as { routine?: { id?: string } }).routine?.id
-      if (id) props.shell.navigate('automations', { automationTab: 'canvas', focusId: id })
+      // The nodes on screen are what was just created: don't rebuild them.
+      keepCanvasRef.current = res.automation.id
+      setCanvasKey(res.automation.id)
+      setCanvasSteps(steps)
       setCanvasPrompt('')
       setCanvasDescribe(false)
+      props.shell.navigate('automations', { automationTab: 'canvas', focusId: res.automation.id })
+    } catch (reason) {
+      setCanvasError(errorText(reason))
     } finally {
       setCanvasBusy(false)
     }
   }
 
-  // The canvas shows the same automation the Manage list edits.
+  // The canvas shows the automation in the route, or else the most recent one.
   const canvasAutomation =
     automations.find((automation) => automation.id === props.focusId) ??
-    automations[0]
+    automations[0] ??
+    null
   const canvasRoutine = canvasAutomation
     ? {
       prompt: canvasAutomation.prompt ?? canvasAutomation.title,
@@ -352,19 +376,25 @@ export default function AutomationsView(props: FeatureProps): React.JSX.Element 
   const canvasRoutineKey = canvasAutomation?.id ?? 'blank'
 
   useEffect(() => {
-    if (canvasRoutineKey !== canvasKey) {
-      setCanvasKey(canvasRoutineKey)
-      setCanvasSteps(canvasStepsForRoutine(canvasRoutine))
-      setSelectedStepId('')
-      setOpenStepMenuId('')
-      setAddAt(null)
+    if (canvasRoutineKey === canvasKey) return
+    setCanvasKey(canvasRoutineKey)
+    if (keepCanvasRef.current === canvasRoutineKey) {
+      keepCanvasRef.current = ''
+      return
     }
+    setCanvasSteps(canvasStepsForRoutine(canvasRoutine))
+    setSelectedStepId('')
+    setOpenStepMenuId('')
+    setAddAt(null)
   }, [canvasRoutineKey, canvasKey, canvasRoutine])
 
   const selectedStep = useMemo(
     () => canvasSteps.find((s) => s.id === selectedStepId) ?? null,
     [canvasSteps, selectedStepId]
   )
+
+  /** A step the user configured: Create can go ahead without a description. */
+  const hasCanvasWork = canvasSteps.some((step) => step.kind !== 'trigger' && !/^select /i.test(step.subtitle))
 
   function pickStep(step: CanvasStep): void {
     setSelectedStepId(step.id)
@@ -633,7 +663,15 @@ export default function AutomationsView(props: FeatureProps): React.JSX.Element 
             onlyActive={activeOnly}
             focusAutomationId={props.focusId}
             selectedId={manageSelectedId}
-            onSelect={setManageSelectedId}
+            onSelect={(id) => {
+              // Automations built on the canvas reopen there, not in the form.
+              const target = automations.find((automation) => automation.id === id)
+              if (target?.kind === 'advanced') {
+                props.shell.navigate('automations', { automationTab: 'canvas', focusId: id })
+                return
+              }
+              setManageSelectedId(id)
+            }}
             onCreate={goCreate}
             onOpenRun={(runId) => props.shell.navigate('automations', { automationTab: 'updates', focusRunId: runId })}
             onDirtyChange={setManageDirty}
@@ -645,14 +683,15 @@ export default function AutomationsView(props: FeatureProps): React.JSX.Element 
         <div className="automations-canvas">
           <header className="canvas-head">
             <div className="canvas-head-text">
-              <span className="canvas-head-label">Automation</span>
-              <strong>{canvasRoutine ? routineTitle(canvasRoutine.prompt) : 'New canvas'}</strong>
+              <strong title={canvasRoutine ? routineTitle(canvasRoutine.prompt) : 'New canvas'}>
+                {canvasRoutine ? canvasHeadTitle(canvasRoutine.prompt) : 'New canvas'}
+              </strong>
               {canvasRoutine && <span className="canvas-head-meta">{canvasRoutine.repeat} · {timeLabel(canvasRoutine.runAt)}</span>}
             </div>
             <button
               type="button"
               className="canvas-head-create"
-              title="Describe an automation for the agent to create"
+              title="Turn this canvas into an automation"
               onClick={() => setCanvasDescribe(true)}
             >
               Create
@@ -790,9 +829,10 @@ export default function AutomationsView(props: FeatureProps): React.JSX.Element 
               <CanvasDescribeBar
                 value={canvasPrompt}
                 busy={canvasBusy}
+                disabled={!canvasPrompt.trim() && !hasCanvasWork}
                 error={canvasError}
                 onChange={(value) => { setCanvasPrompt(value); setCanvasError('') }}
-                onSubmit={() => void submitCanvasDescribe()}
+                onSubmit={() => void createCanvasAutomation()}
                 onClose={() => { setCanvasDescribe(false); setCanvasError('') }}
               />
             )}

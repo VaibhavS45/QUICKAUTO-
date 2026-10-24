@@ -6,6 +6,7 @@ import CanvasDescribeBar from '../../src/renderer/features/automations/canvas-de
 const props = {
   value: '',
   busy: false,
+  disabled: true,
   error: '',
   onChange: () => {},
   onSubmit: () => {},
@@ -13,20 +14,22 @@ const props = {
 }
 
 describe('canvas describe bar', () => {
-  it('invites a plain-language description for the agent', () => {
+  it('invites a plain-language description', () => {
     const html = renderToStaticMarkup(createElement(CanvasDescribeBar, props))
-    expect(html).toContain('Describe the automation and the agent will create it')
+    expect(html).toContain('Describe what this automation should do')
     expect(html).toContain('Create')
   })
 
-  it('disables Create while empty and shows scheduler errors', () => {
-    const html = renderToStaticMarkup(createElement(CanvasDescribeBar, { ...props, value: '  ', error: 'No time found' }))
-    expect(html).toContain('disabled')
-    expect(html).toContain('No time found')
+  it('disables Create until there is a description or a configured step', () => {
+    expect(renderToStaticMarkup(createElement(CanvasDescribeBar, props))).toContain('disabled')
+    const ready = renderToStaticMarkup(createElement(CanvasDescribeBar, { ...props, disabled: false, value: 'Send my inbox digest' }))
+    expect(ready).not.toContain('disabled')
   })
 
-  it('shows a busy state while the agent creates it', () => {
-    const html = renderToStaticMarkup(createElement(CanvasDescribeBar, { ...props, value: 'At 6pm ping me', busy: true }))
+  it('shows the error and the busy state', () => {
+    const html = renderToStaticMarkup(createElement(CanvasDescribeBar, { ...props, disabled: false, busy: true, error: 'Could not save' }))
+    expect(html).toContain('disabled')
     expect(html).toContain('Creating…')
+    expect(html).toContain('Could not save')
   })
 })

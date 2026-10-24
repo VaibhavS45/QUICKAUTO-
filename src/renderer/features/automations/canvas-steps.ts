@@ -1,4 +1,4 @@
-import type { Automation, AutomationSchedule } from '../../../shared/contracts/automations.js'
+import type { Automation, AutomationCreate, AutomationSchedule } from '../../../shared/contracts/automations.js'
 import { formatTime } from '../../lib/format.js'
 
 export type CanvasKind = 'trigger' | 'action' | 'gmail' | 'filter' | 'delay'
@@ -47,6 +47,15 @@ export function parseClock(text: string): string | null {
   return `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}`
 }
 
+export type Repeat = 'daily' | 'weekly' | 'monthly' | 'once'
+
+/** "weekly · 9:00 AM" → repeat + "HH:MM", the shape the trigger node stores. */
+export function parseRepeatTime(text: string): { repeat: Repeat; time: string } {
+  const [rawRepeat, rawTime] = text.split('·').map((part) => part.trim())
+  const repeat = (['daily', 'weekly', 'monthly', 'once'] as const).find((value) => value === rawRepeat) ?? 'daily'
+  return { repeat, time: parseClock(rawTime ?? '') ?? '09:00' }
+}
+
 /**
  * Read the trigger node back into a schedule. The node shows
  * "<type> · <time>", so an edited node can carry a new time or frequency.
@@ -83,6 +92,36 @@ function localDate(date: Date): string {
   const month = String(date.getMonth() + 1).padStart(2, '0')
   const day = String(date.getDate()).padStart(2, '0')
   return `${date.getFullYear()}-${month}-${day}`
+}
+
+/** The schedule a new automation starts with: the trigger node, anchored today. */
+export function scheduleFromSteps(steps: CanvasStep[], now = new Date()): AutomationSchedule {
+  const { repeat, time } = parseRepeatTime(steps.find((step) => step.kind === 'trigger')?.subtitle ?? '')
+  switch (repeat) {
+    case 'once':
+      return { type: 'once', time, date: localDate(now) }
+    case 'weekly':
+      return { type: 'weekly', time, weekdays: [now.getDay()] }
+    case 'monthly':
+      return { type: 'monthly', time, dayOfMonth: now.getDate() }
+    default:
+      return { type: 'daily', time }
+  }
+}
+
+/** The canvas chain as a new automation, so it lands in Manage like any other. */
+export function canvasToCreate(steps: CanvasStep[], title: string, now = new Date()): AutomationCreate {
+  const { text, tools } = canvasToPrompt(steps)
+  return {
+    kind: 'advanced',
+    title: title.trim().slice(0, 200) || 'New automation',
+    prompt: (text || title).slice(0, 20000),
+    schedule: scheduleFromSteps(steps, now),
+    connectors: tools,
+    autoApprove: false,
+    runMode: 'separate_task',
+    agent: ''
+  }
 }
 
 /** What the node edits mean for the automation they came from. */
@@ -280,7 +319,7 @@ export function canvasToPrompt(steps: CanvasStep[]): { text: string; tools: stri
     })
     .filter((x): x is string => x !== null)
   const tools = [...new Set(toolTags)]
-  const events = actions.map((s) => s.subtitle).filter((s) => s && !/^select the event/i.test(s))
+  const events = actions.map((s) => s.subtitle).filter((s) => s && !/^select /i.test(s))
   const text = [events.join('. ') || 'Run my automation', ...tools].join(' ').trim()
   return { text, tools: tools.map((t) => t.slice(1)) }
 }

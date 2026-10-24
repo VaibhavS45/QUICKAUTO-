@@ -4,7 +4,7 @@ import { TOOL_IDS, TOOL_META } from '../../../shared/types.js'
 import { formatTime } from '../../lib/format.js'
 import { TIMER_TRIGGER, TRIGGER_APPS, triggerApp } from './trigger-events.js'
 import { TriggerAppIcon } from './trigger-icons.js'
-import { parseClock, type CanvasKind, type CanvasStep } from './canvas-steps.js'
+import { parseRepeatTime, type CanvasKind, type CanvasStep, type Repeat } from './canvas-steps.js'
 
 /** One row of the add-step picker: what it adds and the node it creates. */
 export interface CanvasPick {
@@ -201,7 +201,7 @@ export function CanvasStepPicker({ onPick, onClose, ariaLabel, zoom = 1 }: {
   )
 }
 
-export type Repeat = 'daily' | 'weekly' | 'monthly' | 'once'
+export type { Repeat }
 
 export const REPEAT_OPTIONS: { value: Repeat; label: string }[] = [
   { value: 'daily', label: 'Daily' },
@@ -209,13 +209,6 @@ export const REPEAT_OPTIONS: { value: Repeat; label: string }[] = [
   { value: 'monthly', label: 'Monthly' },
   { value: 'once', label: 'Once' }
 ]
-
-/** "weekly · 9:00 AM" → repeat + "HH:MM", same shape the trigger node stores. */
-export function parseScheduleNode(text: string): { repeat: Repeat; time: string } {
-  const [rawRepeat, rawTime] = text.split('·').map((part) => part.trim())
-  const repeat = REPEAT_OPTIONS.find((option) => option.value === rawRepeat)?.value ?? 'daily'
-  return { repeat, time: parseClock(rawTime ?? '') ?? '09:00' }
-}
 
 /** "09:00" → "9:00 AM", matching the schedule summaries elsewhere. */
 export function clockLabel(clock: string): string {
@@ -244,7 +237,7 @@ export function CanvasStepEditor({ step, index, onApply, onClose }: {
   onClose(): void
 }): React.JSX.Element {
   const isTrigger = step.kind === 'trigger'
-  const schedule = parseScheduleNode(step.subtitle)
+  const schedule = parseRepeatTime(step.subtitle)
   const [repeat, setRepeat] = useState<Repeat>(schedule.repeat)
   const [time, setTime] = useState(schedule.time)
   const [kind, setKind] = useState<CanvasKind>(step.kind)

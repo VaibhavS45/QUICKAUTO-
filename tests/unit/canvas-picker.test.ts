@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
-import { ACTION_PICKS, LOGIC_PICKS, TRIGGER_PICKS, clockLabel, filterPicks, parseScheduleNode } from '../../src/renderer/features/automations/canvas-picker.js'
-import { defaultCanvasSteps, insertCanvasStep } from '../../src/renderer/features/automations/canvas-steps.js'
+import { ACTION_PICKS, LOGIC_PICKS, TRIGGER_PICKS, clockLabel, filterPicks } from '../../src/renderer/features/automations/canvas-picker.js'
+import { defaultCanvasSteps, insertCanvasStep, parseRepeatTime } from '../../src/renderer/features/automations/canvas-steps.js'
 
 describe('canvas step picker', () => {
   it('offers a schedule plus app triggers, and the tool actions', () => {
@@ -25,8 +25,8 @@ describe('canvas step picker', () => {
   })
 
   it('reads and writes the trigger schedule summary', () => {
-    expect(parseScheduleNode('weekly · 6:30 PM')).toEqual({ repeat: 'weekly', time: '18:30' })
-    expect(parseScheduleNode('nonsense')).toEqual({ repeat: 'daily', time: '09:00' })
+    expect(parseRepeatTime('weekly · 6:30 PM')).toEqual({ repeat: 'weekly', time: '18:30' })
+    expect(parseRepeatTime('nonsense')).toEqual({ repeat: 'daily', time: '09:00' })
     expect(clockLabel('18:30')).toBe('6:30 pm')
     expect(clockLabel('09:00')).toBe('9:00 am')
   })

@@ -104,7 +104,8 @@ export function toAutomation(routine: Routine, now = Date.now()): Automation {
   // Every routine fires at a time, so it is a schedule unless it says otherwise.
   const kind = routine.kind ?? 'schedule'
   const expired = routine.expiresAt !== undefined && routine.expiresAt <= now
-  const schedule = kind === 'advanced' ? undefined : scheduleOf(routine)
+  // Advanced routines fire on the same schedule: the canvas reads the repeat back.
+  const schedule = scheduleOf(routine)
   const next = routine.enabled && !expired ? nextFire(routine, now) : null
   return AutomationSchema.parse({
     id: routine.id,

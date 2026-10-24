@@ -126,6 +126,43 @@ test('the canvas shows the stored task and writes edits back', async () => {
   }
 })
 
+test('the canvas creates an automation that shows in Manage and reopens on the canvas', async () => {
+  const instance = await launch()
+  const { app } = instance
+  try {
+    await expect.poll(() => app.windows().length, { timeout: 30_000 }).toBe(1)
+    const shell = app.windows()[0]!
+
+    await shell.getByRole('button', { name: 'Canvas' }).click()
+    await expect(shell.getByRole('button', { name: 'Create', exact: true })).toBeVisible({ timeout: 15_000 })
+    await shell.getByRole('button', { name: 'Create', exact: true }).click()
+
+    const bar = shell.getByRole('form', { name: 'Describe the automation' })
+    await bar.getByLabel('Describe the automation').fill('Summarize my unread mail')
+    await bar.getByRole('button', { name: 'Create' }).click()
+
+    await expect
+      .poll(async () => {
+        const res = await shell.evaluate(async () => window.app.automationsList())
+        return res.ok ? res.automations?.length ?? 0 : -1
+      }, { timeout: 20_000 })
+      .toBe(1)
+
+    const stored = await shell.evaluate(async () => window.app.automationsList())
+    const automation = stored.automations?.[0]
+    expect(automation?.kind).toBe('advanced')
+    expect(automation?.title).toBe('Summarize my unread mail')
+    expect(automation?.prompt).toBe('Summarize my unread mail')
+    expect(automation?.schedule?.type).toBe('daily')
+
+    await shell.getByRole('button', { name: 'Manage' }).click()
+    await shell.getByRole('button', { name: 'Open Summarize my unread mail' }).click()
+    await expect(shell.getByRole('button', { name: 'Configure step 2 Action' })).toContainText('Summarize my unread mail')
+  } finally {
+    await instance.close()
+  }
+})
+
 test('a triggered task folds the app event into the prompt and the connectors', async () => {
   const instance = await launch()
   const { app } = instance

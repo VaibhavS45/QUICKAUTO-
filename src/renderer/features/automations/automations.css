@@ -633,9 +633,11 @@
   padding-inline: 32px;
 }
 
-/* Run history: days stack down the page instead of side by side. */
+/* Run history: days stack down the page instead of side by side. Stretch so
+   every day's cards are the same width instead of shrink-wrapping the text. */
 .automations-body.updates-body {
   flex-direction: column;
+  align-items: stretch;
   gap: 28px;
 }
 
@@ -839,13 +841,6 @@
   color: var(--text-secondary);
   font-size: 14px;
   line-height: 20px;
-}
-
-.updates-row .p-heatbar {
-  position: absolute;
-  right: 0;
-  bottom: 0;
-  left: 0;
 }
 
 .updates-more {
@@ -1570,24 +1565,35 @@
   white-space: nowrap;
 }
 
-.builder-trig-glyph {
-  display: inline-grid;
-  place-items: center;
-  width: 20px;
-  height: 16px;
-  font-size: 15px;
-  font-weight: 600;
-  line-height: 1;
-}
-
-.builder-pill {
-  padding: 7px 12px;
+.builder-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 7px 10px;
   border: 1px solid var(--border-strong);
   border-radius: 8px;
-  color: var(--text-disabled);
-  background: var(--surface);
+  color: var(--text-muted);
   font-size: var(--font-sm);
   white-space: nowrap;
+}
+
+.builder-status-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--text-disabled);
+}
+
+.builder-status.is-on {
+  color: var(--text);
+}
+
+.builder-status.is-on .builder-status-dot {
+  background: var(--text);
+}
+
+.builder-status.is-off .builder-status-dot {
+  background: var(--text-disabled);
 }
 
 .builder-pill-input {
@@ -1653,9 +1659,50 @@
 }
 
 .builder-cond {
+  padding: 0;
+  border: 0;
   color: var(--text);
+  background: none;
+  font: inherit;
   font-size: var(--font-md);
-  cursor: default;
+  cursor: pointer;
+}
+
+.builder-cond:hover {
+  color: var(--text);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.builder-cond-field {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+}
+
+.builder-cond-field .builder-pill-input {
+  width: 100%;
+  max-width: 360px;
+}
+
+.builder-cond-remove {
+  display: grid;
+  place-items: center;
+  width: 26px;
+  height: 26px;
+  padding: 0;
+  border: 0;
+  border-radius: 6px;
+  color: var(--text-muted);
+  background: none;
+  font-size: var(--font-lg);
+  cursor: pointer;
+}
+
+.builder-cond-remove:hover {
+  color: var(--text);
+  background: var(--surface-2);
 }
 
 .builder-q {
@@ -1678,7 +1725,7 @@
   border: 1px solid var(--border-strong);
   border-radius: 8px;
   color: var(--text);
-  background: var(--bg);
+  background: var(--surface-2);
   font: inherit;
   font-size: var(--font-md);
   font-weight: 400;
@@ -1688,7 +1735,7 @@
 
 .builder-addtrig:hover {
   border-color: var(--border-strong);
-  background: var(--surface);
+  background: var(--surface-3);
 }
 
 .pill-select {
@@ -1708,12 +1755,27 @@
   border-color: var(--border-strong);
 }
 
-.picker-panel {
+.builder-trig-anchor {
+  display: block;
+  width: 100%;
   margin-top: 10px;
-  padding: 8px;
+}
+
+.builder-trig-anchor .builder-addtrig {
+  margin-top: 0;
+}
+
+/* Dropdown popover portalled to <body>, positioned from the trigger button. */
+.picker-panel {
+  position: fixed;
+  z-index: 100;
+  max-height: min(520px, 60vh);
+  overflow-y: auto;
+  padding: 10px;
   border: 1px solid var(--border-strong);
   border-radius: 14px;
   background: var(--surface);
+  box-shadow: rgb(0 0 0 / 35%) 0 12px 32px;
 }
 
 .picker-head {
@@ -1772,9 +1834,9 @@
   flex-direction: column;
   justify-content: space-between;
   gap: 24px;
-  min-height: 104px;
+  min-height: 118px;
   padding: 16px;
-  border: 1px solid var(--surface-2);
+  border: 1px solid var(--border-strong);
   border-radius: 14px;
   color: var(--text);
   background: var(--bg-elevated);
@@ -1784,19 +1846,13 @@
 }
 
 .picker-card:hover {
-  border-color: var(--border-strong);
-  background: var(--surface);
+  border-color: var(--line-3);
+  background: var(--surface-2);
 }
 
 .picker-card:focus-visible {
   outline: 2px solid var(--accent-ring);
   outline-offset: 2px;
-}
-
-.picker-card-glyph {
-  font-size: 22px;
-  font-weight: 600;
-  line-height: 1;
 }
 
 .picker-card-label {
@@ -2887,12 +2943,6 @@
 .light .builder-trig {
   border-color: rgb(0 0 0 / 10%);
   background: var(--surface);
-}
-
-.light .builder-pill {
-  border-color: rgb(0 0 0 / 12%);
-  color: var(--text-muted);
-  background: #fff;
 }
 
 .light .builder-pill-input,

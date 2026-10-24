@@ -36,7 +36,7 @@ async function createTask(shell: import('@playwright/test').Page, task: string, 
   if (weekday) {
     await shell.getByRole('group', { name: 'Days of the week' }).getByRole('button', { name: weekday }).click()
   }
-  await shell.getByPlaceholder(/Describe what Manus should do/).fill(task)
+  await shell.getByPlaceholder(/Describe what Palette should do/).fill(task)
   await shell.getByRole('button', { name: 'Create', exact: true }).click()
 }
 
@@ -136,8 +136,9 @@ test('a triggered task folds the app event into the prompt and the connectors', 
     await shell.getByRole('button', { name: /^Triggered task/ }).first().click()
     await expect(shell.getByRole('dialog', { name: 'Create automation' })).toBeVisible({ timeout: 15_000 })
     await shell.getByRole('button', { name: '+ Add Trigger' }).click()
+    await shell.getByRole('menuitem', { name: 'Gmail' }).click()
     await shell.getByRole('menuitem', { name: 'New conversation' }).click()
-    await shell.getByPlaceholder(/Describe what Manus should do/).fill('summarize new mail')
+    await shell.getByPlaceholder(/Describe what Palette should do/).fill('summarize new mail')
     await shell.getByRole('button', { name: 'Create', exact: true }).click()
 
     await expect

@@ -2,11 +2,13 @@ import { describe, expect, it } from 'vitest'
 import { blankDraft, blankTrigger, draftToAutomation } from '../../src/renderer/features/automations/builder-compile.js'
 import {
   GMAIL_EVENTS,
+  TIMER_TRIGGER,
   TRIGGER_APPS,
   gmailEventPhrase,
   triggerApp,
   triggerMention
 } from '../../src/renderer/features/automations/trigger-events.js'
+import { hasTriggerIcon } from '../../src/renderer/features/automations/trigger-icons.js'
 
 describe('trigger events', () => {
   it('catalogs every Gmail event with a label and phrase', () => {
@@ -25,7 +27,7 @@ describe('trigger events', () => {
     expect(gmailEventPhrase('new-attachment')).toContain('attachment')
   })
 
-  it('lists every app once with a glyph and at least one event', () => {
+  it('lists every app once with an icon and at least one event', () => {
     const ids = new Set(TRIGGER_APPS.map((app) => app.id))
     expect(ids.size).toBe(TRIGGER_APPS.length)
     const labels = TRIGGER_APPS.map((app) => app.label)
@@ -34,7 +36,8 @@ describe('trigger events', () => {
     expect(labels).toContain('Webhook')
     for (const app of TRIGGER_APPS) {
       expect(app.label.trim()).toBeTruthy()
-      expect(app.glyph.trim()).toBeTruthy()
+      expect(app.color.trim()).toBeTruthy()
+      expect(hasTriggerIcon(app.id), `missing icon for ${app.id}`).toBe(true)
       expect(app.events.length).toBeGreaterThan(0)
       const eventIds = new Set(app.events.map((event) => event.id))
       expect(eventIds.size).toBe(app.events.length)
@@ -43,6 +46,7 @@ describe('trigger events', () => {
         expect(event.phrase.trim()).toBeTruthy()
       }
     }
+    expect(hasTriggerIcon(TIMER_TRIGGER.id)).toBe(true)
   })
 
   it('routes native toolkits to their own mention and the rest to @composio', () => {
@@ -69,6 +73,24 @@ describe('trigger events', () => {
       expect(compiled.create?.prompt).toContain(item.phrase)
       expect(compiled.create?.connectors).toContain('gmail')
     }
+  })
+
+  it('folds a condition into the event check', () => {
+    const compiled = draftToAutomation({
+      ...blankDraft(),
+      task: 'triage mail',
+      triggers: [
+        { ...blankTrigger('schedule'), repeat: 'daily', time: '09:00' },
+        {
+          ...blankTrigger('event'),
+          app: 'gmail',
+          event: 'a new email is received',
+          condition: 'from my manager'
+        }
+      ]
+    })
+    expect(compiled.valid).toBe(true)
+    expect(compiled.create?.prompt).toContain('check @gmail for a new email is received only when from my manager')
   })
 
   it('compiles non-native apps through the composio connector', () => {

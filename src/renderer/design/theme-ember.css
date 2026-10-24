@@ -282,13 +282,6 @@ code, kbd, pre, time {
   --focus-ink: 2px;
 }
 
-/* Heat sweep on running rows: thin 1px orange edge (was 2px). */
-.p-heatbar {
-  height: 1px;
-  background: linear-gradient(90deg, transparent, var(--ember) 40%, var(--ember) 60%, transparent);
-  animation: p-heat 2.8s linear infinite;
-}
-
 /* ---------------------------------------------------------------- extras */
 
 .card-hover-line {

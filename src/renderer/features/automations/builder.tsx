@@ -1,6 +1,8 @@
-import { Fragment, useEffect, useMemo, useState } from 'react'
+import { Fragment, useEffect, useMemo, useRef, useState } from 'react'
+import { createPortal } from 'react-dom'
 import { TOOL_IDS, TOOL_META, type ActiveToolId } from '../../../shared/types.js'
-import { TIMER_TRIGGER, TRIGGER_APPS, triggerApp, triggerMention, type TriggerApp } from './trigger-events.js'
+import { TIMER_TRIGGER, TRIGGER_APPS, triggerApp, triggerMention } from './trigger-events.js'
+import { TriggerAppIcon } from './trigger-icons.js'
 import { blankTrigger, draftToAutomation, makeTriggerId, type BuilderDraft, type BuilderRepeat, type BuilderTrigger } from './builder-compile.js'
 import { attachmentPromptText, needsComposioTools, useAttachments } from '../../lib/attachments.js'
 import type { AutomationCreate } from '../../../shared/contracts/automations.js'
@@ -37,18 +39,6 @@ const MINUTES_LIST = ['00', '15', '30', '45']
 const WEEKDAY_LABELS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
 
 /** Half-hour slots labeled like "AM 9:00" (screenshot spec), valued as 24h HH:MM. */
-function GmailMark(): React.JSX.Element {
-  return (
-    <svg width="20" height="16" viewBox="0 0 20 16" fill="none" aria-hidden="true">
-      <path d="M2 2.5v11" stroke="#EA4335" strokeWidth="2.4" strokeLinecap="round" />
-      <path d="M2.5 3.5 10 9.5" stroke="#FBBC05" strokeWidth="2.4" strokeLinecap="round" />
-      <path d="M17.5 3.5 10 9.5" stroke="#34A853" strokeWidth="2.4" strokeLinecap="round" />
-      <path d="M18 2.5v11" stroke="#4285F4" strokeWidth="2.4" strokeLinecap="round" />
-      <path d="M2 13.5h16" stroke="#4285F4" strokeWidth="2.4" strokeLinecap="round" />
-    </svg>
-  )
-}
-
 function TrashIcon(): React.JSX.Element {
   return (
     <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" aria-hidden="true">
@@ -347,13 +337,6 @@ export function BuilderSettingsMenu(props: BuilderSettingsMenuProps): React.JSX.
   )
 }
 
-function TriggerAppMark({ app }: { app: TriggerApp }): React.JSX.Element {
-  if (app.id === 'gmail') return <GmailMark />
-  return (
-    <span className="builder-trig-glyph" style={{ color: app.color }} aria-hidden="true">{app.glyph}</span>
-  )
-}
-
 function patchTrigger(setTriggers: React.Dispatch<React.SetStateAction<BuilderTrigger[]>>, id: string, patch: Partial<BuilderTrigger>): void {
   setTriggers((cur) => cur.map((t) => (t.id === id ? { ...t, ...patch } : t)))
 }
@@ -368,6 +351,10 @@ export default function Builder(props: BuilderProps): React.JSX.Element {
   const [connectorOptions, setConnectorOptions] = useState<string[]>([])
   const [pickerOpen, setPickerOpen] = useState(false)
   const [pickerApp, setPickerApp] = useState<string | null>(null)
+  const [conditionEditingId, setConditionEditingId] = useState<string | null>(null)
+  const [pickerBox, setPickerBox] = useState<{ top: number; left: number; width: number } | null>(null)
+  const triggerAnchorRef = useRef<HTMLDivElement>(null)
+  const pickerRef = useRef<HTMLDivElement>(null)
   const [addMenuOpen, setAddMenuOpen] = useState(false)
   const [skillsSubmenuOpen, setSkillsSubmenuOpen] = useState(false)
   const [recentTasksSubmenuOpen, setRecentTasksSubmenuOpen] = useState(false)
@@ -401,6 +388,44 @@ export default function Builder(props: BuilderProps): React.JSX.Element {
       .catch(() => {})
     return () => { live = false }
   }, [])
+
+  // The sheet's backdrop-filter clips in-flow popovers and the builder overlay
+  // scrolls, so the picker is portalled and anchored to the trigger button.
+  useEffect(() => {
+    if (!pickerOpen) {
+      setPickerBox(null)
+      return
+    }
+    const place = (): void => {
+      const rect = triggerAnchorRef.current?.getBoundingClientRect()
+      if (!rect) return
+      setPickerBox({ top: rect.bottom + 8, left: rect.left, width: rect.width })
+    }
+    const close = (): void => {
+      setPickerOpen(false)
+      setPickerApp(null)
+    }
+    const onPointerDown = (event: PointerEvent): void => {
+      const target = event.target as Node | null
+      if (!target) return
+      if (triggerAnchorRef.current?.contains(target) || pickerRef.current?.contains(target)) return
+      close()
+    }
+    const onKeyDown = (event: KeyboardEvent): void => {
+      if (event.key === 'Escape') close()
+    }
+    place()
+    window.addEventListener('resize', place)
+    window.addEventListener('scroll', place, true)
+    document.addEventListener('pointerdown', onPointerDown)
+    document.addEventListener('keydown', onKeyDown)
+    return () => {
+      window.removeEventListener('resize', place)
+      window.removeEventListener('scroll', place, true)
+      document.removeEventListener('pointerdown', onPointerDown)
+      document.removeEventListener('keydown', onKeyDown)
+    }
+  }, [pickerOpen])
 
   const compiled = useMemo(
     () => draftToAutomation({ title: props.initial.title, triggers, task, tools, agent }),
@@ -576,8 +601,19 @@ export default function Builder(props: BuilderProps): React.JSX.Element {
 
   const selectedApp = pickerApp ? triggerApp(pickerApp) : undefined
 
-  const picker = pickerOpen && (
-    <div className="picker-panel" role="menu" aria-label="Choose a trigger">
+  const picker = pickerOpen && pickerBox && createPortal(
+    <div
+      ref={pickerRef}
+      className="picker-panel"
+      role="menu"
+      aria-label="Choose a trigger"
+      style={{
+        top: pickerBox.top,
+        left: pickerBox.left,
+        width: pickerBox.width,
+        maxHeight: `min(520px, calc(100vh - ${pickerBox.top + 16}px))`
+      }}
+    >
       {selectedApp ? (
         <>
           <button type="button" className="picker-head" onClick={() => setPickerApp(null)}>
@@ -605,17 +641,18 @@ export default function Builder(props: BuilderProps): React.JSX.Element {
               className="picker-card"
               onClick={() => setPickerApp(app.id)}
             >
-              <span className="picker-card-glyph" style={{ color: app.color }} aria-hidden="true">{app.glyph}</span>
+              <TriggerAppIcon app={app} size={26} />
               <span className="picker-card-label">{app.label}</span>
             </button>
           ))}
           <button type="button" role="menuitem" className="picker-card" onClick={addScheduleTrigger}>
-            <span className="picker-card-glyph" style={{ color: TIMER_TRIGGER.color }} aria-hidden="true">{TIMER_TRIGGER.glyph}</span>
+            <TriggerAppIcon app={TIMER_TRIGGER} size={26} />
             <span className="picker-card-label">{TIMER_TRIGGER.label}</span>
           </button>
         </div>
       )}
-    </div>
+    </div>,
+    document.body
   )
 
   return (
@@ -839,13 +876,18 @@ export default function Builder(props: BuilderProps): React.JSX.Element {
                   {triggers.filter((t) => t.kind === 'event').map((trigger, i) => {
                     const app = triggerApp(trigger.app)
                     const connection = triggerConnection(trigger.app)
-                    const pill = connection === undefined ? 'Composio' : connection ? 'Connected' : 'Not Connected'
+                    const status = connection === undefined ? 'Via Composio' : connection ? 'Connected' : 'Not connected'
+                    const tone = connection === undefined ? 'is-muted' : connection ? 'is-on' : 'is-off'
+                    const conditionOpen = conditionEditingId === trigger.id || Boolean(trigger.condition?.trim())
                     return (
                       <div key={trigger.id} className="builder-trig">
                         <div className="builder-trig-line">
-                          {app ? <TriggerAppMark app={app} /> : null}
+                          {app ? <TriggerAppIcon app={app} size={22} /> : null}
                           <span className="builder-trig-text">When {trigger.event || 'something happens'} in {app?.label ?? trigger.app}</span>
-                          <span className="builder-pill">{pill} <span aria-hidden="true">▾</span></span>
+                          <span className={`builder-status ${tone}`}>
+                            <span className="builder-status-dot" aria-hidden="true" />
+                            {status}
+                          </span>
                           <span className="builder-trig-text">of the account</span>
                           {connection !== true && (
                             <button type="button" className="builder-connect" onClick={props.onConnect}>Connect</button>
@@ -860,25 +902,53 @@ export default function Builder(props: BuilderProps): React.JSX.Element {
                           </button>
                         </div>
                         <div className="builder-trig-line indent">
-                          <span className="builder-pill">{pill} <span aria-hidden="true">▾</span></span>
-                        </div>
-                        <div className="builder-trig-line indent">
-                          <span className="builder-cond" title="Conditions are not evaluated yet">+ Add conditions <span className="builder-q" aria-hidden="true">?</span></span>
+                          {conditionOpen ? (
+                            <div className="builder-cond-field">
+                              <span className="builder-sched-note">Only when</span>
+                              <input
+                                autoFocus={conditionEditingId === trigger.id}
+                                className="builder-pill-input"
+                                aria-label="Trigger condition"
+                                placeholder="e.g. from someone in my contacts"
+                                value={trigger.condition ?? ''}
+                                onChange={(event) => patchTrigger(setTriggers, trigger.id, { condition: event.currentTarget.value })}
+                                onBlur={() => {
+                                  if (!trigger.condition?.trim()) setConditionEditingId(null)
+                                }}
+                              />
+                              <button
+                                type="button"
+                                className="builder-cond-remove"
+                                aria-label="Remove condition"
+                                onClick={() => {
+                                  patchTrigger(setTriggers, trigger.id, { condition: '' })
+                                  setConditionEditingId(null)
+                                }}
+                              >
+                                ×
+                              </button>
+                            </div>
+                          ) : (
+                            <button
+                              type="button"
+                              className="builder-cond"
+                              onClick={() => setConditionEditingId(trigger.id)}
+                            >
+                              + Add conditions <span className="builder-q" aria-hidden="true">?</span>
+                            </button>
+                          )}
                         </div>
                       </div>
                     )
                   })}
 
-                  {triggers.length === 0 && (
-                    <button type="button" className="builder-addtrig" onClick={toggleTriggerPicker} aria-expanded={pickerOpen}>
-                      + Add Trigger
-                    </button>
-                  )}
-                  {picker}
-                  {hasEvent && (
-                    <button type="button" className="builder-addtrig" onClick={toggleTriggerPicker} aria-expanded={pickerOpen}>
-                      + Add another trigger
-                    </button>
+                  {(triggers.length === 0 || hasEvent) && (
+                    <div className="builder-menu-anchor builder-trig-anchor" ref={triggerAnchorRef}>
+                      <button type="button" className="builder-addtrig" onClick={toggleTriggerPicker} aria-expanded={pickerOpen}>
+                        {triggers.length === 0 ? '+ Add Trigger' : '+ Add another trigger'}
+                      </button>
+                      {picker}
+                    </div>
                   )}
 
                   </div>

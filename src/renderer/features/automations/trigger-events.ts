@@ -11,8 +11,7 @@ export interface TriggerApp {
   /** Connector/toolkit id used by the compiled automation. */
   id: string
   label: string
-  /** Tile glyph and brand color (same pattern as Settings → Connectors). */
-  glyph: string
+  /** Brand color for the neutral fallback icon. */
   color: string
   events: TriggerEvent[]
 }
@@ -31,11 +30,11 @@ export const GMAIL_EVENTS: TriggerEvent[] = [
 /** Every app with event triggers, in the same order as the Composio picker grid. */
 export const TRIGGER_APPS: TriggerApp[] = [
   {
-    id: 'gmail', label: 'Gmail', glyph: 'M', color: '#EA4335',
+    id: 'gmail', label: 'Gmail', color: '#EA4335',
     events: GMAIL_EVENTS
   },
   {
-    id: 'outlook', label: 'Outlook Mail', glyph: 'O', color: '#0F6CBD',
+    id: 'outlook', label: 'Outlook Mail', color: '#0F6CBD',
     events: [
       { id: 'new-email', label: 'New email', phrase: 'a new email arrives' },
       { id: 'new-attachment', label: 'New attachment', phrase: 'an attachment arrives' },
@@ -45,14 +44,14 @@ export const TRIGGER_APPS: TriggerApp[] = [
     ]
   },
   {
-    id: 'mailmanus', label: 'Mail Manus', glyph: '✉', color: '#8B5CF6',
+    id: 'mailmanus', label: 'Mail Manus', color: '#8B5CF6',
     events: [
       { id: 'new-email', label: 'New email', phrase: 'a new email arrives' },
       { id: 'new-reply', label: 'New reply', phrase: 'a reply is received' }
     ]
   },
   {
-    id: 'slack', label: 'Slack', glyph: '#', color: '#611F69',
+    id: 'slack', label: 'Slack', color: '#611F69',
     events: [
       { id: 'new-message', label: 'New message in a channel', phrase: 'a new message is posted in a channel' },
       { id: 'new-mention', label: 'New mention', phrase: 'you are mentioned in a message' },
@@ -63,7 +62,7 @@ export const TRIGGER_APPS: TriggerApp[] = [
     ]
   },
   {
-    id: 'notion', label: 'Notion', glyph: 'N', color: '#E8E8E8',
+    id: 'notion', label: 'Notion', color: '#E8E8E8',
     events: [
       { id: 'new-page', label: 'New page in a database', phrase: 'a new page is added to a database' },
       { id: 'page-updated', label: 'Page updated', phrase: 'a page is updated' },
@@ -72,7 +71,7 @@ export const TRIGGER_APPS: TriggerApp[] = [
     ]
   },
   {
-    id: 'googlecalendar', label: 'Google Calendar', glyph: '31', color: '#4285F4',
+    id: 'googlecalendar', label: 'Google Calendar', color: '#4285F4',
     events: [
       { id: 'new-event', label: 'New event', phrase: 'a new event is created' },
       { id: 'updated-event', label: 'Event updated', phrase: 'an event is updated' },
@@ -82,7 +81,7 @@ export const TRIGGER_APPS: TriggerApp[] = [
     ]
   },
   {
-    id: 'outlookcalendar', label: 'Outlook Calendar', glyph: '31', color: '#0F6CBD',
+    id: 'outlookcalendar', label: 'Outlook Calendar', color: '#0F6CBD',
     events: [
       { id: 'new-event', label: 'New event', phrase: 'a new event is created' },
       { id: 'updated-event', label: 'Event updated', phrase: 'an event is updated' },
@@ -91,7 +90,7 @@ export const TRIGGER_APPS: TriggerApp[] = [
     ]
   },
   {
-    id: 'github', label: 'GitHub', glyph: 'O', color: '#6E7681',
+    id: 'github', label: 'GitHub', color: '#6E7681',
     events: [
       { id: 'new-issue', label: 'New issue', phrase: 'a new issue is opened' },
       { id: 'new-pr', label: 'New pull request', phrase: 'a new pull request is opened' },
@@ -102,7 +101,7 @@ export const TRIGGER_APPS: TriggerApp[] = [
     ]
   },
   {
-    id: 'instagram', label: 'Instagram', glyph: '◎', color: '#E1306C',
+    id: 'instagram', label: 'Instagram', color: '#E1306C',
     events: [
       { id: 'new-post', label: 'New post', phrase: 'a new post is published' },
       { id: 'new-story', label: 'New story', phrase: 'a new story is posted' },
@@ -111,7 +110,7 @@ export const TRIGGER_APPS: TriggerApp[] = [
     ]
   },
   {
-    id: 'metaads', label: 'Meta Ads', glyph: '∞', color: '#0866FF',
+    id: 'metaads', label: 'Meta Ads', color: '#0866FF',
     events: [
       { id: 'new-lead', label: 'New lead', phrase: 'a new lead is captured' },
       { id: 'campaign-status', label: 'Campaign status changed', phrase: 'a campaign changes status' },
@@ -119,7 +118,7 @@ export const TRIGGER_APPS: TriggerApp[] = [
     ]
   },
   {
-    id: 'googleads', label: 'Google Ads', glyph: 'G', color: '#4285F4',
+    id: 'googleads', label: 'Google Ads', color: '#4285F4',
     events: [
       { id: 'new-lead', label: 'New lead form submission', phrase: 'a new lead form is submitted' },
       { id: 'campaign-status', label: 'Campaign status changed', phrase: 'a campaign changes status' },
@@ -127,7 +126,7 @@ export const TRIGGER_APPS: TriggerApp[] = [
     ]
   },
   {
-    id: 'googleworkspace', label: 'Google Workspace', glyph: 'G', color: '#34A853',
+    id: 'googleworkspace', label: 'Google Workspace', color: '#34A853',
     events: [
       { id: 'new-file', label: 'New file in Drive', phrase: 'a new file is added to Drive' },
       { id: 'file-updated', label: 'File updated in Drive', phrase: 'a file is updated in Drive' },
@@ -136,7 +135,7 @@ export const TRIGGER_APPS: TriggerApp[] = [
     ]
   },
   {
-    id: 'shopify', label: 'Shopify', glyph: 'S', color: '#95BF47',
+    id: 'shopify', label: 'Shopify', color: '#95BF47',
     events: [
       { id: 'new-order', label: 'New order', phrase: 'a new order is placed' },
       { id: 'order-paid', label: 'Order paid', phrase: 'an order is paid' },
@@ -147,14 +146,14 @@ export const TRIGGER_APPS: TriggerApp[] = [
     ]
   },
   {
-    id: 'rss', label: 'RSS', glyph: 'R', color: '#FF6B35',
+    id: 'rss', label: 'RSS', color: '#FF6B35',
     events: [
       { id: 'new-item', label: 'New item in feed', phrase: 'a new item appears in the feed' },
       { id: 'feed-updated', label: 'Feed updated', phrase: 'the feed is updated' }
     ]
   },
   {
-    id: 'webhook', label: 'Webhook', glyph: '⇢', color: '#8B5CF6',
+    id: 'webhook', label: 'Webhook', color: '#8B5CF6',
     events: [
       { id: 'incoming', label: 'Incoming request', phrase: 'an incoming webhook request arrives' }
     ]
@@ -162,7 +161,7 @@ export const TRIGGER_APPS: TriggerApp[] = [
 ]
 
 /** Timer always maps to the schedule trigger instead of an app event. */
-export const TIMER_TRIGGER = { id: 'timer', label: 'Timer', glyph: '◷', color: '#E6E6E6' } as const
+export const TIMER_TRIGGER = { id: 'timer', label: 'Timer', color: '#E6E6E6' } as const
 
 export function triggerApp(id: string): TriggerApp | undefined {
   return TRIGGER_APPS.find((app) => app.id === id)

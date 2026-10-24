@@ -147,7 +147,6 @@ export function UpdatesList({ runs, todayKey, onSelect }: {
                   <small>{timeLabel(run.endedAt ?? run.startedAt)}</small>
                 </span>
                 <span className="updates-row-body">{run.summary || 'No output recorded yet.'}</span>
-                {run.status === 'running' && <span className="p-heatbar" aria-hidden="true" />}
               </button>
             ))}
           </div>

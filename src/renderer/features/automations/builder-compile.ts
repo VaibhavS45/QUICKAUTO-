@@ -22,6 +22,8 @@ export interface BuilderTrigger {
   app: string
   /** what to watch for (event triggers) */
   event: string
+  /** optional "only when" guard folded into the event check */
+  condition?: string
 }
 
 export interface BuilderDraft {
@@ -50,7 +52,8 @@ export function blankTrigger(kind: BuilderTriggerKind = 'schedule'): BuilderTrig
     weekdays: [],
     dayOfMonth: new Date().getDate(),
     app: 'gmail',
-    event: ''
+    event: '',
+    condition: ''
   }
 }
 
@@ -116,7 +119,10 @@ export function draftToAutomation(draft: BuilderDraft): CompiledAutomation {
 
   const eventPhrases = draft.triggers
     .filter((t) => t.kind === 'event' && t.app && t.event.trim())
-    .map((t) => `check @${triggerMention(t.app)} for ${t.event.trim()}`)
+    .map((t) => {
+      const condition = t.condition?.trim()
+      return `check @${triggerMention(t.app)} for ${t.event.trim()}${condition ? ` only when ${condition}` : ''}`
+    })
   const prompt = [task, ...eventPhrases].filter(Boolean).join('. ')
   if (!prompt.trim()) return fail('Describe what the agent should do.')
 

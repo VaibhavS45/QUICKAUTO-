@@ -89,36 +89,6 @@ function FilterIcon(): React.JSX.Element {
   )
 }
 
-/** Faint orbital drawing behind the graph: the canvas is a place, not a void. */
-function CanvasBackdrop(): React.JSX.Element {
-  return (
-    <svg className="n8n-backdrop" viewBox="0 0 1200 700" preserveAspectRatio="xMidYMid slice" aria-hidden="true">
-      <g fill="none" stroke="rgb(255 255 255 / 9%)" strokeWidth="1">
-        <ellipse cx="600" cy="340" rx="430" ry="196" strokeDasharray="2 11" />
-        <ellipse cx="600" cy="340" rx="640" ry="300" strokeDasharray="2 15" />
-        <path d="M-40 480 C 220 260, 430 620, 700 400 S 1090 240, 1240 390" strokeDasharray="1 13" />
-      </g>
-      <g fill="none" stroke="rgb(255 154 92 / 16%)" strokeWidth="1.2" strokeLinecap="round">
-        <path d="M120 252 C 288 186, 372 330, 540 252" strokeDasharray="3 10" />
-        <path d="M812 442 C 956 372, 1008 528, 1160 456" strokeDasharray="3 10" />
-      </g>
-      <g fill="rgb(255 255 255 / 12%)">
-        <circle cx="212" cy="430" r="2.5" />
-        <circle cx="946" cy="216" r="2.5" />
-        <circle cx="1042" cy="468" r="1.8" />
-        <circle cx="360" cy="238" r="1.8" />
-      </g>
-      <g fill="rgb(255 154 92 / 45%)">
-        <circle cx="120" cy="252" r="2" />
-        <circle cx="1160" cy="456" r="2" />
-      </g>
-      <g fill="none" stroke="rgb(255 255 255 / 12%)" strokeWidth="1.4" strokeLinecap="round">
-        <path d="M212 430h22M946 216h18M360 238h14" strokeDasharray="1 5" />
-      </g>
-    </svg>
-  )
-}
-
 /** Canvas tab opener: create a new graph, or jump back into a previous one. */
 export function CanvasLanding({ automations, resume = false, onResumeChange, onNew, onEdit }: {
   automations: Automation[]
@@ -129,7 +99,6 @@ export function CanvasLanding({ automations, resume = false, onResumeChange, onN
 }): React.JSX.Element {
   return (
     <div className="automations-canvas is-canvas-landing">
-      <CanvasBackdrop />
       <div className="canvas-landing">
         <div className="canvas-landing-intro">
           <span className="canvas-landing-mark" aria-hidden="true">
@@ -977,10 +946,6 @@ export default function AutomationsView(props: FeatureProps): React.JSX.Element 
           <div
             className="n8n-viewport"
             ref={viewportRef}
-            style={{
-              backgroundSize: `${24 * vp.z}px ${24 * vp.z}px, ${120 * vp.z}px ${120 * vp.z}px, ${120 * vp.z}px ${120 * vp.z}px`,
-              backgroundPosition: `${vp.x}px ${vp.y}px, ${vp.x}px ${vp.y}px, ${vp.x}px ${vp.y}px`
-            }}
             onPointerDown={(e) => {
               if (!(e.target as HTMLElement).closest('.n8n-picker, .n8n-end, .n8n-empty, .n8n-dir')) {
                 setAddAt(null)
@@ -994,7 +959,6 @@ export default function AutomationsView(props: FeatureProps): React.JSX.Element 
             }}
             aria-label={canvasRoutine ? `Canvas for ${routineTitle(canvasRoutine.prompt)}` : 'Canvas builder'}
           >
-            <CanvasBackdrop />
             <div className="n8n-toolbar" role="toolbar" aria-label="Canvas controls">
               <button type="button" aria-label="Zoom out" onClick={() => zoomBy(0.87)}>−</button>
               <span aria-hidden="true">{Math.round(vp.z * 100)}%</span>

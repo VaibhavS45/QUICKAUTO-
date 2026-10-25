@@ -483,15 +483,7 @@
   border: 1px solid var(--line-2);
   border-radius: var(--radius-xl);
   box-shadow: inset 0 1px 0 var(--highlight);
-  --grid-dot: rgb(255 255 255 / 9%);
-  --grid-line: rgb(255 255 255 / 4%);
-  background-color: var(--bg);
-  /* Dot pitch + major grid; both scale and pan with the world (inline style). */
-  background-image:
-    radial-gradient(circle, var(--grid-dot) 1.2px, transparent 1.6px),
-    linear-gradient(to right, var(--grid-line) 1px, transparent 1px),
-    linear-gradient(to bottom, var(--grid-line) 1px, transparent 1px);
-  background-size: 24px 24px, 120px 120px, 120px 120px;
+  background: var(--bg);
   cursor: grab;
   touch-action: none;
 }
@@ -990,15 +982,6 @@
   margin-top: 1px;
   color: var(--text-disabled);
   font-size: 10.5px;
-}
-
-/* Faint orbit behind the graph; it does not pan or zoom with the world. */
-.n8n-backdrop {
-  position: absolute;
-  inset: 0;
-  width: 100%;
-  height: 100%;
-  pointer-events: none;
 }
 
 /* Empty graph: one dashed target in the middle, n8n style. */

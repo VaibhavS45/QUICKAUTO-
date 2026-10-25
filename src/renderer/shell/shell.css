@@ -2142,3 +2142,63 @@
 }
 
 .light .shell-template-status-error { color: var(--danger); }
+/* ---- Profile menu (design C) — append at the END of shell/shell.css ---- */
+.shell-profile-menu {
+  width: 288px;
+  padding: 6px;
+  border: 1px solid var(--line-2);
+  border-radius: 16px;
+  background: var(--black-2);
+  box-shadow: 0 24px 60px rgb(0 0 0 / 60%);
+}
+
+.shell-profile-menu-head {
+  gap: 12px;
+  margin: 0 6px 6px;
+  padding: 12px 6px 14px;
+  border-bottom: 1px solid var(--line);
+}
+.shell-profile-menu-head .shell-avatar {
+  width: 36px;
+  height: 36px;
+  font-size: 12px;
+  font-weight: 600;
+}
+.shell-profile-menu-identity { gap: 3px; }
+.shell-profile-menu-identity strong { font-size: 14px; font-weight: 600; }
+.shell-profile-menu-status { font-size: 12px; color: var(--ash-2); }
+.shell-profile-menu-status.is-signed-in { color: var(--run-ok, #5bd69b); }
+
+.shell-profile-menu-divider { height: 1px; margin: 6px 6px; background: var(--line); }
+
+.shell-profile-menu button[role="menuitem"] {
+  height: 38px;
+  padding: 0 13px;
+  gap: 12px;
+  border-radius: 8px;
+  font-size: 14px;
+}
+.shell-profile-menu button[role="menuitem"]:hover,
+.shell-profile-menu button[role="menuitem"]:focus-visible {
+  background: var(--black-4);
+  outline: none;
+}
+.shell-profile-menu-icon { width: 15px; height: 15px; color: var(--ash-2); }
+
+.shell-profile-menu-shortcut {
+  padding: 0;
+  background: transparent;
+  color: var(--ash-3);
+  font-size: 11px;
+  letter-spacing: 0.04em;
+}
+
+/* Higher specificity than the generic menuitem colour rule above. */
+.shell-profile-menu button[role="menuitem"].shell-profile-menu-item--signin,
+.shell-profile-menu button[role="menuitem"].shell-profile-menu-item--signin .shell-profile-menu-icon {
+  color: var(--ember-hot);
+}
+.shell-profile-menu button[role="menuitem"].shell-profile-menu-item--signout,
+.shell-profile-menu button[role="menuitem"].shell-profile-menu-item--signout .shell-profile-menu-icon {
+  color: var(--danger-bright);
+}

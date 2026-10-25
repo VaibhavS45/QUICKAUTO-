@@ -13,6 +13,7 @@ import type { ModelSettings } from '../settings/model-settings.js'
 import { DEFAULT_ACP_MODEL, type AgentProvider } from './agent-provider.js'
 import { runAcpPrompt } from './acp-client.js'
 import { runPiPrompt } from './pi-run.js'
+import { ensureOpencode, type EnsureOpencodeResult } from './opencode-install.js'
 
 /**
  * Agent runner. Uses the Vercel AI SDK `ai` v7 `ToolLoopAgent` with
@@ -71,6 +72,8 @@ export interface RunnerDeps {
   getAcpModel?: () => string | null
   /** Injected in tests to avoid spawning `opencode acp`. */
   runAcp?: (req: { prompt: string; systemPrompt?: string; model?: string; runId: string; signal?: AbortSignal; emit: (e: AgentEvent) => void; onPermission?: (perm: { id: string; toolCallId: string; toolName: string; input: unknown; reason?: string }) => Promise<boolean> }) => Promise<{ text: string; steps: number }>
+  /** Checks for OpenCode and installs it when missing; injected in tests. */
+  ensureOpenCode?: () => Promise<EnsureOpencodeResult>
   /** Injected in tests to avoid spawning pi. */
   runPi?: (req: { prompt: string; systemPrompt?: string; runId: string; signal?: AbortSignal; emit: (e: AgentEvent) => void }) => Promise<{ text: string; steps: number }>
   /** Injected in tests to avoid network/model calls. */
@@ -192,6 +195,12 @@ async function runViaHarness(args: HarnessRunArgs): Promise<{ text: string; step
       }
       if (!deps.getHarnessDirectory) {
         return fail('OpenCode harness is not wired in this build.')
+      }
+      // Scheduled runs must never fail on a missing CLI: install on demand
+      // (once per machine) before the ACP handshake.
+      const ready = await (deps.ensureOpenCode ?? ensureOpencode)()
+      if (!ready.ok) {
+        return fail(ready.error ?? 'OpenCode is not ready. Install it from https://opencode.ai and retry.')
       }
       const runAcp = deps.runAcp ?? ((r) => runAcpPrompt({ ...r, cwd: deps.getHarnessDirectory?.() }))
       const acp = await runAcp({

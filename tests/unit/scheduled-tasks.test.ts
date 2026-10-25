@@ -5,6 +5,8 @@ import {
   draftToPatch,
   formatDate,
   isDirty,
+  manageFilterOf,
+  matchesManageFilter,
   pickerTime,
   timeOptions,
   validateDraft,
@@ -75,6 +77,25 @@ describe('automationMeta', () => {
     expect(automationMeta(automation({ schedule: { type: 'weekly', time: '09:00', weekdays: [1, 2] } })))
       .toBe('Schedule · Repeat weekly on Mon, Tue at 09:00')
     expect(automationMeta(automation({ kind: 'advanced', schedule: undefined }))).toBe('Advanced automation')
+  })
+})
+
+describe('manage filter', () => {
+  it('splits automations into schedule, trigger and canvas', () => {
+    expect(manageFilterOf(automation())).toBe('schedule')
+    expect(manageFilterOf(automation({ prompt: 'Summarize. check @gmail for new email' }))).toBe('trigger')
+    expect(manageFilterOf(automation({ kind: 'advanced' }))).toBe('canvas')
+  })
+
+  it('shows everything for All and only the matching kind otherwise', () => {
+    const rows = [
+      automation(),
+      automation({ id: 'a2', prompt: 'watch. check @notion for changes' }),
+      automation({ id: 'a3', kind: 'advanced' })
+    ]
+    expect(rows.filter((row) => matchesManageFilter(row, 'all'))).toHaveLength(3)
+    expect(rows.filter((row) => matchesManageFilter(row, 'trigger')).map((row) => row.id)).toEqual(['a2'])
+    expect(rows.filter((row) => matchesManageFilter(row, 'canvas')).map((row) => row.id)).toEqual(['a3'])
   })
 })
 

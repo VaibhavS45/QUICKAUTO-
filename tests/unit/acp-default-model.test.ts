@@ -10,6 +10,7 @@ function harnessDeps(acpModel: string | null, seen: { model?: string }) {
     getAgentProvider: () => 'opencode' as const,
     getHarnessDirectory: () => '/tmp',
     getAcpModel: () => acpModel,
+    ensureOpenCode: async () => ({ ok: true, binary: 'opencode' }),
     runAcp: async (req: { model?: string }) => {
       seen.model = req.model
       return { text: 'ok', steps: 1 }

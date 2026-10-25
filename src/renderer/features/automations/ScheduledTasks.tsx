@@ -3,6 +3,7 @@ import type { Automation } from '../../../shared/contracts/automations.js'
 import { AutomationActionsProvider, type AutomationActions } from './automation-actions.js'
 import { AutomationCard } from './AutomationCard.js'
 import { AutomationDetail } from './AutomationDetail.js'
+import { matchesManageFilter, type ManageFilter } from './scheduled.js'
 import { ToastStack, useToasts } from './toast.js'
 import './scheduled.css'
 
@@ -10,14 +11,14 @@ import './scheduled.css'
  * Scheduled Tasks: the card grid, the detail/edit page and the shared
  * "⋯" actions menu.
  */
-export default function ScheduledTasks({ onCreate, onOpenRun, onDirtyChange, onSelect, selectedId = '', onlyActive = false, focusAutomationId = '' }: {
+export default function ScheduledTasks({ onCreate, onOpenRun, onDirtyChange, onSelect, selectedId = '', filter = 'all', focusAutomationId = '' }: {
   onCreate(): void
   onOpenRun(runId: string): void
   onDirtyChange(dirty: boolean): void
   /** The owner keeps the open automation: the section hides its title row for it. */
   onSelect(id: string): void
   selectedId?: string
-  onlyActive?: boolean
+  filter?: ManageFilter
   focusAutomationId?: string
 }): React.JSX.Element {
   const [automations, setAutomations] = useState<Automation[]>([])
@@ -60,7 +61,7 @@ export default function ScheduledTasks({ onCreate, onOpenRun, onDirtyChange, onS
   }, [automations, focusAutomationId, onSelect])
 
   const selected = automations.find((automation) => automation.id === selectedId) ?? null
-  const visible = onlyActive ? automations.filter((automation) => automation.status === 'active') : automations
+  const visible = automations.filter((automation) => matchesManageFilter(automation, filter))
 
   // A closed detail has no unsaved edits left: the owner may leave the tab.
   useEffect(() => {
@@ -138,7 +139,7 @@ export default function ScheduledTasks({ onCreate, onOpenRun, onDirtyChange, onS
         <>
           {visible.length === 0 ? (
             <div className="st-empty">
-              <p>No scheduled tasks yet.</p>
+              <p>{filter === 'all' ? 'No scheduled tasks yet.' : `No ${filter} automations yet.`}</p>
               <button type="button" className="st-primary" onClick={onCreate}>Create automation</button>
             </div>
           ) : (

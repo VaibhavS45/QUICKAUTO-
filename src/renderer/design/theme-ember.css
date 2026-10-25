@@ -387,12 +387,6 @@ code, kbd, pre, time {
   border: 1px solid var(--line);
   background: var(--black-2);
 }
-.automations-filter.is-on {
-  border-color: var(--line-3);
-  background: var(--black-4);
-  color: var(--ash-1);
-  box-shadow: inset 0 -2px 0 var(--ember);
-}
 
 /* Manage cards: mono meta line, 15px titles, two-line prompt preview,
    icon tile in a bg-3 square. Data layout unchanged. */
@@ -563,13 +557,8 @@ code, kbd, pre, time {
   width: 100%;
 }
 
-/* Canvas: bg-0 with a panning dot + major grid, so it reads as a canvas.
-   Ports and edge "+" stay neutral hairline — orange is reserved for the active
-   nav and status. */
-.n8n-viewport {
-  --grid-dot: rgb(255 255 255 / 11%);
-  --grid-line: rgb(255 255 255 / 4%);
-}
+/* Canvas ports and edge "+" stay neutral hairline — orange is reserved for the
+   active nav and status. */
 .n8n-handle {
   border-color: var(--line-3);
   background: var(--black-4);

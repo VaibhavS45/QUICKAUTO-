@@ -1,7 +1,7 @@
 import { z } from 'zod'
 import { execFile } from 'node:child_process'
 import { existsSync, readdirSync } from 'node:fs'
-import { join } from 'node:path'
+import { delimiter, join } from 'node:path'
 
 /**
  * Agent harness provider. Separate from the model provider
@@ -61,6 +61,8 @@ export function parseVersion(output: string): string {
 export interface DetectDeps {
   /** Resolves stdout, rejects on missing binary / non-zero exit / timeout. */
   run?: (binary: string, args: string[]) => Promise<string>
+  /** Binary probed per harness (defaults to the resolved opencode path). */
+  resolveBinary?: (id: HarnessStatus['id']) => string
 }
 
 function defaultRun(binary: string, args: string[]): Promise<string> {
@@ -74,11 +76,12 @@ function defaultRun(binary: string, args: string[]): Promise<string> {
 
 async function checkOne(
   id: HarnessStatus['id'],
+  binary: string,
   run: (binary: string, args: string[]) => Promise<string>
 ): Promise<HarnessStatus> {
   try {
-    const out = await run(id, ['--version'])
-    return { id, installed: true, version: parseVersion(out), detail: `${id} ${parseVersion(out)} detected on PATH` }
+    const out = await run(binary, ['--version'])
+    return { id, installed: true, version: parseVersion(out), detail: `${id} ${parseVersion(out)} detected` }
   } catch (err) {
     const code = (err as NodeJS.ErrnoException)?.code
     return {
@@ -95,7 +98,9 @@ async function checkOne(
 /** Detect which harnesses exist on this system. No polling — call on demand. */
 export async function detectHarnesses(deps: DetectDeps = {}): Promise<HarnessStatus[]> {
   const run = deps.run ?? defaultRun
-  return Promise.all([checkOne('opencode', run), checkOne('pi', run)])
+  const binaryFor =
+    deps.resolveBinary ?? ((id: HarnessStatus['id']) => (id === 'opencode' ? resolveOpenCodeBinary() : id))
+  return Promise.all([checkOne('opencode', binaryFor('opencode'), run), checkOne('pi', binaryFor('pi'), run)])
 }
 
 /**
@@ -118,27 +123,58 @@ export function pickAutoEngine(input: {
 /** Default ACP model used by the Zed OpenCode integration. */
 export const DEFAULT_ACP_MODEL = 'opencode/muse-spark-1.3-contributor-free'
 
-/** Resolve the native OpenCode CLI without bundling or copying it. */
-export function resolveOpenCodeBinary(env: NodeJS.ProcessEnv = process.env): string {
+/** Absolute paths where OpenCode lands, most specific first. */
+export function openCodeCandidates(env: NodeJS.ProcessEnv = process.env): string[] {
+  const out: string[] = []
   const configured = env['OPENCODE_BINARY']?.trim()
-  if (configured) return configured
-  const zedRoot = join(env['HOME'] ?? '', 'Library/Application Support/Zed/external_agents/registry/opencode')
+  if (configured) out.push(configured)
+  const home = env['HOME'] ?? ''
+  const zedRoot = join(home, 'Library/Application Support/Zed/external_agents/registry/opencode')
   try {
     const versions = readdirSync(zedRoot)
       .filter((entry) => entry.startsWith('v_'))
       .sort()
       .reverse()
-    for (const version of versions) {
-      const candidate = join(zedRoot, version, 'opencode')
-      if (existsSync(candidate)) return candidate
-    }
+    for (const version of versions) out.push(join(zedRoot, version, 'opencode'))
   } catch {
     // Zed is optional; continue with the native system installation.
   }
-  for (const candidate of ['/opt/homebrew/bin/opencode', '/usr/local/bin/opencode', '/usr/bin/opencode']) {
-    if (existsSync(candidate)) return candidate
+  if (home) {
+    // Official install script (`curl -fsSL https://opencode.ai/install | bash`).
+    out.push(join(home, '.opencode/bin/opencode'), join(home, '.local/bin/opencode'))
   }
-  return 'opencode'
+  out.push('/opt/homebrew/bin/opencode', '/usr/local/bin/opencode', '/usr/bin/opencode')
+  return out
+}
+
+/**
+ * Locate an installed OpenCode binary without spawning anything. GUI apps get
+ * a minimal PATH, so the install-script location and PATH entries are both
+ * checked. Returns null when OpenCode is not on this machine.
+ */
+export function findOpenCodeBinary(
+  env: NodeJS.ProcessEnv = process.env,
+  exists: (path: string) => boolean = existsSync
+): string | null {
+  for (const candidate of openCodeCandidates(env)) {
+    if (exists(candidate)) return candidate
+  }
+  for (const dir of (env['PATH'] ?? '').split(delimiter)) {
+    if (!dir) continue
+    const candidate = join(dir, 'opencode')
+    if (exists(candidate)) return candidate
+  }
+  return null
+}
+
+/** Resolve the native OpenCode CLI without bundling or copying it. */
+export function resolveOpenCodeBinary(
+  env: NodeJS.ProcessEnv = process.env,
+  exists: (path: string) => boolean = existsSync
+): string {
+  const configured = env['OPENCODE_BINARY']?.trim()
+  if (configured) return configured
+  return findOpenCodeBinary(env, exists) ?? 'opencode'
 }
 
 const ACP_MODEL_KEY = 'opencode-model'

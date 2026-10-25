@@ -2,7 +2,7 @@ import { createElement } from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { describe, expect, it, vi } from 'vitest'
 import { addDaysKey, dayLabel, localDayKey, monthGrid, monthLabel, pastDayLabel, routineOccursOn, routineTitle } from '../../src/renderer/features/automations/dates.js'
-import AutomationsView, { UpdatesList, automationsTrail, stepsForRoutine } from '../../src/renderer/features/automations/AutomationsView.js'
+import AutomationsView, { CanvasLanding, UpdatesList, automationsTrail, stepsForRoutine } from '../../src/renderer/features/automations/AutomationsView.js'
 import type { ShellApi } from '../../src/renderer/contracts/feature.js'
 
 const shell: ShellApi = {
@@ -99,6 +99,49 @@ describe('AutomationsView', () => {
     const manage = renderToStaticMarkup(createElement(AutomationsView, { shell, initialAutomationTab: 'manage' }))
     expect(manage).toContain('automations-toolbar')
     expect(manage).not.toContain('is-canvas-mode')
+  })
+
+  it('offers create and edit previous on the Canvas opener', () => {
+    const html = renderToStaticMarkup(createElement(CanvasLanding, {
+      automations: [
+        {
+          id: 'a-1',
+          kind: 'advanced',
+          title: 'Morning brief',
+          prompt: 'Summarize my mail',
+          status: 'active',
+          schedule: { type: 'daily', time: '09:00' },
+          autoApprove: false,
+          runMode: 'separate_task',
+          agent: '',
+          connectors: ['gmail'],
+          createdAt: new Date(2026, 9, 25).toISOString()
+        }
+      ],
+      resume: true,
+      onResumeChange: () => {},
+      onNew: () => {},
+      onEdit: () => {}
+    }))
+    expect(html).toContain('Build an automation')
+    expect(html).toContain('Edit previous')
+    expect(html).toContain('aria-label="Edit Morning brief"')
+    expect(html).toContain('Advanced automation')
+    expect(html).toContain('Always open my last canvas')
+    expect((html.match(/type="checkbox"/g) ?? []).length).toBe(1)
+    expect(html).toContain('checked=""')
+  })
+
+  it('shows the empty previous list before anything is built', () => {
+    const html = renderToStaticMarkup(createElement(CanvasLanding, {
+      automations: [],
+      resume: false,
+      onResumeChange: () => {},
+      onNew: () => {},
+      onEdit: () => {}
+    }))
+    expect(html).toContain('No canvases yet')
+    expect(html).not.toContain('checked=""')
   })
 
   it('leaves the breadcrumb to the app shell: no page renders its own', () => {

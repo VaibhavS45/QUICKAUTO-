@@ -11,7 +11,14 @@ export interface CanvasStep {
   filled: boolean
   /** World coordinates on the n8n-style graph canvas. */
   pos: { x: number; y: number }
+  /** Step that feeds this one. Absent = the step before it in the array (legacy chain). */
+  from?: string
+  /** Label on the incoming edge, e.g. a condition's "Yes" / "No" branch. */
+  branch?: string
 }
+
+/** The side of a node a new step branches out to. */
+export type CanvasDirection = 'up' | 'right' | 'down' | 'left'
 export interface CanvasRoutine {
   prompt: string
   tools: string[]
@@ -136,6 +143,8 @@ export interface CanvasPatch {
  * Sheets, GitHub); a generic node keeps its tool id in the subtitle.
  */
 function toolOfStep(step: CanvasStep): string {
+  // Logic steps shape the run; they are not connectors.
+  if (step.kind === 'filter' || step.kind === 'delay') return ''
   const title = step.title.toLowerCase()
   if (step.kind === 'gmail' || /gmail|email/.test(title)) return 'gmail'
   if (/sheet/.test(title)) return 'sheets'
@@ -152,9 +161,11 @@ export function canvasToPatch(steps: CanvasStep[], automation: Automation): Canv
   const patch: CanvasPatch = {}
   const trigger = steps.find((step) => step.kind === 'trigger')
   const actions = steps.filter((step) => step.kind !== 'trigger')
-  const prompt = actions[0]?.subtitle.trim() ?? ''
+  // Logic steps shape the flow; the task is the first real action.
+  const promptStep = actions.find((step) => step.kind !== 'filter' && step.kind !== 'delay') ?? actions[0]
+  const prompt = promptStep?.subtitle.trim() ?? ''
   if (prompt && prompt !== (automation.prompt ?? '')) patch.prompt = prompt
-  const connectors = actions.slice(1).map(toolOfStep).filter(Boolean)
+  const connectors = actions.filter((step) => step !== promptStep).map(toolOfStep).filter(Boolean)
   if (connectors.join('|') !== automation.connectors.join('|')) patch.connectors = connectors
   if (trigger) {
     const schedule = parseScheduleSummary(trigger.subtitle, automation)
@@ -174,14 +185,85 @@ export function layoutPos(index: number): { x: number; y: number } {
   return { x: ORIGIN.x + index * STEP_X, y: ORIGIN.y }
 }
 
-/** Cubic bezier from the output handle of `from` to the input handle of `to`. */
+/** Cubic bezier from the nearest side of `from` to the nearest side of `to`. */
 export function edgePath(from: { x: number; y: number }, to: { x: number; y: number }): string {
-  const x1 = from.x + NODE_W
-  const y1 = from.y + NODE_H / 2
-  const x2 = to.x
-  const y2 = to.y + NODE_H / 2
-  const c = Math.max(48, (x2 - x1) / 2)
-  return `M ${x1} ${y1} C ${x1 + c} ${y1}, ${x2 - c} ${y2}, ${x2} ${y2}`
+  const fromCx = from.x + NODE_W / 2
+  const fromCy = from.y + NODE_H / 2
+  const toCx = to.x + NODE_W / 2
+  const toCy = to.y + NODE_H / 2
+  const dx = toCx - fromCx
+  const dy = toCy - fromCy
+  if (Math.abs(dx) >= Math.abs(dy)) {
+    const right = dx >= 0
+    const x1 = right ? from.x + NODE_W : from.x
+    const x2 = right ? to.x : to.x + NODE_W
+    const y1 = fromCy
+    const y2 = toCy
+    const c = Math.max(40, Math.abs(x2 - x1) / 2) * (right ? 1 : -1)
+    return `M ${x1} ${y1} C ${x1 + c} ${y1}, ${x2 - c} ${y2}, ${x2} ${y2}`
+  }
+  const down = dy >= 0
+  const x1 = fromCx
+  const x2 = toCx
+  const y1 = down ? from.y + NODE_H : from.y
+  const y2 = down ? to.y : to.y + NODE_H
+  const c = Math.max(40, Math.abs(y2 - y1) / 2) * (down ? 1 : -1)
+  return `M ${x1} ${y1} C ${x1} ${y1 + c}, ${x2} ${y2 - c}, ${x2} ${y2}`
+}
+
+/** Index of the step whose output feeds `steps[index]`; -1 when it is the trigger. */
+export function edgeSourceIndex(steps: CanvasStep[], index: number): number {
+  const from = steps[index]?.from
+  if (!from) return index - 1
+  return steps.findIndex((step) => step.id === from)
+}
+
+/** A condition fans out with two labelled outputs, every other step one. */
+export function branchLabel(parent: CanvasStep, dir: CanvasDirection): string | undefined {
+  if (parent.kind !== 'filter') return undefined
+  if (dir === 'right') return 'Yes'
+  if (dir === 'down') return 'No'
+  return undefined
+}
+
+/** Where a node added from `parent` in `dir` lands, clear of the parent card. */
+export function directionPos(parent: CanvasStep, dir: CanvasDirection): { x: number; y: number } {
+  const gap = 64
+  switch (dir) {
+    case 'right':
+      return { x: parent.pos.x + NODE_W + gap, y: parent.pos.y }
+    case 'left':
+      return { x: Math.max(0, parent.pos.x - NODE_W - gap), y: parent.pos.y }
+    case 'down':
+      return { x: parent.pos.x, y: parent.pos.y + NODE_H + gap }
+    case 'up':
+      return { x: parent.pos.x, y: Math.max(0, parent.pos.y - NODE_H - gap) }
+  }
+}
+
+/** Add a step off any side of a node, wired back to it (conditions get Yes/No). */
+export function insertFromDirection(
+  steps: CanvasStep[],
+  parentId: string,
+  dir: CanvasDirection,
+  kind: CanvasKind = 'action',
+  preset?: { title?: string; subtitle?: string }
+): CanvasStep[] {
+  const index = steps.findIndex((step) => step.id === parentId)
+  if (index < 0) return steps
+  const parent = steps[index]!
+  const step = blankStep(kind, directionPos(parent, dir))
+  const label = branchLabel(parent, dir)
+  const next: CanvasStep = {
+    ...step,
+    ...(preset?.title ? { title: preset.title } : {}),
+    ...(preset?.subtitle ? { subtitle: preset.subtitle } : {}),
+    from: parent.id,
+    ...(label ? { branch: label } : {})
+  }
+  const ordered = [...steps]
+  ordered.splice(index + 1, 0, next)
+  return ordered
 }
 
 /** Blank n8n-style starter: trigger wired to a short chain. */
@@ -216,7 +298,7 @@ export function canvasStepsForRoutine(routine: CanvasRoutine | undefined): Canva
       subtitle: `${routine.repeat} · ${timeLabelLocal(routine.runAt)}`,
       pos: layoutPos(0)
     },
-    { id: makeStepId(), kind: 'action', title: 'Action', filled: true, subtitle: titleOf(routine.prompt), pos: layoutPos(1) }
+    { id: makeStepId(), kind: 'action', title: 'Action', filled: true, subtitle: routine.prompt, pos: layoutPos(1) }
   ]
   for (const tool of routine.tools) {
     if (/gmail|email/i.test(tool)) {
@@ -286,7 +368,10 @@ export function moveStepTo(steps: CanvasStep[], id: string, x: number, y: number
 
 export function removeCanvasStep(steps: CanvasStep[], id: string): CanvasStep[] {
   if (steps.length <= 1) return steps
-  return steps.filter((s) => s.id !== id)
+  const removed = steps.find((s) => s.id === id)
+  return steps
+    .filter((s) => s.id !== id)
+    .map((s) => (s.from === id ? { ...s, from: removed?.from } : s))
 }
 
 export function moveCanvasStep(steps: CanvasStep[], id: string, delta: -1 | 1): CanvasStep[] {

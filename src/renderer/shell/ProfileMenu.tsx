@@ -7,13 +7,14 @@ interface ProfileMenuProps {
   name: string
   initials: string
   isSignedIn: boolean
+  busy?: boolean
   onClose(): void
   onOpenSettings(tab?: string): void
   onSignIn(): void
   onSignOut(): void
 }
 
-export function ProfileMenu({ open, name, initials, isSignedIn, onClose, onOpenSettings, onSignIn, onSignOut }: ProfileMenuProps): React.JSX.Element | null {
+export function ProfileMenu({ open, name, initials, isSignedIn, busy, onClose, onOpenSettings, onSignIn, onSignOut }: ProfileMenuProps): React.JSX.Element | null {
   const { t } = useI18n()
   const menuRef = useRef<HTMLDivElement>(null)
 
@@ -64,7 +65,7 @@ export function ProfileMenu({ open, name, initials, isSignedIn, onClose, onOpenS
           <span>{t('shell.logOut')}</span>
         </button>
       ) : (
-        <button type="button" role="menuitem" className="shell-profile-menu-item shell-profile-menu-item--signin" onClick={() => { onSignIn(); onClose() }}>
+        <button type="button" role="menuitem" className="shell-profile-menu-item shell-profile-menu-item--signin" disabled={busy} aria-busy={busy} onClick={() => { onSignIn(); onClose() }}>
           <LogOut className="shell-profile-menu-icon" />
           <span>{t('shell.logIn')}</span>
         </button>

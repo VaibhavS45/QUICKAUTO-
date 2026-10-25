@@ -46,6 +46,9 @@ const replies: Record<string, unknown> = {
   notificationDismiss: async () => ({ ok: true }),
   routineList: async () => ({ ok: true, routines: [] }),
   scheduleToday: async () => ({ ok: true, schedule: { date: '', entries: [] } }),
+  authGetState: async () => ({ ok: true, state: { signedIn: false, configured: true } }),
+  authSignIn: async () => ({ ok: true, state: { signedIn: true, configured: true, name: 'Browser Preview', email: 'preview@local' } }),
+  authSignOut: async () => ({ ok: true, state: { signedIn: false, configured: true } }),
   automationsList: async () => ({
     ok: true,
     automations: [
@@ -130,7 +133,8 @@ const replies: Record<string, unknown> = {
   onUpdatesChanged: noopOff,
   onAgentEvent: noopOff,
   onNotificationsChanged: noopOff,
-  onScheduleChanged: noopOff
+  onScheduleChanged: noopOff,
+  onAuthChanged: noopOff
 }
 
 if (typeof window.app === 'undefined') {

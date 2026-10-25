@@ -353,6 +353,8 @@ export default function AutomationsView(props: FeatureProps): React.JSX.Element 
   /** The Canvas tab opens on a chooser; this flips once a graph is opened. */
   const [canvasStarted, setCanvasStarted] = useState(false)
   const [canvasMemory, setCanvasMemory] = useState<CanvasMemory>(() => readCanvasMemory(canvasStorage()))
+  /** Set when the chooser was opened on purpose, so resume does not bounce back. */
+  const [resumeSkipped, setResumeSkipped] = useState(false)
   const [addDir, setAddDir] = useState<{ id: string; dir: CanvasDirection } | null>(null)
 
 
@@ -431,6 +433,7 @@ export default function AutomationsView(props: FeatureProps): React.JSX.Element 
   useEffect(() => {
     if (tab === 'canvas') return
     setCanvasStarted(false)
+    setResumeSkipped(false)
     setAddDir(null)
   }, [tab])
 
@@ -497,10 +500,27 @@ export default function AutomationsView(props: FeatureProps): React.JSX.Element 
     props.shell.navigate('home', { startKind: 'choice' })
   }
 
+  /** Remember which canvas to reopen, and whether to skip the chooser. */
+  function saveCanvasMemory(next: CanvasMemory): void {
+    setCanvasMemory(next)
+    writeCanvasMemory(next, canvasStorage())
+  }
+
+  function rememberCanvas(id: string): void {
+    saveCanvasMemory({ lastId: id, resume: canvasMemory.resume })
+  }
+
+  function setResumeCanvas(resume: boolean): void {
+    // Stay on the chooser this visit; the setting applies the next time.
+    setResumeSkipped(true)
+    saveCanvasMemory({ lastId: canvasMemory.lastId, resume })
+  }
+
   /** A fresh graph: no starter nodes, just the centered Add step. */
   function startNewCanvas(): void {
     fittedRef.current = false
     setCanvasStarted(true)
+    setResumeSkipped(false)
     setCanvasKey('blank')
     setCanvasSteps([])
     setVp({ x: 24, y: 0, z: 1 })
@@ -514,27 +534,31 @@ export default function AutomationsView(props: FeatureProps): React.JSX.Element 
     if (props.focusId) props.shell.navigate('automations', { automationTab: 'canvas' })
   }
 
-  /** Remember the canvas that was opened last, so the tab can resume it. */
-  function rememberCanvas(memory: CanvasMemory): void {
-    setCanvasMemory(memory)
-    writeCanvasMemory(memory, canvasStorage())
-  }
-
   /** Reopen a previous automation on the graph. */
   function openCanvas(id: string): void {
     fittedRef.current = false
     setCanvasStarted(true)
-    rememberCanvas({ lastId: id, resume: canvasMemory.resume })
+    setResumeSkipped(false)
+    rememberCanvas(id)
     props.shell.navigate('automations', { automationTab: 'canvas', focusId: id })
+  }
+
+  /** Back to the chooser even when "always open my last canvas" is on. */
+  function showCanvasLanding(): void {
+    setCanvasStarted(false)
+    setResumeSkipped(true)
+    setAddDir(null)
+    setAddAt(null)
+    if (props.focusId) props.shell.navigate('automations', { automationTab: 'canvas' })
   }
 
   // "Always open my last canvas": skip the chooser and go straight back in.
   useEffect(() => {
-    if (tab !== 'canvas' || canvasStarted || props.focusId) return
+    if (tab !== 'canvas' || canvasStarted || props.focusId || resumeSkipped) return
     if (!canvasMemory.resume || !canvasMemory.lastId) return
     if (!automations.some((automation) => automation.id === canvasMemory.lastId && automation.kind === 'advanced')) return
     openCanvas(canvasMemory.lastId)
-  }, [tab, canvasStarted, props.focusId, canvasMemory, automations]) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [tab, canvasStarted, props.focusId, resumeSkipped, canvasMemory, automations]) // eslint-disable-line react-hooks/exhaustive-deps
 
   /**
    * The canvas takes free text, so the sentence becomes the first action and
@@ -563,7 +587,7 @@ export default function AutomationsView(props: FeatureProps): React.JSX.Element 
       setCanvasSteps(steps)
       setCanvasPrompt('')
       setCanvasDescribe(false)
-      rememberCanvas({ lastId: res.automation.id, resume: canvasMemory.resume })
+      rememberCanvas(res.automation.id)
       props.shell.navigate('automations', { automationTab: 'canvas', focusId: res.automation.id })
     } catch (reason) {
       setCanvasError(errorText(reason))
@@ -572,9 +596,12 @@ export default function AutomationsView(props: FeatureProps): React.JSX.Element 
     }
   }
 
-  // The canvas shows the automation in the route. No route id = a new graph;
-  // the tab opener is what decides which one, so never silently load the latest.
-  const canvasAutomation = automations.find((automation) => automation.id === props.focusId) ?? null
+  // "Always open my last canvas" resumes it without putting it in the route.
+  const autoCanvas = canvasMemory.resume && !resumeSkipped && !canvasStarted && !props.focusId
+    ? automations.find((automation) => automation.id === canvasMemory.lastId && automation.kind === 'advanced') ?? null
+    : null
+  // The canvas shows the automation in the route, else the remembered one.
+  const canvasAutomation = automations.find((automation) => automation.id === props.focusId) ?? autoCanvas
   const canvasRoutine = canvasAutomation
     ? {
       prompt: canvasAutomation.prompt ?? canvasAutomation.title,
@@ -932,7 +959,7 @@ export default function AutomationsView(props: FeatureProps): React.JSX.Element 
         <CanvasLanding
           automations={automations}
           resume={canvasMemory.resume}
-          onResumeChange={(next) => rememberCanvas({ ...canvasMemory, resume: next })}
+          onResumeChange={setResumeCanvas}
           onNew={startNewCanvas}
           onEdit={openCanvas}
         />
@@ -948,6 +975,9 @@ export default function AutomationsView(props: FeatureProps): React.JSX.Element 
               {canvasRoutine && <span className="canvas-head-meta">{canvasRoutine.repeat} · {timeLabel(canvasRoutine.runAt)}</span>}
             </div>
             <div className="canvas-head-actions">
+              <button type="button" className="canvas-head-new" title="Pick another canvas" onClick={showCanvasLanding}>
+                All
+              </button>
               <button type="button" className="canvas-head-new" title="Start a new canvas" onClick={startNewCanvas}>
                 <span aria-hidden="true">+</span> New
               </button>

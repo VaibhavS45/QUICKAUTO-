@@ -44,4 +44,10 @@ describe('profile menu', () => {
     const rendered = html({ name: '' })
     expect(rendered).toContain('Not signed in')
   })
+
+  it('disables Log in while a sign-in is in flight', () => {
+    const rendered = html({ busy: true })
+    expect(rendered).toContain('aria-busy="true"')
+    expect(rendered).toContain('disabled=""')
+  })
 })

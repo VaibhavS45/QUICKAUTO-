@@ -4,6 +4,7 @@ import type { ShellApi } from '../contracts/feature.js'
 import type { ChatThread } from '../../shared/chat.js'
 import type { AgentEvent } from '../../shared/agent.js'
 import type { AppNotification } from '../../shared/contracts/notifications.js'
+import type { AuthState } from '../../shared/contracts/auth.js'
 import { TITLEBAR_LEFT } from '../../shared/titlebar.js'
 import { formatDateTime } from '../lib/format.js'
 import { parseMentionedTools } from '../../shared/types.js'
@@ -96,7 +97,8 @@ export default function ShellApp(): React.JSX.Element {
   const [route, setRoute] = useState(router.current)
   const [profile, setProfile] = useState<LocalProfile>({ name: '', email: '' })
   const [profileMenuOpen, setProfileMenuOpen] = useState(false)
-  const [isSignedIn, setIsSignedIn] = useState(false)
+  const [auth, setAuth] = useState<AuthState>({ signedIn: false, configured: false })
+  const [authBusy, setAuthBusy] = useState(false)
   const [settings, setSettings] = useState<{ tab?: string } | null>(null)
   const avatarRef = useRef<HTMLButtonElement>(null)
   const [notificationsOpen, setNotificationsOpen] = useState(false)
@@ -159,6 +161,18 @@ export default function ShellApp(): React.JSX.Element {
     })
     return () => { active = false }
   }, [refreshThreads, refreshNotifications])
+
+  useEffect(() => {
+    let active = true
+    void window.app.authGetState().then((res) => {
+      if (active && res.ok) setAuth(res.state)
+    }).catch((error: unknown) => console.error('Could not load account state.', error))
+    const off = window.app.onAuthChanged((state) => setAuth(state))
+    return () => {
+      active = false
+      off()
+    }
+  }, [])
 
   useEffect(() => window.app.onNotificationsChanged(() => {
     void refreshNotifications().catch((error: unknown) => setDashboardError(errorText(error)))
@@ -257,19 +271,29 @@ export default function ShellApp(): React.JSX.Element {
     avatarRef.current?.focus()
   }, [])
 
-  /**
-   * App-level sign-in / sign-out. There is no app-level auth IPC in the main
-   * process yet (auth today is per-connector: gh, Composio, …), so this flips
-   * local state only and never pretends a server round-trip succeeded.
-   * TODO: wire to real auth (preload `window.app.signIn`/`signOut` +
-   * `ipcMain.handle('auth:sign-in'/'auth:sign-out')`).
-   */
-  function handleSignIn(): void {
-    setIsSignedIn(true)
+  async function handleSignIn(): Promise<void> {
+    if (authBusy) return
+    setAuthBusy(true)
+    setDashboardError('')
+    try {
+      const res = await window.app.authSignIn()
+      if (res.ok) setAuth(res.state)
+      else setDashboardError(res.error)
+    } catch (error) {
+      setDashboardError(errorText(error))
+    } finally {
+      setAuthBusy(false)
+    }
   }
 
-  function handleSignOut(): void {
-    setIsSignedIn(false)
+  async function handleSignOut(): Promise<void> {
+    try {
+      const res = await window.app.authSignOut()
+      if (res.ok) setAuth(res.state)
+      else setDashboardError(res.error)
+    } catch (error) {
+      setDashboardError(errorText(error))
+    }
   }
 
   useEffect(() => {
@@ -335,7 +359,8 @@ export default function ShellApp(): React.JSX.Element {
     onUpdatesChanged: (cb) => window.app.onUpdatesChanged(cb),
     getRunLog: (runId) => window.app.getRunLog(runId)
   }), [navigate])
-  const initials = displayName(profile, t('shell.defaultProfile')).split(/\s+/).slice(0, 2).map((part) => part[0]?.toUpperCase()).join('')
+  const shownName = auth.signedIn && auth.name ? auth.name : displayName(profile, t('shell.defaultProfile'))
+  const initials = shownName.split(/\s+/).slice(0, 2).map((part) => part[0]?.toUpperCase()).join('')
 
   async function sendMessage(text: string): Promise<boolean> {
     if (busyRef.current) return false
@@ -518,13 +543,14 @@ export default function ShellApp(): React.JSX.Element {
             </button>
             <ProfileMenu
               open={profileMenuOpen}
-              name={displayName(profile, t('shell.defaultProfile'))}
+              name={shownName}
               initials={initials}
-              isSignedIn={isSignedIn}
+              isSignedIn={auth.signedIn}
+              busy={authBusy}
               onClose={closeProfileMenu}
               onOpenSettings={(tab) => window.app.openSettingsWindow(tab)}
-              onSignIn={handleSignIn}
-              onSignOut={handleSignOut}
+              onSignIn={() => void handleSignIn()}
+              onSignOut={() => void handleSignOut()}
             />
             {notificationsOpen && (
               <section className="shell-notifications-panel" aria-label={t('shell.notifications')}>

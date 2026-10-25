@@ -60,6 +60,11 @@ import { shouldAutoOpenApp } from './shell/launch-policy.js'
 import { applyAppBehaviorPatch, resolveAppBehavior, type AppBehavior } from './shell/app-prefs.js'
 import { installStdioGuard } from './agent/stdio-guard.js'
 import { createAppTray, watchDockVisibility } from './shell/app-lifecycle.js'
+import { AuthService } from './auth/auth-service.js'
+import { AuthChannels, registerAuthIpc } from './auth/auth-ipc.js'
+import { OAuthClient, readOAuthConfig } from './auth/oidc-client.js'
+import { startLoopback } from './auth/loopback.js'
+import { SafeStorageMcpVault } from './shell/mcp-vault.js'
 import { getShellAppWindow, openShellAppWindow } from './shell/shell-app-window.js'
 import type { RunSource } from '../shared/agent.js'
 import type { RunLogRecord } from '../shared/contracts/schedule.js'
@@ -139,6 +144,22 @@ class ElectronChatStore implements ChatStoreStorage {
 }
 
 const chatStore = new ChatStore(new ElectronChatStore())
+
+const authFile = new Store<Record<string, unknown>>({ name: 'palette-auth', defaults: {} })
+const authKv = {
+  get: (key: string): unknown => (authFile as unknown as { get: (k: string) => unknown }).get(key),
+  set: (key: string, value: unknown): void => (authFile as unknown as { set: (k: string, v: unknown) => void }).set(key, value)
+}
+const authService = new AuthService({
+  config: readOAuthConfig(),
+  vault: new SafeStorageMcpVault(authKv, safeStorage),
+  identityStore: authKv,
+  canEncrypt: () => safeStorage.isAsyncEncryptionAvailable(),
+  openExternal: (url) => shell.openExternal(url),
+  createClient: (config) => new OAuthClient(config),
+  startLoopback: (state) => startLoopback(state)
+})
+
 const settingsShellRuntime = createSettingsShellRuntime(safeStorage)
 
 const connectorFile = new Store<Record<string, unknown>>({ name: 'palette-connectors', defaults: {} })
@@ -378,6 +399,10 @@ function wireIpc(): void {
   }
   registerChatIpc(ipcMain, chatStore)
   settingsShellRuntime.registerIpc(ipcMain)
+  registerAuthIpc(ipcMain, authService)
+  authService.onChange((state) => {
+    getShellAppWindow()?.webContents.send(AuthChannels.changed, state)
+  })
   fireRoutine = (routine) => {
     // Expired automations pause themselves and never fire.
     if (routine.expiresAt !== undefined && routine.expiresAt <= Date.now()) {
@@ -909,6 +934,7 @@ async function onReady(): Promise<void> {
   watchDockVisibility()
   await settingsShellRuntime.loadPlugins(app.getPath('userData'))
   wireIpc()
+  void authService.restore()
   scheduler.startAll()
   createTray()
   applyAutostart()

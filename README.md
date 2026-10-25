@@ -92,6 +92,27 @@ usage page is the source of truth.
 - Secrets (model keys, Composio keys) must never live in the renderer,
   localStorage, or plain files.
 
+## Sign-in (optional)
+
+Palette works fully without an account. To enable **Log in**, register an OAuth app with your provider
+(redirect URI: `http://127.0.0.1` — loopback, any port) and set:
+
+| Variable | Meaning |
+|---|---|
+| `PALETTE_OAUTH_CLIENT_ID` | OAuth client id (required) |
+| `PALETTE_OAUTH_AUTH_URL` | Authorization endpoint (https) |
+| `PALETTE_OAUTH_TOKEN_URL` | Token endpoint (https) |
+| `PALETTE_OAUTH_USERINFO_URL` | Userinfo endpoint (https) |
+| `PALETTE_OAUTH_SCOPES` | Default `openid profile email` |
+| `PALETTE_OAUTH_CLIENT_SECRET` | Only if the provider requires one for desktop apps |
+| `PALETTE_OAUTH_AUTH_PARAMS` | Extra authorize params, e.g. `access_type=offline&prompt=consent` |
+
+Google example: auth `https://accounts.google.com/o/oauth2/v2/auth`, token `https://oauth2.googleapis.com/token`,
+userinfo `https://openidconnect.googleapis.com/v1/userinfo`, params `access_type=offline&prompt=consent`.
+GitHub example: auth `https://github.com/login/oauth/authorize`, token `https://github.com/login/oauth/access_token`,
+userinfo `https://api.github.com/user`, scopes `read:user user:email`.
+Verify endpoints against the provider's current docs. Tokens are encrypted with Electron safeStorage; sign-in is disabled if it is unavailable.
+
 ## Repo notes / deviations from the spec
 
 - **Preload is CJS** (`scripts/build-preload.mjs` via esbuild →

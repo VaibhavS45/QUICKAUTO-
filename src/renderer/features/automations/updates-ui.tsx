@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react'
-import { Check, ChevronDown, ChevronLeft, ChevronUp, Copy, File, Play, Search } from 'lucide-react'
+import { Check, ChevronDown, ChevronLeft, ChevronRight, ChevronUp, Copy, File, Play, Search } from 'lucide-react'
 import type { RunRecord } from '../../../shared/contracts/schedule.js'
 import { formatDate, formatTime } from '../../lib/format.js'
 import { localDayKey, routineTitle } from './dates.js'
@@ -106,10 +106,11 @@ function CopyButton({ text }: { text: string }): React.JSX.Element {
 
 /* ------------------------------------------------------------------ B · Activity feed */
 
-export function UpdatesList({ runs, onBack }: { runs: RunRecord[]; onBack?: () => void }): React.JSX.Element {
+export function UpdatesList({ runs, onBack, onSelect }: { runs: RunRecord[]; onBack?: () => void; onSelect?: (run: RunRecord) => void }): React.JSX.Element {
   const sorted = useMemo(() => newestFirst(runs), [runs])
   const [filter, setFilter] = useState<RunFilter>('all')
-  const [openId, setOpenId] = useState<string | null>(() => sorted[0]?.id ?? null)
+  const [openChoice, setOpenChoice] = useState<string | null | undefined>(undefined)
+  const openId = openChoice === undefined ? (sorted[0]?.id ?? null) : openChoice
   const groups = useMemo(() => groupByDay(sorted.filter((run) => matchesFilter(run.status, filter))), [sorted, filter])
 
   return (
@@ -156,7 +157,7 @@ export function UpdatesList({ runs, onBack }: { runs: RunRecord[]; onBack?: () =
                         type="button"
                         className="run-card-head"
                         aria-expanded={open}
-                        onClick={() => setOpenId(open ? null : run.id)}
+                        onClick={() => setOpenChoice(open ? null : run.id)}
                       >
                         <span className="run-card-main">
                           <strong>{routineTitle(run.title)}</strong>
@@ -169,7 +170,13 @@ export function UpdatesList({ runs, onBack }: { runs: RunRecord[]; onBack?: () =
                         <div className="run-card-body">
                           <div className="run-label-row">
                             <span className="run-kicker">Output</span>
-                            <CopyButton text={output} />
+                            <span className="run-label-actions">
+                              <CopyButton text={output} />
+                              <button type="button" className="run-open" onClick={() => onSelect?.(run)} disabled={!onSelect}>
+                                <ChevronRight size={12} aria-hidden="true" />
+                                Open
+                              </button>
+                            </span>
                           </div>
                           <pre className="run-code">{output || 'No output recorded yet.'}</pre>
                         </div>

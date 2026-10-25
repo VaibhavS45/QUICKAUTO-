@@ -50,6 +50,12 @@ describe('UpdatesList (activity feed)', () => {
   it('shows the empty message with no runs', () => {
     expect(renderToStaticMarkup(createElement(UpdatesList, { runs: [] }))).toContain('No outputs yet.')
   })
+
+  it('offers an Open action in the expanded card to reach run detail', () => {
+    const html = renderToStaticMarkup(createElement(UpdatesList, { runs, onSelect: () => {} }))
+    expect(html).toContain('aria-expanded="true"')
+    expect(html).toContain('Open</button>')
+  })
 })
 
 describe('RunDetailPage (master / detail)', () => {

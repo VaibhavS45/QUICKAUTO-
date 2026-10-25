@@ -3,14 +3,18 @@ import {
   NODE_H,
   NODE_W,
   blankStep,
+  branchLabel,
   canvasStepsForRoutine,
   canvasToCreate,
   canvasToPrompt,
   compileCanvasToSchedulerText,
   defaultCanvasSteps,
   describeRoutine,
+  directionPos,
   edgePath,
+  edgeSourceIndex,
   insertCanvasStep,
+  insertFromDirection,
   layoutPos,
   moveCanvasStep,
   moveStepTo,
@@ -102,8 +106,46 @@ describe('canvas steps', () => {
     expect(text).toContain('@gmail')
   })
 
-  it('creates a Manage automation from the chain, keeping the trigger time', () => {
-    const base = defaultCanvasSteps()
+  it('branches steps off any side, wiring conditions with Yes/No labels', () => {
+    let steps = defaultCanvasSteps()
+    steps = updateCanvasStep(steps, steps[1]!.id, { kind: 'filter', title: 'Filter' })
+    const filter = steps[1]!
+    expect(branchLabel(filter, 'right')).toBe('Yes')
+    expect(branchLabel(filter, 'down')).toBe('No')
+    expect(branchLabel(filter, 'left')).toBeUndefined()
+
+    const yes = insertFromDirection(steps, filter.id, 'right', 'gmail', { title: 'Gmail', subtitle: 'send it' })
+    const yesStep = yes[2]!
+    expect(yesStep.branch).toBe('Yes')
+    expect(yesStep.from).toBe(filter.id)
+    expect(yesStep.pos).toEqual(directionPos(filter, 'right'))
+
+    const no = insertFromDirection(yes, filter.id, 'down', 'action', { title: 'Action', subtitle: 'skip it' })
+    const noStep = no[2]!
+    expect(noStep.branch).toBe('No')
+    expect(edgeSourceIndex(no, 2)).toBe(1)
+    expect(edgeSourceIndex(no, 0)).toBe(-1)
+
+    // Both branches point back at the condition; the chain still reads in order.
+    expect(no.find((s) => s.id === yesStep.id)?.from).toBe(filter.id)
+
+    // A vertical edge leaves the bottom of the condition, not its right side.
+    const down = edgePath(filter.pos, noStep.pos)
+    expect(down).toMatch(/^M \d+ \d+ C /)
+    expect(down.startsWith(`M ${filter.pos.x + NODE_W / 2} `)).toBe(true)
+  })
+
+  it('reparents children when their step is deleted', () => {
+    const steps = defaultCanvasSteps()
+    const child = insertFromDirection(steps, steps[1]!.id, 'right', 'action', { title: 'Action', subtitle: 'child' })
+    const removed = removeCanvasStep(child, steps[1]!.id)
+    expect(removed).toHaveLength(child.length - 1)
+    const orphan = removed.find((s) => s.title === 'Action' && s.subtitle === 'child')!
+    expect(orphan.from).toBeUndefined()
+    expect(edgeSourceIndex(removed, removed.indexOf(orphan))).toBe(0)
+  })
+
+  it('creates a Manage automation from the chain, keeping the trigger time', () => {    const base = defaultCanvasSteps()
     const steps = updateCanvasStep(base, base[0]!.id, { subtitle: 'weekly · 6:30 pm' })
     const input = canvasToCreate(steps, 'Morning briefing', new Date(2026, 9, 25, 8, 0))
     expect(input.kind).toBe('advanced')

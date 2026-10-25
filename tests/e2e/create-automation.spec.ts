@@ -106,6 +106,7 @@ test('the canvas shows the stored task and writes edits back', async () => {
       .toBe(1)
 
     await shell.getByRole('button', { name: 'Canvas' }).click()
+    await shell.getByRole('button', { name: 'Edit weather in bangalore' }).click()
     const node = shell.getByRole('button', { name: /Configure step 2/ })
     await expect(node).toBeVisible({ timeout: 15_000 })
     await expect(node).toContainText('weather in bangalore')

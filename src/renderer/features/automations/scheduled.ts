@@ -64,6 +64,31 @@ export function automationMeta(automation: Automation): string {
   }
 }
 
+/** Manage filter menu: All plus the three ways an automation can run. */
+export type ManageFilter = 'all' | 'schedule' | 'trigger' | 'canvas'
+
+export const MANAGE_FILTERS: Array<{ id: ManageFilter; label: string }> = [
+  { id: 'all', label: 'All' },
+  { id: 'schedule', label: 'Schedule' },
+  { id: 'trigger', label: 'Trigger' },
+  { id: 'canvas', label: 'Canvas' }
+]
+
+/**
+ * A triggered task is a scheduled run whose prompt watches an app event:
+ * builder-compile writes `check @app for ...` into it. Canvases stay separate.
+ * ponytail: prompt-text heuristic; switch to an explicit kind when one lands.
+ */
+export function manageFilterOf(automation: Automation): Exclude<ManageFilter, 'all'> {
+  if (automation.kind === 'advanced') return 'canvas'
+  if (/check\s+@[a-z-]+/i.test(automation.prompt ?? '')) return 'trigger'
+  return 'schedule'
+}
+
+export function matchesManageFilter(automation: Automation, filter: ManageFilter): boolean {
+  return filter === 'all' || manageFilterOf(automation) === filter
+}
+
 export interface AutomationDraft {
   title: string
   prompt: string

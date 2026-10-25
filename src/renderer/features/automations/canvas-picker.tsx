@@ -120,13 +120,14 @@ export function CanvasNodeIcon({ step }: { step: Pick<CanvasStep, 'kind' | 'titl
  * Add-step panel, n8n style: search on top, then the two operations a workflow
  * has — what starts it, and what it does.
  */
-export function CanvasStepPicker({ onPick, onClose, ariaLabel, zoom = 1 }: {
+export function CanvasStepPicker({ onPick, onClose, ariaLabel, zoom = 1, initialTab = 'step' }: {
   onPick(target: CanvasPickTarget, pick: CanvasPick): void
   onClose(): void
   ariaLabel: string
   zoom?: number
+  initialTab?: CanvasPickTarget
 }): React.JSX.Element {
-  const [tab, setTab] = useState<CanvasPickTarget>('step')
+  const [tab, setTab] = useState<CanvasPickTarget>(initialTab)
   const [query, setQuery] = useState('')
 
   const rows = (target: CanvasPickTarget): CanvasPick[] => {

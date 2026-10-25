@@ -36,7 +36,7 @@ export function AutomationCard({ automation, onOpen }: {
       </div>
       <p className="st-meta">{automationMeta(automation)}</p>
       <h3 className="st-title">{automation.title}</h3>
-      {automation.kind !== 'advanced' && automation.prompt && (
+      {automation.prompt && (
         <p className="st-preview">{automation.prompt}</p>
       )}
     </article>

@@ -112,15 +112,76 @@
   background: var(--surface);
 }
 
+.automations-filter-wrap {
+  position: relative;
+}
+
 .automations-filter {
   width: 34px;
   padding: 0 !important;
 }
 
-.automations-filter.is-on {
-  border-color: var(--info);
-  color: var(--info-bright);
-  background: var(--info-soft);
+/* Neutral focus ring: the ember halo around the button reads as a glow. */
+.automations-filter:focus-visible,
+.automations-filter-menu button:focus-visible {
+  outline-color: var(--border-strong);
+}
+
+.automations-filter-menu {
+  position: absolute;
+  top: calc(100% + 6px);
+  left: 0;
+  z-index: 30;
+  display: grid;
+  gap: 2px;
+  min-width: 168px;
+  padding: 6px;
+  border: 1px solid var(--border-strong);
+  border-radius: 14px;
+  background: var(--surface);
+  box-shadow: 0 16px 40px var(--overlay);
+  animation: automations-filter-in 140ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+.automations-filter-menu button {
+  justify-content: flex-start;
+  height: auto;
+  padding: 8px 10px;
+  border: 0;
+  border-radius: 9px;
+  color: var(--text-secondary);
+  background: transparent;
+  font-size: var(--font-md);
+}
+
+.automations-filter-menu button:hover,
+.automations-filter-menu button:focus-visible {
+  border-color: transparent;
+  color: var(--text);
+  background: var(--surface-2);
+}
+
+.automations-filter-menu button[aria-checked="true"] {
+  color: var(--text);
+  background: var(--surface-2);
+  font-weight: 600;
+}
+
+@keyframes automations-filter-in {
+  from {
+    opacity: 0;
+    transform: translateY(-4px) scale(0.97);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .automations-filter-menu {
+    animation: none;
+  }
 }
 
 .automations-create-btn {
@@ -362,6 +423,39 @@
   background: var(--black-2);
   font-size: 10.5px;
   white-space: nowrap;
+}
+
+.canvas-head-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: none;
+}
+
+.canvas-head-new {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  min-height: 28px;
+  padding: 0 12px;
+  border: 1px solid var(--line-2);
+  border-radius: 8px;
+  color: var(--text-secondary);
+  background: transparent;
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.canvas-head-new:hover {
+  border-color: var(--border-strong);
+  color: var(--text);
+}
+
+.canvas-head-new span {
+  color: var(--text-muted);
+  font-size: 14px;
+  line-height: 1;
 }
 
 .canvas-head-create {
@@ -625,45 +719,6 @@
   pointer-events: none;
 }
 
-.n8n-edge-add {
-  position: absolute;
-  z-index: 4;
-  display: grid;
-  place-items: center;
-  width: 64px;
-  height: 44px;
-  transform: translate(-50%, -50%);
-}
-
-.n8n-edge-add > button {
-  display: grid;
-  place-items: center;
-  width: 24px;
-  height: 24px;
-  border: 1px solid var(--line-2);
-  border-radius: 50%;
-  color: var(--text-secondary);
-  background: var(--black-2);
-  font: inherit;
-  font-size: 14px;
-  line-height: 1;
-  opacity: 0;
-  cursor: pointer;
-  transition: opacity 140ms ease, border-color 140ms ease, color 140ms ease;
-}
-
-/* The "+" stays out of the way until the gap is hovered (n8n behaviour). */
-.n8n-edge-add:hover > button,
-.n8n-edge-add > button:focus-visible,
-.n8n-edge-add > button[aria-expanded='true'] {
-  opacity: 1;
-}
-
-.n8n-edge-add > button:hover {
-  border-color: var(--info);
-  color: #fff;
-}
-
 .n8n-end {
   position: absolute;
   transform: translateY(22px);
@@ -687,6 +742,321 @@
 .n8n-end > button:hover {
   border-color: var(--info);
   color: var(--text-secondary);
+}
+
+/* Canvas opener: create a new graph or reopen a previous one. */
+.automations-canvas.is-canvas-landing {
+  position: relative;
+  display: grid;
+  place-items: center;
+  margin: 0 12px 12px;
+  overflow: hidden;
+  border: 1px solid var(--line-2);
+  border-radius: var(--radius-xl);
+  background: var(--bg);
+}
+
+.canvas-landing {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: 32px;
+  width: min(920px, calc(100% - 48px));
+  padding: 32px 0;
+}
+
+.canvas-landing-intro {
+  display: grid;
+  gap: 10px;
+  width: 320px;
+}
+
+.canvas-landing-mark {
+  display: grid;
+  place-items: center;
+  width: 46px;
+  height: 46px;
+  border: 1px solid var(--line-2);
+  border-radius: 12px;
+  color: var(--info);
+  background: var(--black-2);
+  box-shadow: inset 0 1px 0 var(--highlight);
+}
+
+.canvas-landing-intro h2 {
+  margin: 4px 0 0;
+  color: var(--text);
+  font-size: 21px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+}
+
+.canvas-landing-intro p {
+  margin: 0;
+  color: var(--text-muted);
+  font-size: 12.5px;
+  line-height: 1.6;
+}
+
+.canvas-landing-new {
+  justify-self: start;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 36px;
+  margin-top: 6px;
+  padding: 0 18px;
+  border: 1px solid var(--border-strong);
+  border-radius: 9px;
+  color: var(--on-bright);
+  background: var(--ink);
+  font: inherit;
+  font-size: 12.5px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.canvas-landing-new:hover {
+  border-color: var(--info);
+}
+
+.canvas-landing-new span {
+  color: var(--text-secondary);
+  font-size: 15px;
+  line-height: 1;
+}
+
+.canvas-landing-recent {
+  display: grid;
+  gap: 8px;
+  width: min(400px, 100%);
+}
+
+.canvas-landing-recent h3 {
+  margin: 0;
+  color: var(--text-muted);
+  font-family: var(--font-mono);
+  font-size: 10px;
+  font-weight: 500;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+.canvas-landing-empty {
+  margin: 0;
+  padding: 18px;
+  border: 1px dashed var(--line-2);
+  border-radius: 10px;
+  color: var(--text-disabled);
+  font-size: 12px;
+  line-height: 1.6;
+}
+
+.canvas-landing-list {
+  display: grid;
+  gap: 6px;
+  max-height: 264px;
+  overflow-y: auto;
+  scrollbar-width: none;
+}
+
+.canvas-landing-list::-webkit-scrollbar {
+  display: none;
+}
+
+.canvas-landing-list > button {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 10px 12px;
+  border: 1px solid var(--surface-2);
+  border-radius: 10px;
+  color: var(--text);
+  background: var(--surface);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.canvas-landing-list > button:hover,
+.canvas-landing-list > button:focus-visible {
+  border-color: var(--border-strong);
+  background: var(--surface-2);
+}
+
+.canvas-landing-icon {
+  display: grid;
+  place-items: center;
+  width: 30px;
+  height: 30px;
+  flex: 0 0 30px;
+  border: 1px solid var(--surface-2);
+  border-radius: 8px;
+  color: var(--text-secondary);
+}
+
+.canvas-landing-copy {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+  flex: 1;
+}
+
+.canvas-landing-copy strong {
+  overflow: hidden;
+  font-size: 12.5px;
+  font-weight: 500;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.canvas-landing-copy small {
+  overflow: hidden;
+  color: var(--text-muted);
+  font-size: 10.5px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.canvas-landing-go {
+  flex: none;
+  color: var(--text-disabled);
+}
+
+/* Faint orbit behind the graph; it does not pan or zoom with the world. */
+.n8n-backdrop {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+}
+
+/* Empty graph: one dashed target in the middle, n8n style. */
+.n8n-empty {
+  position: absolute;
+  z-index: 4;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+}
+
+.n8n-empty > button {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  min-width: 220px;
+  min-height: 62px;
+  padding: 0 28px;
+  border: 1.5px dashed var(--border-strong);
+  border-radius: 10px;
+  color: var(--text-secondary);
+  background: rgb(0 0 0 / 26%);
+  font: inherit;
+  font-size: 16px;
+  font-weight: 400;
+  cursor: pointer;
+}
+
+.n8n-empty > button:hover,
+.n8n-empty > button[aria-expanded='true'] {
+  border-color: var(--info);
+  color: var(--text);
+}
+
+.n8n-empty > button > span {
+  font-size: 20px;
+  font-weight: 300;
+  line-height: 1;
+}
+
+.n8n-empty .n8n-picker {
+  top: calc(100% + 10px);
+  left: 50%;
+  transform: translateX(-50%) scale(var(--pick-scale, 1));
+  transform-origin: top center;
+}
+
+/* Branch handles: one plus per side; conditions name their outputs. */
+.n8n-dir {
+  position: absolute;
+  z-index: 3;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  width: 20px;
+  height: 20px;
+  padding: 0;
+  border: 1px solid var(--line-2);
+  border-radius: 50%;
+  color: var(--text-muted);
+  background: var(--black-2);
+  font: inherit;
+  font-size: 12px;
+  line-height: 1;
+  opacity: 0;
+  cursor: pointer;
+  transition: opacity 120ms ease, border-color 120ms ease, color 120ms ease;
+}
+
+.n8n-node:hover .n8n-dir,
+.n8n-dir:focus-visible,
+.n8n-dir[aria-expanded='true'] {
+  opacity: 1;
+}
+
+.n8n-dir:hover,
+.n8n-dir[aria-expanded='true'] {
+  border-color: var(--info);
+  color: #fff;
+}
+
+.n8n-dir-right { top: 50%; right: -32px; transform: translateY(-50%); }
+.n8n-dir-left { top: 50%; left: -32px; transform: translateY(-50%); }
+.n8n-dir-down { left: 50%; bottom: -32px; transform: translateX(-50%); }
+.n8n-dir-up { left: 50%; top: -32px; transform: translateX(-50%); }
+
+.n8n-dir.has-label {
+  width: auto;
+  padding: 0 8px;
+  border-radius: 999px;
+}
+
+.n8n-dir small {
+  color: var(--text-secondary);
+  font-size: 9.5px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.n8n-dir-picker {
+  position: absolute;
+  z-index: 9;
+}
+
+.n8n-dir-picker .n8n-picker {
+  top: 0;
+  left: 0;
+  transform: scale(var(--pick-scale, 1));
+  transform-origin: top left;
+}
+
+.n8n-edge-label {
+  fill: var(--text-muted);
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 0.04em;
+  paint-order: stroke;
+  stroke: var(--bg);
+  stroke-width: 4px;
+  stroke-linejoin: round;
+  text-transform: uppercase;
 }
 
 .automations-body {
@@ -2334,13 +2704,6 @@
   text-align: left;
 }
 
-.n8n-edge-add .n8n-picker {
-  top: 24px;
-  left: 50%;
-  transform: translateX(-50%) scale(var(--pick-scale, 1));
-  transform-origin: top center;
-}
-
 .n8n-end .n8n-picker {
   top: calc(100% + 8px);
   left: 0;
@@ -3121,10 +3484,18 @@
   background: var(--surface);
 }
 
-.light .automations-filter.is-on {
-  border-color: var(--info);
-  color: var(--info);
-  background: var(--info-bright);
+.light .automations-filter-menu button {
+  border-color: transparent;
+  color: var(--text-secondary);
+  background: transparent;
+}
+
+.light .automations-filter-menu button:hover,
+.light .automations-filter-menu button:focus-visible,
+.light .automations-filter-menu button[aria-checked="true"] {
+  border-color: transparent;
+  color: var(--text);
+  background: var(--surface-2);
 }
 
 .light .automations-create-btn {

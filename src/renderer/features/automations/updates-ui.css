@@ -43,6 +43,15 @@
 .run-copy:hover:not(:disabled) { color: var(--ash-1); border-color: var(--line-3); }
 .run-copy:disabled { opacity: 0.45; cursor: default; }
 
+.run-label-actions { display: inline-flex; align-items: center; gap: 8px; }
+.run-open {
+  display: inline-flex; align-items: center; gap: 5px; height: 26px; padding: 0 11px;
+  border: 0; border-radius: 8px; background: var(--ember);
+  color: var(--text-on-accent); font: inherit; font-size: 12px; font-weight: 600; cursor: pointer;
+}
+.run-open:hover:not(:disabled) { background: var(--ember-hot); }
+.run-open:disabled { opacity: 0.45; cursor: default; }
+
 .run-label-row { display: flex; align-items: center; justify-content: space-between; }
 .run-empty { margin: 32px 0; color: var(--ash-2); font-size: 14px; }
 .run-empty.is-rail { margin: 16px 8px; font-size: 13px; }

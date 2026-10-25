@@ -882,7 +882,11 @@ export default function AutomationsView(props: FeatureProps): React.JSX.Element 
 
       {!loading && !error && tab === 'updates' && (
         <div className="automations-body updates-body">
-          <UpdatesList runs={runs} onBack={() => props.shell.navigate('home')} />
+          <UpdatesList
+            runs={runs}
+            onBack={() => props.shell.navigate('home')}
+            onSelect={(run) => props.shell.navigate('automations', { automationTab: 'updates', focusRunId: run.id })}
+          />
         </div>
       )}
 

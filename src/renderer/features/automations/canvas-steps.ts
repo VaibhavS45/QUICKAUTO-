@@ -298,7 +298,7 @@ export function canvasStepsForRoutine(routine: CanvasRoutine | undefined): Canva
       subtitle: `${routine.repeat} · ${timeLabelLocal(routine.runAt)}`,
       pos: layoutPos(0)
     },
-    { id: makeStepId(), kind: 'action', title: 'Action', filled: true, subtitle: titleOf(routine.prompt), pos: layoutPos(1) }
+    { id: makeStepId(), kind: 'action', title: 'Action', filled: true, subtitle: routine.prompt, pos: layoutPos(1) }
   ]
   for (const tool of routine.tools) {
     if (/gmail|email/i.test(tool)) {

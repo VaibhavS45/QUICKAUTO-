@@ -129,6 +129,51 @@ test('the canvas edits a stored canvas automation and writes edits back', async 
         return res.ok ? res.automations?.[0]?.prompt ?? '' : ''
       }, { timeout: 20_000 })
       .toBe('weather in bengaluru today')
+
+    // Editing writes back to the same automation instead of making another.
+    const stored = await shell.evaluate(async () => window.app.automationsList())
+    expect(stored.automations).toHaveLength(1)
+
+    await shell.getByRole('button', { name: 'Manage' }).click()
+    await expect(shell.getByRole('button', { name: 'Open weather in bangalore' })).toBeVisible({ timeout: 15_000 })
+    await expect(shell.locator('.st-grid')).toHaveCount(1)
+  } finally {
+    await instance.close()
+  }
+})
+
+test('the canvas saves the open automation instead of creating another', async () => {
+  const instance = await launch()
+  const { app } = instance
+  try {
+    await expect.poll(() => app.windows().length, { timeout: 30_000 }).toBe(1)
+    const shell = app.windows()[0]!
+
+    await shell.getByRole('button', { name: 'Canvas' }).click()
+    await shell.getByRole('button', { name: 'Create', exact: true }).click()
+    await shell.getByRole('button', { name: 'Create', exact: true }).click()
+    const bar = shell.getByRole('form', { name: 'Describe the automation' })
+    await bar.getByLabel('Describe the automation').fill('weather in bangalore')
+    await bar.getByRole('button', { name: 'Create' }).click()
+
+    await expect
+      .poll(async () => {
+        const res = await shell.evaluate(async () => window.app.automationsList())
+        return res.ok ? res.automations?.length ?? 0 : -1
+      }, { timeout: 20_000 })
+      .toBe(1)
+
+    // An automation is open: the header saves it, it no longer offers Create.
+    await expect(shell.getByRole('button', { name: 'Save' })).toBeVisible({ timeout: 15_000 })
+    await expect(shell.getByRole('button', { name: 'Create', exact: true })).toHaveCount(0)
+    await shell.getByRole('button', { name: 'Save' }).click()
+    await expect(shell.getByRole('form', { name: 'Describe the automation' })).toHaveCount(0)
+
+    const stored = await shell.evaluate(async () => window.app.automationsList())
+    expect(stored.automations).toHaveLength(1)
+
+    await shell.getByRole('button', { name: 'Manage' }).click()
+    await expect(shell.getByRole('button', { name: 'Open weather in bangalore' })).toBeVisible({ timeout: 15_000 })
   } finally {
     await instance.close()
   }

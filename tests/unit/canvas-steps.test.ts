@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest'
+import type { Automation } from '../../src/shared/contracts/automations.js'
 import {
   NODE_H,
   NODE_W,
@@ -6,6 +7,7 @@ import {
   branchLabel,
   canvasStepsForRoutine,
   canvasToCreate,
+  canvasToPatch,
   canvasToPrompt,
   compileCanvasToSchedulerText,
   defaultCanvasSteps,
@@ -143,6 +145,29 @@ describe('canvas steps', () => {
     const orphan = removed.find((s) => s.title === 'Action' && s.subtitle === 'child')!
     expect(orphan.from).toBeUndefined()
     expect(edgeSourceIndex(removed, removed.indexOf(orphan))).toBe(0)
+  })
+
+  it('round-trips a reopened canvas without truncating its prompt', () => {
+    const prompt = 'Summarize every unread mail, group it by sender and list the action I owe each sender today'
+    const automation: Automation = {
+      id: 'a-long',
+      kind: 'advanced',
+      title: 'Mail digest',
+      prompt,
+      status: 'active',
+      schedule: { type: 'daily', time: '09:00' },
+      autoApprove: false,
+      runMode: 'separate_task',
+      agent: '',
+      connectors: ['gmail'],
+      createdAt: new Date().toISOString()
+    }
+    const steps = canvasStepsForRoutine({ prompt, tools: ['gmail'], runAt: Date.now(), repeat: 'daily' })
+    expect(steps[1]?.subtitle).toBe(prompt)
+    // Only a node move: nothing the stored automation does not already have.
+    const patch = canvasToPatch(moveStepTo(steps, steps[1]!.id, 320, 320), automation)
+    expect(patch.prompt).toBeUndefined()
+    expect(patch.connectors).toBeUndefined()
   })
 
   it('creates a Manage automation from the chain, keeping the trigger time', () => {    const base = defaultCanvasSteps()

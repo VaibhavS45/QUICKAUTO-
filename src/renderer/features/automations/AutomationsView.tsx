@@ -292,6 +292,11 @@ export default function AutomationsView(props: FeatureProps): React.JSX.Element 
   const viewportRef = useRef<HTMLDivElement | null>(null)
   /** The canvas that was just created keeps the nodes it was built from. */
   const keepCanvasRef = useRef('')
+  /** The steps last read from or written to the stored automation; skips the autosave. */
+  const savedStepsRef = useRef<CanvasStep[] | null>(null)
+  /** Which canvas the on-screen steps belong to, so a slow autosave never hits the wrong id. */
+  const stepsOwnerRef = useRef('')
+  const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const dragRef = useRef<
     | { mode: 'pan'; sx: number; sy: number; ox: number; oy: number }
     | { mode: 'node'; id: string; dx: number; dy: number }
@@ -309,6 +314,7 @@ export default function AutomationsView(props: FeatureProps): React.JSX.Element 
   const [canvasDescribe, setCanvasDescribe] = useState(false)
   const [canvasPrompt, setCanvasPrompt] = useState('')
   const [canvasBusy, setCanvasBusy] = useState(false)
+  const [canvasSaving, setCanvasSaving] = useState(false)
   const [canvasError, setCanvasError] = useState('')
   /** The Canvas tab opens on a chooser; this flips once a graph is opened. */
   const [canvasStarted, setCanvasStarted] = useState(false)
@@ -384,6 +390,8 @@ export default function AutomationsView(props: FeatureProps): React.JSX.Element 
     setCanvasStarted(true)
     setCanvasKey('blank')
     setCanvasSteps([])
+    savedStepsRef.current = null
+    stepsOwnerRef.current = 'blank'
     props.shell.navigate('automations', { automationTab: 'canvas' })
     setCanvasDescribe(true)
   }, [createKind, props.shell])
@@ -483,6 +491,8 @@ export default function AutomationsView(props: FeatureProps): React.JSX.Element 
     setResumeSkipped(false)
     setCanvasKey('blank')
     setCanvasSteps([])
+    savedStepsRef.current = null
+    stepsOwnerRef.current = 'blank'
     setVp({ x: 24, y: 0, z: 1 })
     setCanvasPrompt('')
     setCanvasDescribe(false)
@@ -535,6 +545,8 @@ export default function AutomationsView(props: FeatureProps): React.JSX.Element 
       await refresh()
       // The nodes on screen are what was just created: don't rebuild them.
       keepCanvasRef.current = res.automation.id
+      savedStepsRef.current = steps
+      stepsOwnerRef.current = res.automation.id
       setCanvasKey(res.automation.id)
       setCanvasSteps(steps)
       setCanvasPrompt('')
@@ -571,7 +583,10 @@ export default function AutomationsView(props: FeatureProps): React.JSX.Element 
       keepCanvasRef.current = ''
       return
     }
-    setCanvasSteps(canvasStepsForRoutine(canvasRoutine))
+    const loaded = canvasStepsForRoutine(canvasRoutine)
+    savedStepsRef.current = loaded
+    stepsOwnerRef.current = canvasRoutineKey
+    setCanvasSteps(loaded)
     setSelectedStepId('')
     setOpenStepMenuId('')
     setAddAt(null)
@@ -590,17 +605,82 @@ export default function AutomationsView(props: FeatureProps): React.JSX.Element 
   }
 
   /** Write the edited nodes back onto the automation they came from. */
-  async function persistCanvas(steps: CanvasStep[]): Promise<void> {
-    if (!canvasAutomation) return
-    const patch = canvasToPatch(steps, canvasAutomation)
-    if (Object.keys(patch).length === 0) return
-    const res = await window.app.automationsUpdate(canvasAutomation.id, patch)
+  const persistCanvas = useCallback(async (automation: Automation | undefined, steps: CanvasStep[]): Promise<boolean> => {
+    if (!automation) return false
+    const patch = canvasToPatch(steps, automation)
+    if (Object.keys(patch).length === 0) return true
+    const res = await window.app.automationsUpdate(automation.id, patch)
     if (!res.ok || !res.automation) {
       setError(res.error || 'Could not save the automation.')
-      return
+      return false
     }
     setAutomations((list) => list.map((item) => (item.id === res.automation!.id ? res.automation! : item)))
+    return true
+  }, [])
+
+  /** A debounced edit waiting to be written; flushed when the canvas closes. */
+  const pendingSaveRef = useRef<{ automation: Automation; steps: CanvasStep[] } | null>(null)
+  const canvasIdRef = useRef('')
+  canvasIdRef.current = canvasAutomation?.id ?? ''
+  const flushPendingSave = useCallback((): void => {
+    const pending = pendingSaveRef.current
+    if (!pending) return
+    pendingSaveRef.current = null
+    const previous = savedStepsRef.current
+    // Optimistic: a re-render from the update must not schedule the same save again.
+    savedStepsRef.current = pending.steps
+    void persistCanvas(pending.automation, pending.steps).then((ok) => {
+      if (!ok) savedStepsRef.current = previous
+    })
+  }, [persistCanvas])
+
+  /** Explicit save from the canvas header; skips the autosave wait. */
+  async function saveCanvas(): Promise<void> {
+    if (!canvasAutomation || canvasSaving) return
+    if (saveTimerRef.current) {
+      clearTimeout(saveTimerRef.current)
+      saveTimerRef.current = null
+    }
+    pendingSaveRef.current = null
+    setCanvasSaving(true)
+    const previous = savedStepsRef.current
+    savedStepsRef.current = canvasSteps
+    try {
+      if (!(await persistCanvas(canvasAutomation, canvasSteps))) savedStepsRef.current = previous
+    } finally {
+      setCanvasSaving(false)
+    }
   }
+
+  // Node edits (add, delete, drag, tidy, inspector) save themselves after a
+  // short pause, so leaving and reopening a canvas never loses the graph.
+  useEffect(() => {
+    if (!canvasAutomation || stepsOwnerRef.current !== canvasAutomation.id) return
+    if (canvasSteps === savedStepsRef.current) return
+    pendingSaveRef.current = { automation: canvasAutomation, steps: canvasSteps }
+    saveTimerRef.current = setTimeout(() => {
+      saveTimerRef.current = null
+      flushPendingSave()
+    }, 500)
+    return () => {
+      if (saveTimerRef.current) {
+        clearTimeout(saveTimerRef.current)
+        saveTimerRef.current = null
+      }
+      // A different canvas replaced this one before the wait ended: write
+      // the edit to the automation it belongs to, not the newly opened one.
+      if (pendingSaveRef.current && pendingSaveRef.current.automation.id !== canvasIdRef.current) {
+        flushPendingSave()
+      }
+    }
+  }, [canvasAutomation, canvasSteps, flushPendingSave])
+
+  // Leaving the tab or unmounting must not drop the last edit still waiting.
+  useEffect(() => flushPendingSave, [flushPendingSave])
+  useEffect(() => {
+    if (tab === 'canvas') return
+    flushPendingSave()
+  }, [tab, flushPendingSave])
 
   const stepsRef = useRef(canvasSteps)
   stepsRef.current = canvasSteps
@@ -644,12 +724,10 @@ export default function AutomationsView(props: FeatureProps): React.JSX.Element 
     setAddDir(null)
   }
 
-  /** Step inspector save: update the node and write it back to the automation. */
+  /** Step inspector save: update the node; the autosave writes it back. */
   function applyStepEdit(patch: Partial<Pick<CanvasStep, 'kind' | 'title' | 'subtitle'>>): void {
     if (!selectedStep) return
-    const next = updateCanvasStep(canvasSteps, selectedStep.id, patch)
-    setCanvasSteps(next)
-    void persistCanvas(next)
+    setCanvasSteps(updateCanvasStep(canvasSteps, selectedStep.id, patch))
   }
 
   useEffect(() => {
@@ -933,14 +1011,26 @@ export default function AutomationsView(props: FeatureProps): React.JSX.Element 
               <button type="button" className="canvas-head-new" title="Start a new canvas" onClick={startNewCanvas}>
                 <span aria-hidden="true">+</span> New
               </button>
-              <button
-                type="button"
-                className="canvas-head-create"
-                title="Turn this canvas into an automation"
-                onClick={() => setCanvasDescribe(true)}
-              >
-                Create
-              </button>
+              {canvasAutomation ? (
+                <button
+                  type="button"
+                  className="canvas-head-create"
+                  title="Save changes to this automation"
+                  disabled={canvasSaving}
+                  onClick={() => void saveCanvas()}
+                >
+                  {canvasSaving ? 'Saving…' : 'Save'}
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  className="canvas-head-create"
+                  title="Turn this canvas into an automation"
+                  onClick={() => setCanvasDescribe(true)}
+                >
+                  Create
+                </button>
+              )}
             </div>
           </header>
           <div

@@ -927,6 +927,71 @@
   color: var(--text-disabled);
 }
 
+.canvas-landing-resume {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  margin-top: 4px;
+  color: var(--text-muted);
+  font-size: 11.5px;
+  line-height: 1.4;
+  cursor: pointer;
+}
+
+.canvas-landing-resume input {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.canvas-landing-switch {
+  position: relative;
+  flex: none;
+  width: 28px;
+  height: 17px;
+  margin-top: 1px;
+  border: 1px solid var(--line-2);
+  border-radius: 999px;
+  background: var(--black-2);
+  transition: border-color 140ms ease, background 140ms ease;
+}
+
+.canvas-landing-switch::after {
+  content: '';
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 11px;
+  height: 11px;
+  border-radius: 50%;
+  background: var(--text-muted);
+  transition: transform 140ms ease, background 140ms ease;
+}
+
+.canvas-landing-resume input:checked + .canvas-landing-switch {
+  border-color: var(--info);
+  background: rgb(124 140 255 / 18%);
+}
+
+.canvas-landing-resume input:checked + .canvas-landing-switch::after {
+  transform: translateX(11px);
+  background: var(--text);
+}
+
+.canvas-landing-resume input:focus-visible + .canvas-landing-switch {
+  outline: 2px solid var(--accent-ring);
+  outline-offset: 2px;
+}
+
+.canvas-landing-resume small {
+  display: block;
+  margin-top: 1px;
+  color: var(--text-disabled);
+  font-size: 10.5px;
+}
+
 /* Faint orbit behind the graph; it does not pan or zoom with the world. */
 .n8n-backdrop {
   position: absolute;
@@ -949,28 +1014,30 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 10px;
-  min-width: 220px;
-  min-height: 62px;
-  padding: 0 28px;
+  gap: 8px;
+  min-width: 158px;
+  min-height: 42px;
+  padding: 0 18px;
   border: 1.5px dashed var(--border-strong);
-  border-radius: 10px;
+  border-radius: 9px;
   color: var(--text-secondary);
-  background: rgb(0 0 0 / 26%);
+  background: rgb(0 0 0 / 22%);
   font: inherit;
-  font-size: 16px;
+  font-size: 13px;
   font-weight: 400;
   cursor: pointer;
+  transition: border-color 140ms ease, color 140ms ease, background 140ms ease;
 }
 
 .n8n-empty > button:hover,
 .n8n-empty > button[aria-expanded='true'] {
   border-color: var(--info);
   color: var(--text);
+  background: rgb(0 0 0 / 32%);
 }
 
 .n8n-empty > button > span {
-  font-size: 20px;
+  font-size: 16px;
   font-weight: 300;
   line-height: 1;
 }
@@ -1038,13 +1105,40 @@
 .n8n-dir-picker {
   position: absolute;
   z-index: 9;
+  width: 0;
+  height: 0;
 }
 
-.n8n-dir-picker .n8n-picker {
+/* The panel grows out of the plus that was clicked, not a detached corner. */
+.n8n-dir-picker.is-right .n8n-picker {
   top: 0;
+  right: auto;
+  left: 10px;
+  transform: translateY(-50%) scale(var(--pick-scale, 1));
+  transform-origin: left center;
+}
+
+.n8n-dir-picker.is-left .n8n-picker {
+  top: 0;
+  right: 10px;
+  left: auto;
+  transform: translateY(-50%) scale(var(--pick-scale, 1));
+  transform-origin: right center;
+}
+
+.n8n-dir-picker.is-down .n8n-picker {
+  top: 10px;
   left: 0;
-  transform: scale(var(--pick-scale, 1));
-  transform-origin: top left;
+  transform: translateX(-50%) scale(var(--pick-scale, 1));
+  transform-origin: top center;
+}
+
+.n8n-dir-picker.is-up .n8n-picker {
+  top: auto;
+  bottom: 10px;
+  left: 0;
+  transform: translateX(-50%) scale(var(--pick-scale, 1));
+  transform-origin: bottom center;
 }
 
 .n8n-edge-label {
@@ -1057,6 +1151,54 @@
   stroke-width: 4px;
   stroke-linejoin: round;
   text-transform: uppercase;
+}
+
+/* Soft entrances: the chooser, the graph, the steps and the pickers. */
+@keyframes n8n-surface-in {
+  from { opacity: 0; transform: translateY(4px); }
+  to { opacity: 1; transform: none; }
+}
+
+@keyframes n8n-node-in {
+  from { opacity: 0; transform: translateY(4px) scale(0.985); }
+  to { opacity: 1; transform: none; }
+}
+
+@keyframes n8n-fade-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+.automations-canvas {
+  animation: n8n-surface-in 180ms ease-out;
+}
+
+.n8n-node {
+  animation: n8n-node-in 160ms ease-out;
+}
+
+.n8n-picker {
+  animation: n8n-fade-in 130ms ease-out;
+}
+
+.canvas-landing-list > button {
+  transition: border-color 120ms ease, background 120ms ease, transform 120ms ease;
+}
+
+.canvas-landing-list > button:hover {
+  transform: translateX(2px);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .automations-canvas,
+  .n8n-node,
+  .n8n-picker {
+    animation: none;
+  }
+
+  .canvas-landing-list > button:hover {
+    transform: none;
+  }
 }
 
 .automations-body {

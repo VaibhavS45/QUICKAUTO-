@@ -2,6 +2,7 @@ import { createOpencodeClient, type OpencodeClient } from '@opencode-ai/sdk'
 import { spawn, type ChildProcess } from 'node:child_process'
 import { randomBytes } from 'node:crypto'
 import { createServer } from 'node:net'
+import { resolveOpenCodeBinary } from './agent-provider.js'
 
 /**
  * Manages one `opencode serve` child process for the app lifetime.
@@ -132,7 +133,8 @@ export class OpencodeServerManager {
   }
 
   private async launch(): Promise<string> {
-    const binary = this.deps.binary ?? 'opencode'
+    // Resolve at launch: an install performed during this run is picked up.
+    const binary = this.deps.binary ?? resolveOpenCodeBinary()
     const port = await (this.deps.pickPort ?? defaultPickPort)()
     const password = randomBytes(32).toString('base64url')
     const url = `http://127.0.0.1:${port}`

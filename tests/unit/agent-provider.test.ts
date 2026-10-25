@@ -4,6 +4,8 @@ import {
   AgentProviderService,
   DEFAULT_ACP_MODEL,
   detectHarnesses,
+  findOpenCodeBinary,
+  openCodeCandidates,
   parseVersion,
   pickAutoEngine,
   resolveOpenCodeBinary
@@ -96,6 +98,21 @@ describe('resolveOpenCodeBinary', () => {
     expect(['/opt/homebrew/bin/opencode', '/usr/local/bin/opencode', '/usr/bin/opencode', 'opencode'])
       .toContain(resolveOpenCodeBinary({}))
   })
+
+  it('finds the official install-script location before falling back to PATH', () => {
+    expect(openCodeCandidates({ HOME: '/home/me' })).toContain('/home/me/.opencode/bin/opencode')
+    expect(findOpenCodeBinary({ HOME: '/home/me' }, (p) => p === '/home/me/.opencode/bin/opencode')).toBe(
+      '/home/me/.opencode/bin/opencode'
+    )
+    expect(
+      findOpenCodeBinary({ HOME: '/home/me', PATH: '/custom/bin:/usr/bin' }, (p) => p === '/custom/bin/opencode')
+    ).toBe('/custom/bin/opencode')
+  })
+
+  it('reports no binary when neither known paths nor PATH contain opencode', () => {
+    expect(findOpenCodeBinary({ HOME: '/home/me', PATH: '/custom/bin' }, () => false)).toBe(null)
+    expect(resolveOpenCodeBinary({ HOME: '/home/me', PATH: '/custom/bin' }, () => false)).toBe('opencode')
+  })
 })
 
 describe('parseVersion', () => {
@@ -108,15 +125,29 @@ describe('parseVersion', () => {
 describe('detectHarnesses', () => {
   it('reports installed + missing binaries without touching the network', async () => {
     const out = await detectHarnesses({
+      resolveBinary: (id) => id,
       run: async (bin) => {
         if (bin === 'opencode') return 'opencode v2.0.20\n'
         throw Object.assign(new Error('not found'), { code: 'ENOENT' })
       }
     })
     expect(out).toEqual([
-      { id: 'opencode', installed: true, version: '2.0.20', detail: 'opencode 2.0.20 detected on PATH' },
+      { id: 'opencode', installed: true, version: '2.0.20', detail: 'opencode 2.0.20 detected' },
       { id: 'pi', installed: false, detail: 'pi not found on PATH.' }
     ])
+  })
+
+  it('probes the resolved absolute path (GUI apps have a minimal PATH)', async () => {
+    const seen: string[] = []
+    const out = await detectHarnesses({
+      resolveBinary: () => '/home/me/.opencode/bin/opencode',
+      run: async (bin) => {
+        seen.push(bin)
+        throw Object.assign(new Error('missing'), { code: 'ENOENT' })
+      }
+    })
+    expect(seen).toContain('/home/me/.opencode/bin/opencode')
+    expect(out[0]?.installed).toBe(false)
   })
 })
 

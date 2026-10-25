@@ -118,6 +118,8 @@ describe('AutomationsView', () => {
           createdAt: new Date(2026, 9, 25).toISOString()
         }
       ],
+      resume: true,
+      onResumeChange: () => {},
       onNew: () => {},
       onEdit: () => {}
     }))
@@ -125,11 +127,21 @@ describe('AutomationsView', () => {
     expect(html).toContain('Edit previous')
     expect(html).toContain('aria-label="Edit Morning brief"')
     expect(html).toContain('Advanced automation')
+    expect(html).toContain('Always open my last canvas')
+    expect((html.match(/type="checkbox"/g) ?? []).length).toBe(1)
+    expect(html).toContain('checked=""')
   })
 
   it('shows the empty previous list before anything is built', () => {
-    const html = renderToStaticMarkup(createElement(CanvasLanding, { automations: [], onNew: () => {}, onEdit: () => {} }))
-    expect(html).toContain('Nothing here yet')
+    const html = renderToStaticMarkup(createElement(CanvasLanding, {
+      automations: [],
+      resume: false,
+      onResumeChange: () => {},
+      onNew: () => {},
+      onEdit: () => {}
+    }))
+    expect(html).toContain('No canvases yet')
+    expect(html).not.toContain('checked=""')
   })
 
   it('leaves the breadcrumb to the app shell: no page renders its own', () => {

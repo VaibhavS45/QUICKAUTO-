@@ -90,14 +90,21 @@ test('a weekly task keeps the picked weekdays', async () => {
   }
 })
 
-test('the canvas shows the stored task and writes edits back', async () => {
+test('the canvas edits a stored canvas automation and writes edits back', async () => {
   const instance = await launch()
   const { app } = instance
   try {
     await expect.poll(() => app.windows().length, { timeout: 30_000 }).toBe(1)
     const shell = app.windows()[0]!
 
-    await createTask(shell, 'weather in bangalore')
+    await shell.getByRole('button', { name: 'Canvas' }).click()
+    await shell.getByRole('button', { name: 'Create', exact: true }).click()
+    await shell.getByRole('button', { name: 'Create', exact: true }).click()
+
+    const bar = shell.getByRole('form', { name: 'Describe the automation' })
+    await bar.getByLabel('Describe the automation').fill('weather in bangalore')
+    await bar.getByRole('button', { name: 'Create' }).click()
+
     await expect
       .poll(async () => {
         const res = await shell.evaluate(async () => window.app.automationsList())
@@ -105,7 +112,7 @@ test('the canvas shows the stored task and writes edits back', async () => {
       }, { timeout: 20_000 })
       .toBe(1)
 
-    await shell.getByRole('button', { name: 'Canvas' }).click()
+    await shell.getByRole('button', { name: 'All canvases' }).click()
     await shell.getByRole('button', { name: 'Edit weather in bangalore' }).click()
     const node = shell.getByRole('button', { name: /Configure step 2/ })
     await expect(node).toBeVisible({ timeout: 15_000 })
@@ -136,6 +143,7 @@ test('the canvas creates an automation that shows in Manage and reopens on the c
 
     await shell.getByRole('button', { name: 'Canvas' }).click()
     await expect(shell.getByRole('button', { name: 'Create', exact: true })).toBeVisible({ timeout: 15_000 })
+    await shell.getByRole('button', { name: 'Create', exact: true }).click()
     await shell.getByRole('button', { name: 'Create', exact: true }).click()
 
     const bar = shell.getByRole('form', { name: 'Describe the automation' })

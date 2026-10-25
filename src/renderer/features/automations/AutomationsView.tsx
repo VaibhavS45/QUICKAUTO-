@@ -11,7 +11,6 @@ import {
   canvasStepsForRoutine,
   canvasToCreate,
   canvasToPatch,
-  directionPos,
   edgePath,
   edgeSourceIndex,
   insertCanvasStep,
@@ -94,14 +93,6 @@ function FilterIcon(): React.JSX.Element {
 function CanvasBackdrop(): React.JSX.Element {
   return (
     <svg className="n8n-backdrop" viewBox="0 0 1200 700" preserveAspectRatio="xMidYMid slice" aria-hidden="true">
-      <defs>
-        <radialGradient id="n8n-backdrop-glow" cx="50%" cy="50%" r="50%">
-          <stop offset="0%" stopColor="#7c8cff" stopOpacity="0.18" />
-          <stop offset="55%" stopColor="#7c8cff" stopOpacity="0.05" />
-          <stop offset="100%" stopColor="#7c8cff" stopOpacity="0" />
-        </radialGradient>
-      </defs>
-      <ellipse cx="600" cy="340" rx="580" ry="340" fill="url(#n8n-backdrop-glow)" />
       <g fill="none" stroke="rgb(255 255 255 / 9%)" strokeWidth="1">
         <ellipse cx="600" cy="340" rx="430" ry="196" strokeDasharray="2 11" />
         <ellipse cx="600" cy="340" rx="640" ry="300" strokeDasharray="2 15" />
@@ -158,7 +149,7 @@ export function CanvasLanding({ automations, resume = false, onResumeChange, onN
         <div className="canvas-landing-recent">
           <h3>Edit previous</h3>
           {automations.length === 0 ? (
-            <p className="canvas-landing-empty">Nothing here yet. Create one and it will show up here.</p>
+            <p className="canvas-landing-empty">No canvases yet. Create one and it will show up here.</p>
           ) : (
             <div className="canvas-landing-list">
               {automations.map((automation) => (
@@ -551,14 +542,6 @@ export default function AutomationsView(props: FeatureProps): React.JSX.Element 
     setAddAt(null)
     if (props.focusId) props.shell.navigate('automations', { automationTab: 'canvas' })
   }
-
-  // "Always open my last canvas": skip the chooser and go straight back in.
-  useEffect(() => {
-    if (tab !== 'canvas' || canvasStarted || props.focusId || resumeSkipped) return
-    if (!canvasMemory.resume || !canvasMemory.lastId) return
-    if (!automations.some((automation) => automation.id === canvasMemory.lastId && automation.kind === 'advanced')) return
-    openCanvas(canvasMemory.lastId)
-  }, [tab, canvasStarted, props.focusId, resumeSkipped, canvasMemory, automations]) // eslint-disable-line react-hooks/exhaustive-deps
 
   /**
    * The canvas takes free text, so the sentence becomes the first action and
@@ -955,9 +938,9 @@ export default function AutomationsView(props: FeatureProps): React.JSX.Element 
         </div>
       )}
 
-      {!loading && !error && tab === 'canvas' && !canvasStarted && !props.focusId && (
+      {!loading && !error && tab === 'canvas' && !canvasStarted && !props.focusId && !autoCanvas && (
         <CanvasLanding
-          automations={automations}
+          automations={automations.filter((automation) => automation.kind === 'advanced')}
           resume={canvasMemory.resume}
           onResumeChange={setResumeCanvas}
           onNew={startNewCanvas}
@@ -965,7 +948,7 @@ export default function AutomationsView(props: FeatureProps): React.JSX.Element 
         />
       )}
 
-      {!loading && !error && tab === 'canvas' && (canvasStarted || props.focusId) && (
+      {!loading && !error && tab === 'canvas' && (canvasStarted || props.focusId || autoCanvas) && (
         <div className="automations-canvas">
           <header className="canvas-head">
             <div className="canvas-head-text">
@@ -975,8 +958,8 @@ export default function AutomationsView(props: FeatureProps): React.JSX.Element 
               {canvasRoutine && <span className="canvas-head-meta">{canvasRoutine.repeat} · {timeLabel(canvasRoutine.runAt)}</span>}
             </div>
             <div className="canvas-head-actions">
-              <button type="button" className="canvas-head-new" title="Pick another canvas" onClick={showCanvasLanding}>
-                All
+              <button type="button" className="canvas-head-new" title="Pick another canvas" aria-label="All canvases" onClick={showCanvasLanding}>
+                Canvases
               </button>
               <button type="button" className="canvas-head-new" title="Start a new canvas" onClick={startNewCanvas}>
                 <span aria-hidden="true">+</span> New
@@ -1116,11 +1099,19 @@ export default function AutomationsView(props: FeatureProps): React.JSX.Element 
               {addDir && (() => {
                 const parent = canvasSteps.find((step) => step.id === addDir.id)
                 if (!parent) return null
-                const pos = directionPos(parent, addDir.dir)
+                // The picker grows out of the plus that opened it.
+                const offset = 22
+                const anchor = addDir.dir === 'right'
+                  ? { x: parent.pos.x + NODE_W + offset, y: parent.pos.y + NODE_H / 2 }
+                  : addDir.dir === 'left'
+                    ? { x: parent.pos.x - offset, y: parent.pos.y + NODE_H / 2 }
+                    : addDir.dir === 'down'
+                      ? { x: parent.pos.x + NODE_W / 2, y: parent.pos.y + NODE_H + offset }
+                      : { x: parent.pos.x + NODE_W / 2, y: parent.pos.y - offset }
                 return (
-                  <div className="n8n-dir-picker" style={{ left: pos.x, top: pos.y }}>
+                  <div className={`n8n-dir-picker is-${addDir.dir}`} style={{ left: anchor.x, top: anchor.y }}>
                     <CanvasStepPicker
-                      ariaLabel={`Add step to the ${addDir.dir}`}
+                      ariaLabel={`Add step ${DIRECTION_LABEL[addDir.dir]} this step`}
                       zoom={vp.z}
                       onPick={(_target, pick) => addPickedFromDirection(addDir.dir, pick)}
                       onClose={() => setAddDir(null)}

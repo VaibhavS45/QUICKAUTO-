@@ -261,10 +261,11 @@
 }
 
 .shell-topbar-actions .shell-profile-menu {
-  top: calc(100% + 12px);
-  right: 0;
-  bottom: auto;
-  left: auto;
+  /* Higher specificity than the theme visual-pass layer so the specified
+     border / background / shadow win regardless of CSS load order. */
+  border: 1px solid #26262b;
+  background: #131315;
+  box-shadow: 0 16px 48px rgb(0 0 0 / 45%), inset 0 1px 0 #1a1a1f;
   transform-origin: top right;
   animation: shell-menu-in 140ms ease both;
 }
@@ -480,14 +481,15 @@
 .shell-profile-menu {
   position: absolute;
   z-index: 4;
-  bottom: 0;
-  left: calc(100% + 10px);
-  width: 230px;
-  padding: 5px;
-  border: 1px solid var(--border-strong);
-  border-radius: 10px;
-  background: var(--surface);
-  box-shadow: inset 0 1px 0 var(--border), 0 16px 48px var(--overlay);
+  top: calc(100% + 12px);
+  right: 0;
+  width: 288px;
+  padding: 6px;
+  border-radius: 14px;
+  /* The title bar is -webkit-app-region: drag; the menu must not inherit it
+     or every click on its items is swallowed (see ShellApp root cause). */
+  -webkit-app-region: no-drag;
+  outline: none;
 }
 
 .shell-profile-menu-head {
@@ -495,8 +497,8 @@
   align-items: center;
   gap: 9px;
   padding: 8px 9px 10px;
-  border-bottom: 1px solid var(--surface-2);
-  margin-bottom: 5px;
+  border-bottom: 1px solid #1a1a1f;
+  margin-bottom: 7px;
 }
 
 .shell-profile-menu-identity {
@@ -508,12 +510,12 @@
 .shell-profile-menu-identity strong {
   overflow: hidden;
   color: var(--text);
-  font-size: 12px;
+  font-size: 13px;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
-.shell-profile-menu-identity small {
+.shell-profile-menu-status {
   overflow: hidden;
   color: var(--text-muted);
   font-size: var(--font-2xs);
@@ -521,20 +523,69 @@
   white-space: nowrap;
 }
 
-.shell-profile-menu button[role="menuitem"] {
-  width: 100%;
-  height: 34px;
-  padding: 0 9px;
+.shell-profile-menu-status.is-signed-in {
+  color: #4ade80;
+}
+
+.shell-profile-menu-divider {
+  height: 1px;
+  margin: 4px 0;
   border: 0;
-  border-radius: 6px;
+  background: #1a1a1f;
+}
+
+.shell-profile-menu button[role="menuitem"] {
+  position: relative;
+  width: 100%;
+  height: 38px;
+  padding: 0 9px 0 8px;
+  border: 0;
+  border-radius: 9px;
   color: var(--text);
   background: transparent;
   text-align: left;
   cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  -webkit-app-region: no-drag;
 }
 
 .shell-profile-menu button[role="menuitem"]:hover {
-  background: var(--surface-2);
+  background: #1c1c20;
+}
+
+.shell-profile-menu-icon {
+  width: 16px;
+  height: 16px;
+  flex: 0 0 auto;
+}
+
+.shell-profile-menu-shortcut {
+  margin-left: auto;
+  flex: 0 0 auto;
+  font-size: 10px;
+  font-family: var(--font-mono);
+  color: var(--text-muted);
+  padding: 1px 5px;
+  border-radius: 4px;
+  background: rgba(255, 255, 255, 0.05);
+}
+
+.shell-profile-menu-item--signin {
+  color: var(--accent);
+}
+
+.shell-profile-menu-item--signin .shell-profile-menu-icon {
+  color: var(--accent);
+}
+
+.shell-profile-menu-item--signout {
+  color: var(--danger-bright);
+}
+
+.shell-profile-menu-item--signout .shell-profile-menu-icon {
+  color: var(--danger-bright);
 }
 
 .shell-main-pane {
@@ -1853,9 +1904,14 @@
 .light .shell-notification-badge { border-color: var(--text-muted); }
 
 .light .shell-notifications-panel,
-.light .shell-profile-menu,
 .light .chat-model-menu,
 .light .chat-mention-menu {
+  border-color: rgb(0 0 0 / 10%);
+  background: #fff;
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / 60%), 0 16px 48px rgb(0 0 0 / 16%);
+}
+
+.light .shell-topbar-actions .shell-profile-menu {
   border-color: rgb(0 0 0 / 10%);
   background: #fff;
   box-shadow: inset 0 1px 0 rgb(255 255 255 / 60%), 0 16px 48px rgb(0 0 0 / 16%);

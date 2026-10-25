@@ -96,7 +96,9 @@ export default function ShellApp(): React.JSX.Element {
   const [route, setRoute] = useState(router.current)
   const [profile, setProfile] = useState<LocalProfile>({ name: '', email: '' })
   const [profileMenuOpen, setProfileMenuOpen] = useState(false)
+  const [isSignedIn, setIsSignedIn] = useState(false)
   const [settings, setSettings] = useState<{ tab?: string } | null>(null)
+  const avatarRef = useRef<HTMLButtonElement>(null)
   const [notificationsOpen, setNotificationsOpen] = useState(false)
   const [notifications, setNotifications] = useState<AppNotification[]>([])
   const [dashboardError, setDashboardError] = useState('')
@@ -217,12 +219,12 @@ export default function ShellApp(): React.JSX.Element {
       if (target.closest('.shell-profile-menu, .shell-profile-button, .shell-notifications-panel, .shell-notifications-button')) {
         return
       }
-      setProfileMenuOpen(false)
+      closeProfileMenu()
       setNotificationsOpen(false)
     }
     const onKeyDown = (event: KeyboardEvent): void => {
       if (event.key !== 'Escape') return
-      setProfileMenuOpen(false)
+      closeProfileMenu()
       setNotificationsOpen(false)
     }
     window.addEventListener('pointerdown', onPointerDown)
@@ -248,6 +250,27 @@ export default function ShellApp(): React.JSX.Element {
       apply()
     }
   }, [router])
+
+  /** Close the profile menu and return focus to the avatar trigger. */
+  const closeProfileMenu = useCallback((): void => {
+    setProfileMenuOpen(false)
+    avatarRef.current?.focus()
+  }, [])
+
+  /**
+   * App-level sign-in / sign-out. There is no app-level auth IPC in the main
+   * process yet (auth today is per-connector: gh, Composio, …), so this flips
+   * local state only and never pretends a server round-trip succeeded.
+   * TODO: wire to real auth (preload `window.app.signIn`/`signOut` +
+   * `ipcMain.handle('auth:sign-in'/'auth:sign-out')`).
+   */
+  function handleSignIn(): void {
+    setIsSignedIn(true)
+  }
+
+  function handleSignOut(): void {
+    setIsSignedIn(false)
+  }
 
   useEffect(() => {
     const unsubscribe = router.subscribe(setRoute)
@@ -479,9 +502,10 @@ export default function ShellApp(): React.JSX.Element {
               {unreadCount > 0 && <span className="shell-notification-badge">{unreadCount > 99 ? '99+' : unreadCount}</span>}
             </button>
             <button
+              ref={avatarRef}
               type="button"
               className="shell-profile-button"
-              aria-label={`${t('shell.accountMenuFor')} ${displayName(profile, t('shell.defaultProfile'))}`}
+              aria-label={t('shell.openProfileMenu')}
               aria-expanded={profileMenuOpen}
               aria-haspopup="menu"
               title={t('shell.profile')}
@@ -495,10 +519,12 @@ export default function ShellApp(): React.JSX.Element {
             <ProfileMenu
               open={profileMenuOpen}
               name={displayName(profile, t('shell.defaultProfile'))}
-              email={profile.email.trim()}
               initials={initials}
-              onClose={() => setProfileMenuOpen(false)}
+              isSignedIn={isSignedIn}
+              onClose={closeProfileMenu}
               onOpenSettings={(tab) => window.app.openSettingsWindow(tab)}
+              onSignIn={handleSignIn}
+              onSignOut={handleSignOut}
             />
             {notificationsOpen && (
               <section className="shell-notifications-panel" aria-label={t('shell.notifications')}>

@@ -1,44 +1,74 @@
-import { useEffect } from 'react'
+import { useEffect, useRef } from 'react'
+import { LogIn, LogOut, Settings as SettingsIcon } from 'lucide-react'
 import { useI18n } from '../i18n/LanguageContext.js'
 
 interface ProfileMenuProps {
   open: boolean
   name: string
-  email: string
   initials: string
+  isSignedIn: boolean
   onClose(): void
   onOpenSettings(tab?: string): void
+  onSignIn(): void
+  onSignOut(): void
 }
 
-export function ProfileMenu({ open, name, email, initials, onClose, onOpenSettings }: ProfileMenuProps): React.JSX.Element | null {
+export function ProfileMenu({ open, name, initials, isSignedIn, onClose, onOpenSettings, onSignIn, onSignOut }: ProfileMenuProps): React.JSX.Element | null {
   const { t } = useI18n()
+  const menuRef = useRef<HTMLDivElement>(null)
+
   useEffect(() => {
     if (!open) return
     const onKey = (event: KeyboardEvent): void => {
-      if (event.key === 'Escape') onClose()
+      if (event.key === 'Escape') {
+        onClose()
+        return
+      }
+      if (event.key !== 'ArrowDown' && event.key !== 'ArrowUp') return
+      event.preventDefault()
+      const menu = menuRef.current
+      if (!menu) return
+      const items = Array.from(menu.querySelectorAll<HTMLElement>('[role="menuitem"]'))
+      if (!items.length) return
+      const current = items.indexOf(document.activeElement as HTMLElement)
+      let next: number
+      if (event.key === 'ArrowDown') next = current === -1 ? 0 : (current + 1) % items.length
+      else next = current === -1 ? 0 : (current - 1 + items.length) % items.length
+      items[next]?.focus()
     }
     window.addEventListener('keydown', onKey)
+    const first = menuRef.current?.querySelector<HTMLElement>('[role="menuitem"]')
+    first?.focus()
     return () => window.removeEventListener('keydown', onKey)
   }, [open, onClose])
 
   if (!open) return null
   return (
-    <>
-      <div className="shell-profile-menu" role="menu" aria-label={t('shell.profile')}>
-        <div className="shell-profile-menu-head">
-          <span className="shell-avatar">{initials || 'L'}</span>
-          <span className="shell-profile-menu-identity">
-            <strong>{name}</strong>
-            {email && <small>{email}</small>}
-          </span>
+    <div ref={menuRef} className="shell-profile-menu" role="menu" aria-label={t('shell.profile')}>
+      <div className="shell-profile-menu-head">
+        <span className="shell-avatar">{initials || 'LP'}</span>
+        <div className="shell-profile-menu-identity">
+          <strong>{name}</strong>
+          <span className={`shell-profile-menu-status${isSignedIn ? ' is-signed-in' : ''}`}>{isSignedIn ? t('shell.signedIn') : t('shell.signedOut')}</span>
         </div>
-        <button type="button" role="menuitem" onClick={() => { onOpenSettings('account'); onClose() }}>
-          {t('shell.accountSettings')}
-        </button>
-        <button type="button" role="menuitem" onClick={() => { onOpenSettings(); onClose() }}>
-          {t('shell.settings')}
-        </button>
       </div>
-    </>
+      <button type="button" role="menuitem" className="shell-profile-menu-item" onClick={() => { onOpenSettings(); onClose() }}>
+        <SettingsIcon className="shell-profile-menu-icon" />
+        <span>{t('shell.settings')}</span>
+        <kbd className="shell-profile-menu-shortcut">⌘ ,</kbd>
+      </button>
+      <div role="separator" aria-orientation="horizontal" className="shell-profile-menu-divider" />
+      {isSignedIn ? (
+        <button type="button" role="menuitem" className="shell-profile-menu-item shell-profile-menu-item--signout" onClick={() => { onSignOut(); onClose() }}>
+          <LogOut className="shell-profile-menu-icon" />
+          <span>{t('shell.logOut')}</span>
+        </button>
+      ) : (
+        <button type="button" role="menuitem" className="shell-profile-menu-item shell-profile-menu-item--signin" onClick={() => { onSignIn(); onClose() }}>
+          <LogIn className="shell-profile-menu-icon" />
+          <span>{t('shell.logIn')}</span>
+        </button>
+      )}
+    </div>
   )
 }

@@ -24,7 +24,7 @@ describe('top bar nav', () => {
     expect(html).toContain('shell-topnav')
     expect(html).not.toContain('shell-sidebar')
     expect(html).not.toContain('shell-palette')
-    expect(html).toContain('Account menu for Local profile')
+    expect(html).toContain('Open profile menu')
   })
 
   it('splits the active view into the orange slot outside the pill', () => {

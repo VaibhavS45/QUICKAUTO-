@@ -1,5 +1,5 @@
 import { useEffect, useRef } from 'react'
-import { LogIn, LogOut, Settings as SettingsIcon } from 'lucide-react'
+import { LogOut, Settings as SettingsIcon } from 'lucide-react'
 import { useI18n } from '../i18n/LanguageContext.js'
 
 interface ProfileMenuProps {
@@ -65,7 +65,7 @@ export function ProfileMenu({ open, name, initials, isSignedIn, onClose, onOpenS
         </button>
       ) : (
         <button type="button" role="menuitem" className="shell-profile-menu-item shell-profile-menu-item--signin" onClick={() => { onSignIn(); onClose() }}>
-          <LogIn className="shell-profile-menu-icon" />
+          <LogOut className="shell-profile-menu-icon" />
           <span>{t('shell.logIn')}</span>
         </button>
       )}

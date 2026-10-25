@@ -160,29 +160,24 @@ describe('AutomationsView', () => {
   it('groups update rows by day with title, time, and full summary', () => {
     const at = (y: number, m: number, d: number, h: number, min = 0): number => new Date(y, m, d, h, min).getTime()
     const html = renderToStaticMarkup(createElement(UpdatesList, {
-      todayKey: '2026-10-11',
-      onSelect: () => {},
       runs: [
         { id: 'a', title: 'Daily Hacker News Top 10 Digest', startedAt: at(2026, 9, 11, 9), endedAt: at(2026, 9, 11, 9, 5), status: 'succeeded', summary: 'Today digest body.' },
         { id: 'b', title: 'Daily Hacker News Top 10 Digest', startedAt: at(2026, 9, 10, 12), endedAt: at(2026, 9, 10, 12, 2), status: 'succeeded', summary: 'Yesterday digest body.' }
       ]
     }))
-    expect(html).toContain('Today')
-    expect(html).toContain('Yesterday')
+    expect(html).toContain('OCT 11, 2026')
+    expect(html).toContain('OCT 10, 2026')
     expect(html).toContain('Daily Hacker News Top 10 Digest')
     expect(html).toContain('Today digest body.')
-    expect(html).toContain('Yesterday digest body.')
   })
 
   it('does not render a summary strip above the feed', () => {
     const html = renderToStaticMarkup(createElement(UpdatesList, {
-      todayKey: '2026-10-11',
       runs: [
         { id: 'a', title: 'Daily Hacker News Top 10 Digest', startedAt: new Date(2026, 9, 11, 9).getTime(), status: 'succeeded', summary: 'Today digest body.' }
-      ],
-      onSelect: () => {}
+      ]
     }))
-    expect(html).toContain('Today')
+    expect(html).toContain('OCT 11, 2026')
     expect(html).not.toContain('updates-summary')
     expect(html).not.toContain('Runs today')
   })

@@ -25,7 +25,6 @@ import {
 } from './canvas-steps.js'
 import { parseAutomationCreate, parseAutomationTab, type AutomationTabId } from '../../shell/nav.js'
 import { useBreadcrumbs, type BreadcrumbItem } from '../../components/layout/Breadcrumbs.js'
-import CanvasDescribeBar from './canvas-describe.js'
 import { formatDateTime } from '../../lib/format.js'
 import ScheduledTasks from './ScheduledTasks.js'
 import { MANAGE_FILTERS, automationMeta, type ManageFilter } from './scheduled.js'
@@ -292,6 +291,8 @@ export default function AutomationsView(props: FeatureProps): React.JSX.Element 
   const viewportRef = useRef<HTMLDivElement | null>(null)
   /** The canvas that was just created keeps the nodes it was built from. */
   const keepCanvasRef = useRef('')
+  /** "New" cleared the route on purpose, so losing focusId must not bounce back. */
+  const freshCanvasRef = useRef(false)
   /** The steps last read from or written to the stored automation; skips the autosave. */
   const savedStepsRef = useRef<CanvasStep[] | null>(null)
   /** Which canvas the on-screen steps belong to, so a slow autosave never hits the wrong id. */
@@ -311,11 +312,8 @@ export default function AutomationsView(props: FeatureProps): React.JSX.Element 
   const [manageSelectedId, setManageSelectedId] = useState('')
   const [pendingTab, setPendingTab] = useState<AutomationTabId | null>(null)
   const [pendingLeave, setPendingLeave] = useState(false)
-  const [canvasDescribe, setCanvasDescribe] = useState(false)
-  const [canvasPrompt, setCanvasPrompt] = useState('')
   const [canvasBusy, setCanvasBusy] = useState(false)
   const [canvasSaving, setCanvasSaving] = useState(false)
-  const [canvasError, setCanvasError] = useState('')
   /** The Canvas tab opens on a chooser; this flips once a graph is opened. */
   const [canvasStarted, setCanvasStarted] = useState(false)
   const [canvasMemory, setCanvasMemory] = useState<CanvasMemory>(() => readCanvasMemory(canvasStorage()))
@@ -393,8 +391,23 @@ export default function AutomationsView(props: FeatureProps): React.JSX.Element 
     savedStepsRef.current = null
     stepsOwnerRef.current = 'blank'
     props.shell.navigate('automations', { automationTab: 'canvas' })
-    setCanvasDescribe(true)
   }, [createKind, props.shell])
+
+  // Dropping the open automation from the route (a top-nav click on Canvas)
+  // returns to the chooser instead of showing a phantom blank graph.
+  const previousFocusId = useRef(props.focusId)
+  useEffect(() => {
+    const previous = previousFocusId.current
+    previousFocusId.current = props.focusId
+    if (tab !== 'canvas' || props.focusId || !previous) return
+    if (freshCanvasRef.current) {
+      freshCanvasRef.current = false
+      return
+    }
+    setCanvasStarted(false)
+    setAddDir(null)
+    setAddAt(null)
+  }, [tab, props.focusId])
 
   // Leaving the tab forgets the open graph, so it reopens on the chooser (or
   // resumes the last one when that preference is on).
@@ -494,14 +507,14 @@ export default function AutomationsView(props: FeatureProps): React.JSX.Element 
     savedStepsRef.current = null
     stepsOwnerRef.current = 'blank'
     setVp({ x: 24, y: 0, z: 1 })
-    setCanvasPrompt('')
-    setCanvasDescribe(false)
-    setCanvasError('')
     setSelectedStepId('')
     setOpenStepMenuId('')
     setAddAt(null)
     setAddDir(null)
-    if (props.focusId) props.shell.navigate('automations', { automationTab: 'canvas' })
+    if (props.focusId) {
+      freshCanvasRef.current = true
+      props.shell.navigate('automations', { automationTab: 'canvas' })
+    }
   }
 
   /** Reopen a previous automation on the graph. */
@@ -523,38 +536,33 @@ export default function AutomationsView(props: FeatureProps): React.JSX.Element 
   }
 
   /**
-   * The canvas takes free text, so the sentence becomes the first action and
-   * the trigger node keeps the schedule. The result is a real automation, so
-   * it shows up in Manage and reopens here when edited.
+   * Turn the graph into a real automation. The first configured action is the
+   * task, the trigger keeps the schedule, and the tools become connectors.
+   * The result shows up in Manage and reopens here when edited.
    */
   async function createCanvasAutomation(): Promise<void> {
-    if (canvasBusy) return
-    const text = canvasPrompt.trim()
+    if (canvasBusy || !hasCanvasWork) return
     setCanvasBusy(true)
-    setCanvasError('')
+    setError('')
     try {
       const firstAction = canvasSteps.find((step) => step.kind !== 'trigger')
-      const steps = text && firstAction ? updateCanvasStep(canvasSteps, firstAction.id, { subtitle: text }) : canvasSteps
-      const title = canvasHeadTitle(text || firstAction?.subtitle || '')
-      const input = canvasToCreate(steps, title)
-      const res = await window.app.automationsCreate(text ? { ...input, prompt: text.slice(0, 20000) } : input)
+      const title = canvasHeadTitle(firstAction?.subtitle ?? '')
+      const input = canvasToCreate(canvasSteps, title)
+      const res = await window.app.automationsCreate(input)
       if (!res.ok || !res.automation) {
-        setCanvasError(res.error || 'Could not create the automation.')
+        setError(res.error || 'Could not create the automation.')
         return
       }
       await refresh()
       // The nodes on screen are what was just created: don't rebuild them.
       keepCanvasRef.current = res.automation.id
-      savedStepsRef.current = steps
+      savedStepsRef.current = canvasSteps
       stepsOwnerRef.current = res.automation.id
       setCanvasKey(res.automation.id)
-      setCanvasSteps(steps)
-      setCanvasPrompt('')
-      setCanvasDescribe(false)
       rememberCanvas(res.automation.id)
       props.shell.navigate('automations', { automationTab: 'canvas', focusId: res.automation.id })
     } catch (reason) {
-      setCanvasError(errorText(reason))
+      setError(errorText(reason))
     } finally {
       setCanvasBusy(false)
     }
@@ -1025,10 +1033,11 @@ export default function AutomationsView(props: FeatureProps): React.JSX.Element 
                 <button
                   type="button"
                   className="canvas-head-create"
-                  title="Turn this canvas into an automation"
-                  onClick={() => setCanvasDescribe(true)}
+                  title={hasCanvasWork ? 'Create this automation' : 'Configure a step first'}
+                  disabled={canvasBusy || !hasCanvasWork}
+                  onClick={() => void createCanvasAutomation()}
                 >
-                  Create
+                  {canvasBusy ? 'Creating…' : 'Create'}
                 </button>
               )}
             </div>
@@ -1044,7 +1053,7 @@ export default function AutomationsView(props: FeatureProps): React.JSX.Element 
               beginPan(e)
             }}
             onDoubleClick={(e) => {
-              if ((e.target as HTMLElement).closest('.n8n-node, .n8n-menu, .n8n-picker, .n8n-end, .n8n-empty, .n8n-dir, button, .n8n-toolbar, .n8n-inspector, .n8n-describe')) return
+              if ((e.target as HTMLElement).closest('.n8n-node, .n8n-menu, .n8n-picker, .n8n-end, .n8n-empty, .n8n-dir, button, .n8n-toolbar, .n8n-inspector')) return
               addAtPoint(e.clientX, e.clientY)
             }}
             aria-label={canvasRoutine ? `Canvas for ${routineTitle(canvasRoutine.prompt)}` : 'Canvas builder'}
@@ -1216,17 +1225,6 @@ export default function AutomationsView(props: FeatureProps): React.JSX.Element 
               </div>
             )}
             <p className="n8n-hint" aria-hidden="true">Drag from any side of a step to branch · swipe up/down to zoom · double-click empty canvas to add</p>
-            {canvasDescribe && (
-              <CanvasDescribeBar
-                value={canvasPrompt}
-                busy={canvasBusy}
-                disabled={!canvasPrompt.trim() && !hasCanvasWork}
-                error={canvasError}
-                onChange={(value) => { setCanvasPrompt(value); setCanvasError('') }}
-                onSubmit={() => void createCanvasAutomation()}
-                onClose={() => { setCanvasDescribe(false); setCanvasError('') }}
-              />
-            )}
             {selectedStep && (
               <div className="n8n-inspector" aria-label={`Configure step ${selectedStep.title}`}>
                 <CanvasStepEditor

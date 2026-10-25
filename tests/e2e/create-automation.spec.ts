@@ -40,6 +40,25 @@ async function createTask(shell: import('@playwright/test').Page, task: string, 
   await shell.getByRole('button', { name: 'Create', exact: true }).click()
 }
 
+async function createCanvasTask(shell: import('@playwright/test').Page, task: string): Promise<void> {
+  await shell.getByRole('button', { name: 'Canvas' }).click()
+  await shell.getByRole('button', { name: 'Create', exact: true }).click()
+  await shell.getByRole('button', { name: 'Add first step' }).click()
+  await shell.getByRole('dialog', { name: 'Add first step' }).getByRole('button', { name: /^Schedule/ }).click()
+  await shell.getByRole('button', { name: 'Add step at the end' }).click()
+  await shell.getByRole('dialog', { name: 'Add step at the end' }).getByRole('button', { name: /^Gmail/ }).click()
+  await shell.getByRole('button', { name: /^Configure step 2/ }).click()
+  await shell.getByPlaceholder('What should this step do?').fill(task)
+  await shell.getByRole('button', { name: 'Apply' }).click()
+  await shell.getByRole('button', { name: 'Create', exact: true }).click()
+  await expect
+    .poll(async () => {
+      const res = await shell.evaluate(async () => window.app.automationsList())
+      return res.ok ? res.automations?.length ?? 0 : -1
+    }, { timeout: 20_000 })
+    .toBe(1)
+}
+
 test('a scheduled task created in the form stores the picks it shows', async () => {
   const instance = await launch()
   const { app } = instance
@@ -97,20 +116,7 @@ test('the canvas edits a stored canvas automation and writes edits back', async 
     await expect.poll(() => app.windows().length, { timeout: 30_000 }).toBe(1)
     const shell = app.windows()[0]!
 
-    await shell.getByRole('button', { name: 'Canvas' }).click()
-    await shell.getByRole('button', { name: 'Create', exact: true }).click()
-    await shell.getByRole('button', { name: 'Create', exact: true }).click()
-
-    const bar = shell.getByRole('form', { name: 'Describe the automation' })
-    await bar.getByLabel('Describe the automation').fill('weather in bangalore')
-    await bar.getByRole('button', { name: 'Create' }).click()
-
-    await expect
-      .poll(async () => {
-        const res = await shell.evaluate(async () => window.app.automationsList())
-        return res.ok ? res.automations?.length ?? 0 : -1
-      }, { timeout: 20_000 })
-      .toBe(1)
+    await createCanvasTask(shell, 'weather in bangalore')
 
     await shell.getByRole('button', { name: 'All canvases' }).click()
     await shell.getByRole('button', { name: 'Edit weather in bangalore' }).click()
@@ -149,28 +155,21 @@ test('the canvas saves the open automation instead of creating another', async (
     await expect.poll(() => app.windows().length, { timeout: 30_000 }).toBe(1)
     const shell = app.windows()[0]!
 
-    await shell.getByRole('button', { name: 'Canvas' }).click()
-    await shell.getByRole('button', { name: 'Create', exact: true }).click()
-    await shell.getByRole('button', { name: 'Create', exact: true }).click()
-    const bar = shell.getByRole('form', { name: 'Describe the automation' })
-    await bar.getByLabel('Describe the automation').fill('weather in bangalore')
-    await bar.getByRole('button', { name: 'Create' }).click()
-
-    await expect
-      .poll(async () => {
-        const res = await shell.evaluate(async () => window.app.automationsList())
-        return res.ok ? res.automations?.length ?? 0 : -1
-      }, { timeout: 20_000 })
-      .toBe(1)
+    await createCanvasTask(shell, 'weather in bangalore')
 
     // An automation is open: the header saves it, it no longer offers Create.
     await expect(shell.getByRole('button', { name: 'Save' })).toBeVisible({ timeout: 15_000 })
     await expect(shell.getByRole('button', { name: 'Create', exact: true })).toHaveCount(0)
     await shell.getByRole('button', { name: 'Save' }).click()
-    await expect(shell.getByRole('form', { name: 'Describe the automation' })).toHaveCount(0)
 
     const stored = await shell.evaluate(async () => window.app.automationsList())
     expect(stored.automations).toHaveLength(1)
+
+    // Clicking the Canvas nav drops the open id: show the chooser with the
+    // saved automation, never a phantom blank graph.
+    await shell.getByRole('button', { name: 'Canvas', exact: true }).click()
+    await expect(shell.getByRole('button', { name: 'Edit weather in bangalore' })).toBeVisible({ timeout: 15_000 })
+    await expect(shell.getByText('New automation')).toHaveCount(0)
 
     await shell.getByRole('button', { name: 'Manage' }).click()
     await expect(shell.getByRole('button', { name: 'Open weather in bangalore' })).toBeVisible({ timeout: 15_000 })
@@ -186,27 +185,14 @@ test('the canvas creates an automation that shows in Manage and reopens on the c
     await expect.poll(() => app.windows().length, { timeout: 30_000 }).toBe(1)
     const shell = app.windows()[0]!
 
-    await shell.getByRole('button', { name: 'Canvas' }).click()
-    await expect(shell.getByRole('button', { name: 'Create', exact: true })).toBeVisible({ timeout: 15_000 })
-    await shell.getByRole('button', { name: 'Create', exact: true }).click()
-    await shell.getByRole('button', { name: 'Create', exact: true }).click()
-
-    const bar = shell.getByRole('form', { name: 'Describe the automation' })
-    await bar.getByLabel('Describe the automation').fill('Summarize my unread mail')
-    await bar.getByRole('button', { name: 'Create' }).click()
-
-    await expect
-      .poll(async () => {
-        const res = await shell.evaluate(async () => window.app.automationsList())
-        return res.ok ? res.automations?.length ?? 0 : -1
-      }, { timeout: 20_000 })
-      .toBe(1)
+    await createCanvasTask(shell, 'Summarize my unread mail')
 
     const stored = await shell.evaluate(async () => window.app.automationsList())
     const automation = stored.automations?.[0]
     expect(automation?.kind).toBe('advanced')
     expect(automation?.title).toBe('Summarize my unread mail')
-    expect(automation?.prompt).toBe('Summarize my unread mail')
+    expect(automation?.prompt).toContain('Summarize my unread mail')
+    expect(automation?.connectors).toContain('gmail')
     expect(automation?.schedule?.type).toBe('daily')
 
     await shell.getByRole('button', { name: 'Manage' }).click()

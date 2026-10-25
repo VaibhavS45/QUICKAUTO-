@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { FeatureProps } from '../../contracts/feature.js'
 import type { RunRecord, ScheduleItem } from '../../../shared/contracts/schedule.js'
 import type { Automation } from '../../../shared/contracts/automations.js'
-import { addDaysKey, localDayKey, pastDayLabel, routineTitle, timeLabel } from './dates.js'
+import { addDaysKey, localDayKey, routineTitle, timeLabel } from './dates.js'
 import {
   NODE_H,
   NODE_W,
@@ -25,11 +25,12 @@ import {
 } from './canvas-steps.js'
 import { parseAutomationCreate, parseAutomationTab, type AutomationTabId } from '../../shell/nav.js'
 import { useBreadcrumbs, type BreadcrumbItem } from '../../components/layout/Breadcrumbs.js'
-import { formatDateTime } from '../../lib/format.js'
 import ScheduledTasks from './ScheduledTasks.js'
 import { MANAGE_FILTERS, automationMeta, type ManageFilter } from './scheduled.js'
 import { ConfirmDialog } from './ConfirmDialog.js'
-import { StatusBadge, UpdatesGlyph } from '../../components/ui/primitives.js'
+import { RunDetailPage, UpdatesList } from './updates-ui.js'
+
+export { RunDetailPage, UpdatesList }
 import { CanvasNodeIcon, CanvasStepEditor, CanvasStepPicker, type CanvasPick, type CanvasPickTarget } from './canvas-picker.js'
 import { readCanvasMemory, writeCanvasMemory, type CanvasMemory } from './canvas-memory.js'
 import './automations.css'
@@ -169,95 +170,6 @@ export function stepsForRoutine(routine: Routine | undefined): ZapStep[] {
     subtitle: s.subtitle,
     filled: s.filled
   }))
-}
-
-export function UpdatesList({ runs, todayKey, onSelect }: {
-  runs: RunRecord[]
-  todayKey: string
-  onSelect(run: RunRecord): void
-}): React.JSX.Element {
-  if (runs.length === 0) return <p className="automations-empty">No outputs yet. Run an automation to see results here.</p>
-  const byDay = new Map<string, RunRecord[]>()
-  for (const run of runs) {
-    const key = localDayKey(new Date(run.endedAt ?? run.startedAt))
-    const list = byDay.get(key) ?? []
-    list.push(run)
-    byDay.set(key, list)
-  }
-  const days = [...byDay.entries()].sort((a, b) => b[0].localeCompare(a[0]))
-  return (
-    <>
-      {days.map(([key, dayRuns]) => (
-        <section key={key} className="updates-day" aria-label={pastDayLabel(key, todayKey)}>
-          <h3>{pastDayLabel(key, todayKey)} <span>({dayRuns.length})</span></h3>
-          <div className="p-rail">
-            {dayRuns.map((run) => (
-              <button
-                key={run.id}
-                type="button"
-                className={`p-rail-item updates-row${run.status === 'running' ? ' is-running' : ''}`}
-                onClick={() => onSelect(run)}
-              >
-                <span
-                  className={`p-rail-dot${run.status === 'running' ? ' is-heat' : run.status === 'failed' ? ' is-failed' : run.status === 'succeeded' ? ' is-drawn' : ''}`}
-                  aria-hidden="true"
-                />
-                <span className="updates-row-meta">
-                  <span className="updates-row-icon" aria-hidden="true"><UpdatesGlyph /></span>
-                  <strong>{routineTitle(run.title)}</strong>
-                  <small>{timeLabel(run.endedAt ?? run.startedAt)}</small>
-                </span>
-                <span className="updates-row-body">{run.summary || 'No output recorded yet.'}</span>
-              </button>
-            ))}
-          </div>
-        </section>
-      ))}
-    </>
-  )
-}
-
-/** Dedicated run page: full info left, every agent run in a right rail. */
-export function RunDetailPage({ run, runs, onSelect, onBack }: {
-  run: RunRecord
-  runs: RunRecord[]
-  onSelect(run: RunRecord): void
-  onBack(): void
-}): React.JSX.Element {
-  return (
-    <section className="automations" aria-label="Run details">
-      <div className="automations-crumbbar">
-        <button type="button" className="automations-backlink" onClick={onBack}>← Back</button>
-      </div>
-      <div className="automations-run">
-        <article className="automations-run-main" aria-label={routineTitle(run.title)}>
-          <p className="automations-detail-kicker">
-            Output · {formatDateTime(run.startedAt)}
-          </p>
-          <h3>{routineTitle(run.title)}</h3>
-          <p className={`automations-status is-${run.status}`}>{run.status.replaceAll('_', ' ')}</p>
-          <StatusBadge status={run.status} />
-          <p className="automations-detail-body">{run.summary || 'No output recorded yet.'}</p>
-        </article>
-        <aside className="automations-run-rail" aria-label="All runs">
-          <h3>Runs <small>({runs.length})</small></h3>
-          {runs.map((item) => (
-            <button
-              key={item.id}
-              type="button"
-              className={`automations-day-item${item.id === run.id ? ' is-active' : ''}`}
-              aria-current={item.id === run.id}
-              onClick={() => onSelect(item)}
-            >
-              <span className={`automations-dot is-${item.status}`} aria-hidden="true" />
-              <span>{routineTitle(item.title)}</span>
-              <time>{timeLabel(item.endedAt ?? item.startedAt)}</time>
-            </button>
-          ))}
-        </aside>
-      </div>
-    </section>
-  )
 }
 
 /**
@@ -912,6 +824,13 @@ export default function AutomationsView(props: FeatureProps): React.JSX.Element 
         runs={runs}
         onSelect={(next) => props.shell.navigate('automations', { automationTab: 'updates', focusRunId: next.id })}
         onBack={goUpdates}
+        onViewAll={goUpdates}
+        onRunAgain={run.routineId
+          ? async (): Promise<void> => {
+              await window.app.automationsTestRun(run.routineId!)
+              await refresh()
+            }
+          : undefined}
       />
     )
   }
@@ -963,11 +882,7 @@ export default function AutomationsView(props: FeatureProps): React.JSX.Element 
 
       {!loading && !error && tab === 'updates' && (
         <div className="automations-body updates-body">
-          <UpdatesList
-            runs={runs}
-            todayKey={todayKey}
-            onSelect={(run) => props.shell.navigate('automations', { automationTab: 'updates', focusRunId: run.id })}
-          />
+          <UpdatesList runs={runs} onBack={() => props.shell.navigate('home')} />
         </div>
       )}
 

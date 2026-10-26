@@ -169,9 +169,26 @@ describe('AutomationsView', () => {
     }))
     expect(html).toContain('Today')
     expect(html).toContain('Yesterday')
+    expect(html).toContain('Yesterday <span>(1)</span>')
     expect(html).toContain('Daily Hacker News Top 10 Digest')
     expect(html).toContain('Today digest body.')
     expect(html).toContain('Yesterday digest body.')
+    expect(html).toContain('p-rail-item updates-row')
+    expect(html).toContain('updates-row-meta')
+    expect(html).toContain('updates-row-icon')
+    expect(html).toContain('updates-row-body')
+  })
+
+  it('shows the empty-output placeholder in the row body', () => {
+    const html = renderToStaticMarkup(createElement(UpdatesList, {
+      todayKey: '2026-10-11',
+      runs: [
+        { id: 'a', title: 'Daily Hacker News Top 10 Digest', startedAt: new Date(2026, 9, 11, 9).getTime(), status: 'succeeded', summary: '' }
+      ],
+      onSelect: () => {}
+    }))
+    expect(html).toContain('No output recorded yet.')
+    expect(html).toContain('updates-row-body')
   })
 
   it('does not render a summary strip above the feed', () => {

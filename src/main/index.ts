@@ -380,7 +380,13 @@ function applyStrictCsp(): void {
 }
 
 function wireIpc(): void {
-  const shellRuntime = createShellRuntime(ipcMain, () => scheduler.list(), getShellAppWindow, (id, status) => scheduler.markRan(id, status))
+  const shellRuntime = createShellRuntime(
+    ipcMain,
+    () => scheduler.list(),
+    getShellAppWindow,
+    (id, status) => scheduler.markRan(id, status),
+    () => app.getPath('userData')
+  )
   routineChangeHook = () => shellRuntime.scheduleChanged()
   missedRoutine = (routine) => {
     // Scheduler skips an occurrence whose time already passed (re-arm after
@@ -600,6 +606,9 @@ function wireIpc(): void {
       emit: (event) => {
         shellRuntime.observeRunEvent(event)
         emitToApp(event)
+        // Files the tool produced land in the artifact store for every run
+        // (chat and scheduled alike), before the run-log-only early return.
+        if (event.type === 'tool-result') shellRuntime.recordToolResult(runId, event.toolName, event.output)
         if (!logRunId) return
         if (event.type === 'tool-call') {
           shellRuntime.appendRunLogStep(logRunId, { tool: event.toolName, input: event.input })

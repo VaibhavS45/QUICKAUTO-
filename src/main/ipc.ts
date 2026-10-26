@@ -59,6 +59,10 @@ export const IpcChannels = {
   updatesList: 'updates:list',
   updatesStream: 'updates:stream',
   updatesGetRunLog: 'updates:get-run-log',
+  /** Files an automation run produced: list on the detail page, save, preview. */
+  runArtifactsList: 'run-artifacts:list',
+  runArtifactsSave: 'run-artifacts:save',
+  runArtifactsPreview: 'run-artifacts:preview',
   getProfile: 'settings:get-profile',
   setProfile: 'settings:set-profile',
   getAppBehavior: 'app:get-behavior',

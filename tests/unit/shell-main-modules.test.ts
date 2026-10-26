@@ -61,6 +61,9 @@ describe('shell main-process contract modules', () => {
       'pluginEnable',
       'pluginsList',
       'recentTasks',
+      'runArtifactsList',
+      'runArtifactsPreview',
+      'runArtifactsSave',
       'scheduleToday',
       'updatesList',
       'updatesStream'

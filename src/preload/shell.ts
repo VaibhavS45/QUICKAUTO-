@@ -1,5 +1,6 @@
 import { ipcRenderer } from 'electron'
 import type { AppNotification } from '../shared/contracts/notifications.js'
+import type { RunArtifact } from '../shared/contracts/artifacts.js'
 import type { RunLogRecord } from '../shared/contracts/schedule.js'
 import type { RunRecord, TodaySchedule } from '../shared/contracts/schedule.js'
 import type { AgentProfile } from '../main/agent/agent-store.js'
@@ -38,6 +39,23 @@ export const shellApi = {
   },
   getRunLog: (runId: string): Promise<{ ok: boolean; log?: RunLogRecord; error?: string }> =>
     ipcRenderer.invoke('updates:get-run-log', { runId }).catch((error: unknown) => ({
+      ok: false,
+      error: error instanceof Error ? error.message : String(error)
+    })),
+  runArtifactsList: (runId: string): Promise<{ ok: boolean; artifacts?: RunArtifact[]; error?: string }> =>
+    ipcRenderer.invoke('run-artifacts:list', { runId }).catch((error: unknown) => ({
+      ok: false,
+      error: error instanceof Error ? error.message : String(error)
+    })),
+  /** One click: copies the file straight into the OS Downloads folder. */
+  runArtifactsSave: (artifactId: string): Promise<{ ok: boolean; savedPath?: string; error?: string }> =>
+    ipcRenderer.invoke('run-artifacts:save', { artifactId }).catch((error: unknown) => ({
+      ok: false,
+      error: error instanceof Error ? error.message : String(error)
+    })),
+  /** Data URL for image previews only; other mimes return ok with no image. */
+  runArtifactsPreview: (artifactId: string): Promise<{ ok: boolean; dataUrl?: string; error?: string }> =>
+    ipcRenderer.invoke('run-artifacts:preview', { artifactId }).catch((error: unknown) => ({
       ok: false,
       error: error instanceof Error ? error.message : String(error)
     })),

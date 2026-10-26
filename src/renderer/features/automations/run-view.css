@@ -1,0 +1,72 @@
+/* run-view.css — run detail page (.rv-*). Uses existing ember tokens. */
+:root {
+  --run-ok: #5bd69b;
+  --run-ok-soft: rgb(91 214 155 / 12%);
+  --run-bad: #ff6b6b;
+  --run-bad-soft: rgb(255 107 107 / 12%);
+}
+
+/* ---------- Run detail page ---------- */
+.rv-page { width: min(100%, 820px); margin: 0 auto; padding: 8px 24px 64px; box-sizing: border-box; display: grid; gap: 20px; }
+.rv-header { display: grid; gap: 12px; }
+.rv-kicker {
+  margin: 0; color: var(--ash-3); font-family: var(--font-mono);
+  font-size: 11px; font-weight: 400; letter-spacing: 0.14em; text-transform: uppercase;
+}
+.rv-title {
+  margin: 0; color: var(--ash-1); font-size: 28px; font-weight: 600;
+  letter-spacing: -0.02em; line-height: 1.2; overflow-wrap: anywhere;
+}
+.rv-meta { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 16px; color: var(--ash-2); font-size: 13px; }
+.rv-meta-item { display: inline-flex; align-items: center; gap: 6px; }
+.rv-chip {
+  --tone: var(--ash-2); --tone-soft: rgb(255 255 255 / 7%);
+  display: inline-flex; align-items: center; gap: 6px; padding: 3px 11px; border-radius: 999px;
+  background: var(--tone-soft); color: var(--tone); font-size: 12px; font-weight: 500;
+}
+.rv-chip.is-ok { --tone: var(--run-ok); --tone-soft: var(--run-ok-soft); }
+.rv-chip.is-bad { --tone: var(--run-bad); --tone-soft: var(--run-bad-soft); }
+.rv-chip.is-live { --tone: var(--ember); --tone-soft: var(--ember-dim); }
+
+.rv-card { border: 1px solid var(--line-2); border-radius: 14px; background: var(--black-2); overflow: hidden; }
+.rv-card-head { display: flex; align-items: center; justify-content: space-between; padding: 12px 18px; border-bottom: 1px solid var(--line-2); }
+.rv-card-body { padding: 20px 22px; }
+.rv-copy, .rv-code button {
+  display: inline-flex; align-items: center; gap: 6px; height: 26px; padding: 0 10px;
+  border: 1px solid var(--line-2); border-radius: 8px; background: transparent;
+  color: var(--ash-2); font: inherit; font-size: 12px; cursor: pointer;
+}
+.rv-copy:hover:not(:disabled), .rv-code button:hover { color: var(--ash-1); border-color: var(--line-3); }
+.rv-copy:disabled { opacity: 0.45; cursor: default; }
+
+.rv-md { color: var(--ash-1); font-size: 14.5px; line-height: 1.7; overflow-wrap: anywhere; }
+.rv-md > :first-child { margin-top: 0; }
+.rv-md > :last-child { margin-bottom: 0; }
+.rv-md p { margin: 0 0 12px; white-space: pre-line; }
+.rv-md ul, .rv-md ol { margin: 0 0 12px; padding-left: 22px; }
+.rv-md li { margin: 4px 0; }
+.rv-md h4 { margin: 18px 0 8px; font-weight: 600; letter-spacing: -0.01em; }
+.rv-md .rv-h1 { font-size: 20px; }
+.rv-md .rv-h2 { font-size: 17px; }
+.rv-md .rv-h3 { font-size: 15px; }
+.rv-inline-code {
+  padding: 1px 6px; border-radius: 6px; background: var(--black-4);
+  font-family: var(--font-mono); font-size: 0.9em;
+}
+.rv-code { margin: 14px 0; border: 1px solid var(--line-2); border-radius: 10px; background: var(--black-1); overflow: hidden; }
+.rv-code figcaption {
+  display: flex; align-items: center; justify-content: space-between; padding: 7px 12px;
+  border-bottom: 1px solid var(--line-2); color: var(--ash-3);
+  font-family: var(--font-mono); font-size: 11px; letter-spacing: 0.1em; text-transform: uppercase;
+}
+.rv-code pre { margin: 0; padding: 14px 16px; overflow-x: auto; font-family: var(--font-mono); font-size: 13px; line-height: 1.6; }
+.rv-empty { margin: 0; padding: 28px 8px; text-align: center; color: var(--ash-2); font-size: 14px; }
+
+/* Keep the existing Results + Chat blocks, just give them the same card look. */
+.rv-section { display: grid; gap: 10px; }
+
+@media (max-width: 700px) { .rv-page { padding-inline: 16px; } .rv-title { font-size: 24px; } }
+
+/* Day mode fallback */
+.light .rv-card { background: #fff; }
+.light .rv-code, .light .rv-inline-code { background: var(--surface); }

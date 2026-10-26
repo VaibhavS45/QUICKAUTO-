@@ -8,6 +8,8 @@ import type { Routine } from '../agent/scheduler.js'
 import { configureNotificationStorage, notify, type NotificationStorage } from './notifications.js'
 import { registerNotificationIpc } from './notification-ipc.js'
 import { registerScheduleIpc } from './schedule-ipc.js'
+import { registerArtifactIpc } from './artifact-ipc.js'
+import { RunArtifactService, type RunArtifactStorage } from './run-artifacts.js'
 import { ScheduleService, type RunRecordStorage } from './schedule-service.js'
 
 type RunStatus = RunRecord['status']
@@ -39,6 +41,25 @@ class ElectronRunLogStore implements RunLogRawStorage {
 
   save(records: RunLogRecord[]): void {
     this.store.set('run-logs', records)
+  }
+}
+
+interface RunArtifactStoreSchema {
+  'run-artifacts': unknown[]
+}
+
+class ElectronRunArtifactStore implements RunArtifactStorage {
+  private readonly store = new Store<RunArtifactStoreSchema>({
+    name: 'palette-shell',
+    defaults: { 'run-artifacts': [] }
+  })
+
+  load(): unknown {
+    return this.store.get('run-artifacts', [])
+  }
+
+  save(records: Parameters<RunArtifactStorage['save']>[0]): void {
+    this.store.set('run-artifacts', records)
   }
 }
 
@@ -82,6 +103,8 @@ export interface ShellRuntime {
   }): void
   getRunLog(runId: string): RunLogRecord | null
   onRunLogChange(cb: () => void): () => void
+  /** Capture the files a tool result produced (artifact detail page + downloads). */
+  recordToolResult(runId: string, toolName: string, output: unknown): void
   scheduleChanged(): void
   notify(input: Parameters<typeof notify>[0]): AppNotification
   notificationsChanged(): void
@@ -108,13 +131,17 @@ export function createShellRuntime(
   ipc: IpcMain,
   getRoutines: () => Routine[],
   getWindow: () => BrowserWindow | null,
-  markRoutineRan: (id: string, status: string) => void
+  markRoutineRan: (id: string, status: string) => void,
+  /** Root dir for cached run artifacts; the app's userData on production. */
+  getBaseDir: () => string = () => '.'
 ): ShellRuntime {
   const runs = new ElectronRunRecordStore()
   const runLogs = new ElectronRunLogStore()
+  const runArtifacts = new ElectronRunArtifactStore()
   const notificationStore = new ElectronNotificationStore()
   configureNotificationStorage(notificationStore)
   const scheduleService = new ScheduleService(getRoutines, runs, runLogs)
+  const artifactService = new RunArtifactService({ baseDir: getBaseDir(), storage: runArtifacts })
   const activeRecords = new Map<string, RunRecord>()
   const send = (channel: string): void => {
     const window = getWindow()
@@ -123,6 +150,7 @@ export function createShellRuntime(
 
   registerScheduleIpc(ipc, scheduleService)
   registerNotificationIpc(ipc, { changed: () => send(IpcChannels.notificationsChanged) })
+  registerArtifactIpc(ipc, artifactService)
   scheduleService.onChange(() => send(IpcChannels.scheduleChanged))
   scheduleService.onRunLogChange(() => send(IpcChannels.updatesChanged))
 
@@ -201,6 +229,9 @@ export function createShellRuntime(
     },
     getRunLog: (runId) => scheduleService.getRunLog(runId),
     onRunLogChange: (cb) => scheduleService.onRunLogChange(cb),
+    recordToolResult: (runId, toolName, output) => {
+      void artifactService.observeToolResult(runId, toolName, output)
+    },
     scheduleChanged: () => scheduleService.changed(),
     notify,
     notificationsChanged: () => send(IpcChannels.notificationsChanged)

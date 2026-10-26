@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { FeatureProps } from '../../contracts/feature.js'
 import type { RunRecord, ScheduleItem } from '../../../shared/contracts/schedule.js'
+import type { RunArtifact } from '../../../shared/contracts/artifacts.js'
+import type { ChatThread } from '../../../shared/chat.js'
 import type { Automation } from '../../../shared/contracts/automations.js'
 import { addDaysKey, localDayKey, pastDayLabel, routineTitle, timeLabel } from './dates.js'
 import {
@@ -25,14 +27,15 @@ import {
 } from './canvas-steps.js'
 import { parseAutomationCreate, parseAutomationTab, type AutomationTabId } from '../../shell/nav.js'
 import { useBreadcrumbs, type BreadcrumbItem } from '../../components/layout/Breadcrumbs.js'
-import { formatDateTime } from '../../lib/format.js'
 import ScheduledTasks from './ScheduledTasks.js'
 import { MANAGE_FILTERS, automationMeta, type ManageFilter } from './scheduled.js'
 import { ConfirmDialog } from './ConfirmDialog.js'
-import { StatusBadge, UpdatesGlyph } from '../../components/ui/primitives.js'
 import { CanvasNodeIcon, CanvasStepEditor, CanvasStepPicker, type CanvasPick, type CanvasPickTarget } from './canvas-picker.js'
 import { readCanvasMemory, writeCanvasMemory, type CanvasMemory } from './canvas-memory.js'
+import { UpdatesGlyph } from '../../components/ui/primitives.js'
+import { RunHeader, RunOutput } from './run-view.js'
 import './automations.css'
+import './run-view.css'
 
 interface Routine {
   id: string
@@ -217,44 +220,124 @@ export function UpdatesList({ runs, todayKey, onSelect }: {
   )
 }
 
-/** Dedicated run page: full info left, every agent run in a right rail. */
-export function RunDetailPage({ run, runs, onSelect, onBack }: {
+/** Byte size shown the way a file manager shows it. */
+export function formatArtifactBytes(size: number): string {
+  if (size < 1024) return `${size} B`
+  if (size < 1024 * 1024) return `${Math.round(size / 102.4) / 10} KB`
+  return `${Math.round(size / (1024 * 102.4)) / 10} MB`
+}
+
+/** Icon per artifact kind: PDF sheet, image, or a plain download sheet. */
+export function ArtifactGlyph({ mime }: { mime: string }): React.JSX.Element {
+  const pdf = mime === 'application/pdf'
+  const image = mime.startsWith('image/')
+  return (
+    <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <path d="M6 2.8h8L19.2 8v11.4a1.8 1.8 0 0 1-1.8 1.8H6a1.8 1.8 0 0 1-1.8-1.8V4.6A1.8 1.8 0 0 1 6 2.8Z" />
+      <path d="M14 3v5h5" />
+      {pdf && <path d="M9.4 15.2h5.2M9.4 11.6h5.2" />}
+      {image && (
+        <>
+          <circle cx="9.4" cy="12.2" r="1.4" />
+          <path d="m7 18.4 3.4-3.4 2.2 2.2 2.6-2.6 3 3" />
+        </>
+      )}
+      {!pdf && !image && <path d="M12 10.6v5.8M9.6 14l2.4 2.4L14.4 14" />}
+    </svg>
+  )
+}
+
+function ChatGlyph(): React.JSX.Element {
+  return (
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <path d="M20.5 11.4a7.5 7.5 0 0 1-7.9 7.4 8.9 8.9 0 0 1-2.8-.5L5 19.6l1.2-3.7A7.3 7.3 0 0 1 4.7 11a7.6 7.6 0 0 1 8.3-7.2 7.5 7.5 0 0 1 7.5 7.6Z" />
+      <path d="M9.4 10.2h5.6M9.4 13.4h3.6" />
+    </svg>
+  )
+}
+
+const ARTIFACT_STATUS_SAVING = 'saving'
+const ARTIFACT_STATUS_SAVED = 'saved'
+
+/** Dedicated run page: the run's output, its result files, and the source chat. */
+export function RunDetailPage({ run, artifacts, previews, artifactStatus, thread, onBack, onDownload, onOpenChat }: {
   run: RunRecord
-  runs: RunRecord[]
-  onSelect(run: RunRecord): void
+  artifacts: RunArtifact[]
+  /** data URL thumbnails already fetched, by artifact id (image/* only). */
+  previews: Record<string, string>
+  /** Per-artifact download state: saving / saved / an error message. */
+  artifactStatus: Record<string, string>
+  thread: ChatThread | null
   onBack(): void
+  onDownload(artifact: RunArtifact): void
+  onOpenChat?(chatId: string): void
 }): React.JSX.Element {
   return (
     <section className="automations" aria-label="Run details">
       <div className="automations-crumbbar">
         <button type="button" className="automations-backlink" onClick={onBack}>← Back</button>
       </div>
-      <div className="automations-run">
-        <article className="automations-run-main" aria-label={routineTitle(run.title)}>
-          <p className="automations-detail-kicker">
-            Output · {formatDateTime(run.startedAt)}
-          </p>
-          <h3>{routineTitle(run.title)}</h3>
-          <p className={`automations-status is-${run.status}`}>{run.status.replaceAll('_', ' ')}</p>
-          <StatusBadge status={run.status} />
-          <p className="automations-detail-body">{run.summary || 'No output recorded yet.'}</p>
-        </article>
-        <aside className="automations-run-rail" aria-label="All runs">
-          <h3>Runs <small>({runs.length})</small></h3>
-          {runs.map((item) => (
-            <button
-              key={item.id}
-              type="button"
-              className={`automations-day-item${item.id === run.id ? ' is-active' : ''}`}
-              aria-current={item.id === run.id}
-              onClick={() => onSelect(item)}
-            >
-              <span className={`automations-dot is-${item.status}`} aria-hidden="true" />
-              <span>{routineTitle(item.title)}</span>
-              <time>{timeLabel(item.endedAt ?? item.startedAt)}</time>
-            </button>
-          ))}
-        </aside>
+      <div className="rv-page">
+        <RunHeader run={run} />
+        <RunOutput text={run.summary ?? ''} />
+        {artifacts.length > 0 && (
+          <section className="rv-section">
+            <div className="run-results" aria-label="Run results">
+              <h4>Results</h4>
+              <div className="run-artifacts">
+                {artifacts.map((artifact) => {
+                  const status = artifactStatus[artifact.id]
+                  return (
+                    <div key={artifact.id} className="run-artifact-card">
+                      <span className="run-artifact-thumb" aria-hidden="true">
+                        {previews[artifact.id]
+                          ? <img src={previews[artifact.id]} alt="" loading="lazy" />
+                          : <ArtifactGlyph mime={artifact.mime} />}
+                      </span>
+                      <span className="run-artifact-copy">
+                        <strong>{artifact.name}</strong>
+                        <small>{artifact.mime} · {formatArtifactBytes(artifact.size)}</small>
+                      </span>
+                      <button
+                        type="button"
+                        className="run-artifact-download"
+                        disabled={status === ARTIFACT_STATUS_SAVING}
+                        onClick={() => onDownload(artifact)}
+                      >
+                        {status === ARTIFACT_STATUS_SAVING
+                          ? 'Saving…'
+                          : status === ARTIFACT_STATUS_SAVED
+                            ? 'Saved ✓'
+                            : 'Download'}
+                      </button>
+                      {status && status !== ARTIFACT_STATUS_SAVING && status !== ARTIFACT_STATUS_SAVED && (
+                        <small className="run-artifact-error" role="alert">{status}</small>
+                      )}
+                    </div>
+                  )
+                })}
+              </div>
+            </div>
+          </section>
+        )}
+        {run.chatId && (
+          <section className="rv-section">
+            <div className="rv-card run-chat-card">
+              <span className="run-chat-icon" aria-hidden="true"><ChatGlyph /></span>
+              <span className="run-chat-copy">
+                <strong>{thread?.title ?? 'Chat'}</strong>
+                <small>
+                  {thread
+                    ? `From chat · ${thread.messages.length} message${thread.messages.length === 1 ? '' : 's'}`
+                    : 'The chat that produced this result.'}
+                </small>
+              </span>
+              <button type="button" className="run-chat-open" onClick={() => onOpenChat?.(run.chatId!)}>
+                Open chat
+              </button>
+            </div>
+          </section>
+        )}
       </div>
     </section>
   )
@@ -884,6 +967,84 @@ export default function AutomationsView(props: FeatureProps): React.JSX.Element 
     props.shell.navigate('automations', { automationTab: 'updates' })
   }
 
+  // ---- Run detail page: the run's files and the chat that produced it ----
+  const [runArtifacts, setRunArtifacts] = useState<RunArtifact[]>([])
+  const [artifactPreviews, setArtifactPreviews] = useState<Record<string, string>>({})
+  const [artifactStatus, setArtifactStatus] = useState<Record<string, string>>({})
+  const [runThread, setRunThread] = useState<ChatThread | null>(null)
+  const detailRun = useMemo(
+    () => runs.find((candidate) => candidate.id === runId) ?? null,
+    [runs, runId]
+  )
+
+  // The files of the open run; reset cleanly when the page closes.
+  useEffect(() => {
+    if (!runId) {
+      setRunArtifacts([])
+      setArtifactPreviews({})
+      setArtifactStatus({})
+      setRunThread(null)
+      return
+    }
+    let active = true
+    setRunArtifacts([])
+    window.app.runArtifactsList(runId)
+      .then((res) => {
+        if (active) setRunArtifacts(res.ok && res.artifacts ? res.artifacts : [])
+      })
+      .catch(() => {
+        if (active) setRunArtifacts([])
+      })
+    if (detailRun?.chatId) {
+      window.app.chatGet(detailRun.chatId)
+        .then((res) => {
+          if (active && res.ok && res.thread) setRunThread(res.thread)
+        })
+        .catch(() => {
+          if (active) setRunThread(null)
+        })
+    } else {
+      setRunThread(null)
+    }
+    return () => { active = false }
+  }, [runId, detailRun])
+
+  // Image artifacts get a real thumbnail; the rest show their kind glyph.
+  useEffect(() => {
+    for (const artifact of runArtifacts) {
+      if (!artifact.mime.startsWith('image/')) continue
+      if (artifactPreviews[artifact.id] !== undefined) continue
+      window.app.runArtifactsPreview(artifact.id)
+        .then((res) => {
+          if (res.ok && res.dataUrl) {
+            setArtifactPreviews((prev) => ({ ...prev, [artifact.id]: res.dataUrl! }))
+          }
+        })
+        .catch(() => {})
+    }
+  }, [runArtifacts]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  /** One click: copy the file into the OS Downloads folder. */
+  const downloadArtifact = useCallback(async (artifact: RunArtifact): Promise<void> => {
+    setArtifactStatus((prev) => ({ ...prev, [artifact.id]: ARTIFACT_STATUS_SAVING }))
+    try {
+      const res = await window.app.runArtifactsSave(artifact.id)
+      setArtifactStatus((prev) => ({
+        ...prev,
+        [artifact.id]: res.ok ? ARTIFACT_STATUS_SAVED : (res.error ?? 'Could not save the file.')
+      }))
+    } catch (reason) {
+      setArtifactStatus((prev) => ({
+        ...prev,
+        [artifact.id]: reason instanceof Error ? reason.message : 'Could not save the file.'
+      }))
+    }
+  }, [])
+
+  const openRunChat = useCallback((chatId: string): void => {
+    props.shell.navigate('chat', { chatId })
+  }, [props.shell])
+
   if (runId) {
     const run = runs.find((candidate) => candidate.id === runId)
     if (loading) {
@@ -909,9 +1070,13 @@ export default function AutomationsView(props: FeatureProps): React.JSX.Element 
     return (
       <RunDetailPage
         run={run}
-        runs={runs}
-        onSelect={(next) => props.shell.navigate('automations', { automationTab: 'updates', focusRunId: next.id })}
+        artifacts={runArtifacts}
+        previews={artifactPreviews}
+        artifactStatus={artifactStatus}
+        thread={runThread}
         onBack={goUpdates}
+        onDownload={(artifact) => void downloadArtifact(artifact)}
+        onOpenChat={openRunChat}
       />
     )
   }

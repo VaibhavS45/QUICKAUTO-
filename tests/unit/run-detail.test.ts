@@ -40,11 +40,11 @@ describe('RunDetailPage', () => {
     )
     expect(html).toContain('Synced 12 rows.')
     expect(html).toContain('All runs')
-    expect(html).toContain('<span class="run-count">2</span>')
-    expect(html.match(/class="run-row /g)).toHaveLength(2)
-    expect(html).toContain('run-dot')
+    expect(html).toContain('Runs <small>(2)</small>')
+    expect(html.match(/automations-day-item/g)).toHaveLength(2)
+    expect(html).toContain('automations-dot is-failed')
     expect(html).toContain('is-active')
-    expect(html).toContain('Back to Updates')
+    expect(html).toContain('← Back')
   })
 
   it('switches runs through onSelect', () => {

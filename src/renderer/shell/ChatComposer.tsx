@@ -2,13 +2,13 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { AutomationTemplateCards } from './AutomationTemplateCards.js'
 import type { AutomationTemplate } from '../../shared/contracts/automation-templates.js'
 import { activeMention, parseMentionedTools, TOOL_META } from '../../shared/types.js'
-import { attachmentPromptText, useAttachments } from '../lib/attachments.js'
+import { attachmentPromptText, fileExtension, useAttachments } from '../lib/attachments.js'
 import { useI18n } from '../i18n/LanguageContext.js'
 
 interface ChatComposerProps {
   busy: boolean
   compact?: boolean
-  onSend(text: string): Promise<boolean>
+  onSend(text: string, attachments?: Array<{ path: string; name?: string }>): Promise<boolean>
   onOpenConnections(): void
   onOpenAutomations(): void
   onSelectTemplate(template: AutomationTemplate): void
@@ -86,12 +86,19 @@ export function ChatComposer({
 
   async function send(): Promise<void> {
     const base = value.trim()
-    const text = base ? `${base} ${attachmentPromptText(attachments.files)}`.trim() : ''
+    const attachmentText = attachmentPromptText(attachments.files)
+    const text = [base, attachmentText].filter(Boolean).join(' ')
     if (!text || busy || submitting.current) return
     submitting.current = true
     setError('')
     try {
-      if (await onSend(text)) setValue('')
+      const localAttachments = attachments.files
+        .filter((file) => file.kind === 'local')
+        .map((file) => ({ path: file.ref, name: file.name }))
+      if (await onSend(text, localAttachments)) {
+        setValue('')
+        attachments.clear()
+      }
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : 'Could not start this chat.')
     } finally {
@@ -151,7 +158,10 @@ export function ChatComposer({
           <div className="chat-mention-menu" role="listbox" aria-label="Available tools">
             {suggestions.map(([id, meta]) => (
               <button key={id} type="button" role="option" onMouseDown={(event) => event.preventDefault()} onClick={() => insertMention(id)}>
-                <span>{meta.label}</span>
+                <span className={`chat-mention-option-label is-${meta.kind}`}>
+                  <span className="chat-tool-pill-mark" aria-hidden="true" />
+                  {meta.label}
+                </span>
                 <small>{meta.hint}</small>
               </button>
             ))}
@@ -164,13 +174,20 @@ export function ChatComposer({
           <div className="chat-attach-chips">
             {attachments.files.map((file) => (
               <div key={file.ref} className="chat-attach-chip" title={file.ref}>
-                <span className="chat-attach-chip-name">{file.name}</span>
+                <span className={`chat-attach-file-icon is-${fileExtension(file.name).toLowerCase()}`} aria-hidden="true">
+                  <span>{fileExtension(file.name)}</span>
+                </span>
+                <span className="chat-attach-chip-copy">
+                  <span className="chat-attach-chip-name">{file.name}</span>
+                  <span className="chat-attach-chip-kind">{file.kind === 'local' ? 'Local file' : 'Google Drive'}</span>
+                </span>
                 <button
                   type="button"
+                  className="chat-attach-remove"
                   aria-label={`Remove ${file.name}`}
                   onClick={() => attachments.remove(file.ref)}
                 >
-                  ×
+                  <span aria-hidden="true">×</span>
                 </button>
               </div>
             ))}
@@ -230,7 +247,15 @@ export function ChatComposer({
               )}
             </div>
           <span className="chat-tool-selection" aria-label="Selected tools">
-            {selectedTools.filter((id) => id !== 'calendar').map((id) => <span key={id}>{TOOL_META[id].label}</span>)}
+            {selectedTools.filter((id) => id !== 'calendar').map((id) => {
+              const meta = TOOL_META[id]
+              return (
+                <span key={id} className={`chat-tool-pill is-${meta.kind}`} title={meta.hint}>
+                  <span className="chat-tool-pill-mark" aria-hidden="true" />
+                  {meta.label}
+                </span>
+              )
+            })}
           </span>
           <button type="button" className="chat-send-button" disabled={busy || (!value.trim() && attachments.files.length === 0)} onClick={() => void send()}>
             {busy ? t('composer.working') : t('composer.send')}

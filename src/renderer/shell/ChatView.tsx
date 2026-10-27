@@ -9,7 +9,7 @@ interface ChatViewProps {
   messages: ChatMessage[]
   run: ChatRunState | null
   busy: boolean
-  onSend(text: string): Promise<boolean>
+  onSend(text: string, attachments?: Array<{ path: string; name?: string }>): Promise<boolean>
   onApprove(approvalId: string, approved: boolean): void
   onStop(): void
   onOpenConnections(): void

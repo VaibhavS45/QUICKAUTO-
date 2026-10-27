@@ -25,6 +25,12 @@ export function baseName(filePath: string): string {
   return n.length > 0 ? n : filePath
 }
 
+export function fileExtension(fileName: string): string {
+  const name = baseName(fileName)
+  const dot = name.lastIndexOf('.')
+  return dot > 0 && dot < name.length - 1 ? name.slice(dot + 1).toUpperCase().slice(0, 5) : 'FILE'
+}
+
 /** Local chip reference for a picked path. */
 export function localRef(filePath: string): string {
   return filePath
@@ -83,6 +89,7 @@ export function useAttachments(): {
   attachLocal: () => Promise<void>
   attachDrive: (file: { id: string; name: string; mimeType?: string }) => void
   remove: (ref: string) => void
+  clear: () => void
   setError: (message: string) => void
 } {
   const [files, setFiles] = useState<AttachedFile[]>([])
@@ -130,5 +137,10 @@ export function useAttachments(): {
     setFiles((prev) => prev.filter((f) => f.ref !== ref))
   }, [])
 
-  return { files, error, attachLocal, attachDrive, remove, setError }
+  const clear = useCallback((): void => {
+    setFiles([])
+    setError('')
+  }, [])
+
+  return { files, error, attachLocal, attachDrive, remove, clear, setError }
 }

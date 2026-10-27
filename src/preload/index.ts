@@ -47,6 +47,7 @@ const api = {
     tools: string[]
     source: 'palette' | 'chat' | 'scheduled'
     chatId?: string
+    attachments?: Array<{ path: string; name?: string }>
     history?: ChatMessage[]
     systemPrompt?: string
   }): Promise<{ ok: boolean; runId?: string; error?: string }> =>

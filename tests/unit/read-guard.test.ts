@@ -75,6 +75,7 @@ describe('W3 sensitive-path denial for read_file', () => {
   it('R1: resolves symlinks and refuses targets that are sensitive', async () => {
     const key = await seed('.ssh/id_rsa', 'SECRET')
     const alias = path.join(process.cwd(), 'out', 'read-guard-test', 'alias.txt')
+    await rm(alias, { force: true }).catch(() => {})
     await mkdir(path.dirname(alias), { recursive: true })
     await symlink(key, alias)
     await expect(read_file.execute({ path: alias })).rejects.toThrow(/sensitive/i)

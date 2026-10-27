@@ -366,7 +366,7 @@ export default function ShellApp(): React.JSX.Element {
   }), [navigate])
   const shownName = auth.signedIn && auth.name ? auth.name : displayName(profile, t('shell.defaultProfile'))
 
-  async function sendMessage(text: string): Promise<boolean> {
+  async function sendMessage(text: string, attachments?: Array<{ path: string; name?: string }>): Promise<boolean> {
     if (busyRef.current) return false
     busyRef.current = true
     setBusy(true)
@@ -387,7 +387,8 @@ export default function ShellApp(): React.JSX.Element {
         prompt: text,
         tools: parseMentionedTools(text),
         source: 'chat',
-        chatId: threadId
+        chatId: threadId,
+        ...(attachments?.length ? { attachments } : {})
       })
       if (!result.ok || !result.runId) throw new Error(result.error || 'Could not start the assistant.')
       runIdRef.current = result.runId

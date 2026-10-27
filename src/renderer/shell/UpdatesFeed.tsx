@@ -1,8 +1,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { ShellApi } from '../contracts/feature.js'
 import type { RunLogRecord } from '../../shared/contracts/schedule.js'
-import { localDayKey, pastDayLabel, routineTitle, timeLabel } from '../features/automations/dates.js'
-import '../features/automations/automations.css'
+import { localDayKey, pastDayLabel, routineTitle, timeLabel } from '../features/automations/shared/dates.js'
+import '../features/automations/shared/automations.css'
 
 const POLL_MS = 7000
 const PAGE_LIMIT = 100

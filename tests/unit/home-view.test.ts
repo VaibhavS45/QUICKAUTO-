@@ -2,7 +2,7 @@ import { createElement } from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { describe, expect, it, vi } from 'vitest'
 import { HomeView } from '../../src/renderer/shell/HomeView.js'
-import { START_OPTIONS } from '../../src/renderer/features/automations/start-choice.js'
+import { START_OPTIONS } from '../../src/renderer/features/automations/schedule/start-choice.js'
 import { createFeatureProps } from '../../src/renderer/shell/FeatureHost.js'
 
 const shell = {

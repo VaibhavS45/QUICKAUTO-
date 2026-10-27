@@ -12,7 +12,6 @@ interface ChatViewProps {
   onSend(text: string): Promise<boolean>
   onApprove(approvalId: string, approved: boolean): void
   onStop(): void
-  onOpenSettings(): void
   onOpenConnections(): void
   onOpenAutomations(): void
   onSelectTemplate(template: AutomationTemplate): void
@@ -41,12 +40,10 @@ export function ChatView({
   onSend,
   onApprove,
   onStop,
-  onOpenSettings,
   onOpenConnections,
   onOpenAutomations,
   onSelectTemplate
 }: ChatViewProps): React.JSX.Element {
-  const showProviderLink = run?.phase === 'error' && /api key|provider/i.test(run.error ?? '')
   const messageList = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
@@ -89,7 +86,6 @@ export function ChatView({
         {run?.phase === 'error' && (
           <div className="chat-run-error" role="alert">
             <p>{run.error || 'The run failed.'}</p>
-            {showProviderLink && <button type="button" onClick={onOpenSettings}>Open Provider settings</button>}
           </div>
         )}
         {run?.phase === 'aborted' && <p className="chat-run-status" role="status">Run stopped.</p>}
@@ -100,7 +96,6 @@ export function ChatView({
           compact
           busy={busy}
           onSend={onSend}
-          onOpenSettings={onOpenSettings}
           onOpenConnections={onOpenConnections}
           onOpenAutomations={onOpenAutomations}
           onSelectTemplate={onSelectTemplate}

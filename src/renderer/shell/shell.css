@@ -347,7 +347,11 @@
 .shell-profile-button svg {
   width: 14px;
   height: 14px;
-  transform: rotate(90deg);
+}
+
+.shell-avatar svg {
+  width: 16px;
+  height: 16px;
 }
 
 .shell-footer-actions {
@@ -2163,6 +2167,10 @@
   height: 36px;
   font-size: 12px;
   font-weight: 600;
+}
+.shell-profile-menu-head .shell-avatar svg {
+  width: 20px;
+  height: 20px;
 }
 .shell-profile-menu-identity { gap: 3px; }
 .shell-profile-menu-identity strong { font-size: 14px; font-weight: 600; }

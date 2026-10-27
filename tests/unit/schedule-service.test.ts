@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
-import { ScheduleService, buildToday, localDateKey, msToNextMinute, progress } from '../../src/main/shell/schedule-service.js'
-import { registerScheduleIpc } from '../../src/main/shell/schedule-ipc.js'
+import { ScheduleService, buildToday, localDateKey, msToNextMinute, progress } from '../../src/main/automations/schedule/schedule-service.js'
+import { registerScheduleIpc } from '../../src/main/automations/schedule/schedule-ipc.js'
 import { IpcChannels } from '../../src/main/ipc.js'
 import type { RunRecord } from '../../src/shared/contracts/schedule.js'
 

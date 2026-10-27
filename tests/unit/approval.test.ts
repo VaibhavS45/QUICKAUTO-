@@ -190,7 +190,7 @@ describe('runAgent approval flow', () => {
     expect(events.map((e) => e.type)).toContain('aborted')
   })
 
-  it('missing API key returns a clear error, no model call', async () => {
+  it('an engine-less builtin run returns a clear error, no model call', async () => {
     const createAgent = vi.fn(() => {
       throw new Error('should not be called')
     })
@@ -205,7 +205,7 @@ describe('runAgent approval flow', () => {
     expect(out.text).toBe('')
     expect(createAgent).not.toHaveBeenCalled()
     expect(events[0]?.type).toBe('error')
-    expect(events[0]?.message ?? '').toMatch(/api key/i)
+    expect(events[0]?.message ?? '').toMatch(/opencode/i)
   })
 })
 

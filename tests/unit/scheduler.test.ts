@@ -6,7 +6,7 @@ import {
   cleanPromptForRoutine,
   nextFire,
   type Routine
-} from '../../src/main/agent/scheduler.js'
+} from '../../src/main/automations/schedule/scheduler.js'
 
 const BASE = new Date(2026, 9, 7, 12, 0, 0) // Wed Oct 7 2026 noon local
 

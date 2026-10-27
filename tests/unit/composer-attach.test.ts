@@ -1,8 +1,8 @@
 import { createElement } from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { describe, expect, it } from 'vitest'
-import Builder from '../../src/renderer/features/automations/builder.js'
-import { blankDraft } from '../../src/renderer/features/automations/builder-compile.js'
+import Builder from '../../src/renderer/features/automations/schedule/builder.js'
+import { blankDraft } from '../../src/renderer/features/automations/schedule/builder-compile.js'
 import { ChatComposer } from '../../src/renderer/shell/ChatComposer.js'
 
 describe('builder attach + drive picker markup', () => {
@@ -29,7 +29,6 @@ describe('chat composer attach markup', () => {
       createElement(ChatComposer, {
         busy: false,
         onSend: async () => true,
-        onOpenSettings: () => {},
         onOpenConnections: () => {},
         onOpenAutomations: () => {},
         onSelectTemplate: () => {}

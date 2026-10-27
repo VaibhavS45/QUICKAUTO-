@@ -1,34 +1,12 @@
 import { useEffect, useState } from 'react'
 import { Button } from '../../components/ui/button.js'
-import { Card, CardSub, CardTitle, Hint } from '../../components/ui/card.js'
-import { Input, Select } from '../../components/ui/input.js'
 import { buildEngines, type EngineInfo } from '../engines.js'
 import AgentsPanel from './AgentsPanel.js'
-
-interface ModelState {
-  provider: string
-  model: string
-  baseUrl?: string
-  resetDay?: number
-  githubRepos?: Array<{ path: string; repo: string; testCommand?: string }>
-  autoApprove?: string[]
-  keySet: boolean
-  encryptionAvailable: boolean
-}
 
 interface HarnessInfo {
   id: string
   installed: boolean
   version?: string
-}
-
-function Field({ label, children }: { label: string; children: React.ReactNode }): React.JSX.Element {
-  return (
-    <label className="set-field">
-      <span className="set-field-label">{label}</span>
-      {children}
-    </label>
-  )
 }
 
 /** Install command lifted from the engine hint line ("Install: <cmd>"). */
@@ -101,43 +79,25 @@ function EngineCard({ engine, active, onUse }: { engine: EngineInfo; active: boo
 }
 
 /**
- * Agents tab: engines (Ready / Needs setup, Image-1 style), the in-app model
- * + key for Built-in, auto-approve, and custom agent profiles. Replaces the
- * old standalone Provider tab — one place for everything that runs the agent.
+ * Agents tab: the OpenCode (ACP) engine, and the custom agents you can run.
+ * OpenCode brings its own models and auth (`opencode auth login`), so there is
+ * no in-app provider/model/API-key setup here.
  */
 export default function AgentsTab(): React.JSX.Element {
-  const [active, setActive] = useState('builtin')
+  const [active, setActive] = useState('opencode')
   const [harnesses, setHarnesses] = useState<HarnessInfo[]>([])
-  const [model, setModel] = useState('')
-  const [keySet, setKeySet] = useState(false)
   const [checking, setChecking] = useState(false)
   const [engineMsg, setEngineMsg] = useState<string | null>(null)
-
-  const [provider, setProvider] = useState('anthropic')
-  const [modelName, setModelName] = useState('')
-  const [baseUrl, setBaseUrl] = useState('')
-  const [resetDay, setResetDay] = useState('1')
-  const [autoApproveEcho, setAutoApproveEcho] = useState(false)
-  const [apiKey, setApiKey] = useState('')
-  const [msg, setMsg] = useState<string | null>(null)
 
   async function refresh(): Promise<void> {
     setChecking(true)
     try {
-      const [p, d, m] = await Promise.all([
+      const [p, d] = await Promise.all([
         window.app.getAgentProvider() as Promise<{ ok: boolean; provider?: string }>,
-        window.app.detectHarnesses() as Promise<{ ok: boolean; harnesses?: HarnessInfo[] }>,
-        window.app.getModelSettings() as Promise<ModelState>
+        window.app.detectHarnesses() as Promise<{ ok: boolean; harnesses?: HarnessInfo[] }>
       ])
       if (p.ok && p.provider) setActive(p.provider)
       if (d.ok && d.harnesses) setHarnesses(d.harnesses)
-      setModel(m.model)
-      setKeySet(m.keySet)
-      setProvider(m.provider)
-      setModelName(m.model)
-      setBaseUrl(m.baseUrl ?? '')
-      setResetDay(String(m.resetDay ?? 1))
-      setAutoApproveEcho((m.autoApprove ?? []).includes('echo'))
     } catch {
       setEngineMsg('Could not check engines.')
     } finally {
@@ -156,37 +116,7 @@ export default function AgentsTab(): React.JSX.Element {
     else setEngineMsg(res.error ?? 'Save failed.')
   }
 
-  async function saveModel(): Promise<void> {
-    setMsg(null)
-    const rd = Math.min(28, Math.max(1, parseInt(resetDay, 10) || 1))
-    const current = (await window.app.getModelSettings()) as ModelState
-    const res = (await window.app.setModelSettings({
-      provider,
-      model: modelName.trim(),
-      baseUrl: baseUrl.trim() || undefined,
-      resetDay: rd,
-      githubRepos: current.githubRepos,
-      autoApprove: autoApproveEcho ? ['echo'] : []
-    })) as { ok: boolean; error?: string }
-    if (!res.ok) {
-      setMsg(res.error ?? 'Save failed.')
-      return
-    }
-    if (apiKey.trim()) {
-      const kr = (await window.app.setApiKey(apiKey.trim())) as { ok: boolean; error?: string }
-      if (!kr.ok) {
-        setMsg(kr.error ?? 'Key save failed.')
-        return
-      }
-      setApiKey('')
-    }
-    setMsg('Saved.')
-    const m = (await window.app.getModelSettings()) as ModelState
-    setModel(m.model)
-    setKeySet(m.keySet)
-  }
-
-  const { ready, needsSetup } = buildEngines({ active, harnesses, model, keySet })
+  const { ready, needsSetup } = buildEngines({ active, harnesses })
 
   return (
     <div className="set-stack">
@@ -194,7 +124,7 @@ export default function AgentsTab(): React.JSX.Element {
         <div className="flex items-center justify-between">
           <div>
             <h2>Agents</h2>
-            <p>Choose an engine, configure its model, and manage the agents you can run.</p>
+            <p>OpenCode runs your agents. Manage the custom agents you can run.</p>
           </div>
           <Button variant="secondary" size="sm" onClick={() => void refresh()} disabled={checking}>
             {checking ? 'Checking…' : '⟳ Check again'}
@@ -207,7 +137,7 @@ export default function AgentsTab(): React.JSX.Element {
           <span className="set-subhead-inline">Ready to use</span>
           <span className="text-xs text-neutral-600">{ready.length} engine{ready.length === 1 ? '' : 's'}</span>
         </div>
-        {ready.length === 0 && <p className="set-empty-note">Nothing is ready yet. Add a model key or install an engine below to get started.</p>}
+        {ready.length === 0 && <p className="set-empty-note">OpenCode is not installed yet. Install it below to get started.</p>}
         <div className="grid gap-3 md:grid-cols-2 settings-engine-grid">
           {ready.map((e) => (
             <EngineCard key={e.id} engine={e} active={e.id === active} onUse={() => void useEngine(e.id)} />
@@ -227,66 +157,6 @@ export default function AgentsTab(): React.JSX.Element {
           </div>
         </div>
       )}
-      <Card>
-        <CardTitle>Model</CardTitle>
-        <CardSub>Provider, model, and encrypted API key for the built-in engine.</CardSub>
-        <div className="set-list">
-          <div className="set-grid2">
-            <Field label="Provider">
-              <Select value={provider} onChange={(e) => setProvider(e.target.value)}>
-                <option value="google">google (gemini)</option>
-                <option value="anthropic">anthropic</option>
-                <option value="openai">openai</option>
-                <option value="openai-compatible">openai-compatible</option>
-              </Select>
-            </Field>
-            <Field label="Model">
-              <Input monospace value={modelName} onChange={(e) => setModelName(e.target.value)} placeholder="claude-sonnet-4-5" />
-            </Field>
-          </div>
-          {provider === 'openai-compatible' && (
-            <Field label="Base URL">
-              <Input monospace value={baseUrl} onChange={(e) => setBaseUrl(e.target.value)} placeholder="http://localhost:11434/v1" />
-            </Field>
-          )}
-          <div className="set-row">
-            <div className="set-grow">
-              <Field label={`API key ${keySet ? '(set ✓)' : '(not set)'}`}>
-                <Input
-                  monospace
-                  type="password"
-                  value={apiKey}
-                  onChange={(e) => setApiKey(e.target.value)}
-                  placeholder={keySet ? '•••••• (enter to replace)' : 'sk-…'}
-                />
-              </Field>
-            </div>
-            <Field label="Reset day">
-              <input value={resetDay} onChange={(e) => setResetDay(e.target.value)} inputMode="numeric" className="set-reset" />
-            </Field>
-            <Button onClick={() => void saveModel()}>
-              Save
-            </Button>
-          </div>
-        </div>
-        {msg && <p className="set-msg">{msg}</p>}
-        <Hint>Keys are encrypted with the OS keychain (safeStorage) and never leave the main process.</Hint>
-      </Card>
-      <Card>
-        <CardTitle>Auto-approve</CardTitle>
-        <label className="set-check">
-          <input
-            type="checkbox"
-            checked={autoApproveEcho}
-            onChange={(e) => setAutoApproveEcho(e.target.checked)}
-          />
-          echo (harmless test tool) — runs without asking
-        </label>
-        <Hint>
-          Default: everything asks. Writes (email draft/send/reply/labels) always need approval
-          and can never auto-approve; scheduled runs never auto-approve anything.
-        </Hint>
-      </Card>
       <div>
         <h3 className="set-subhead">Custom agents</h3>
         <AgentsPanel />

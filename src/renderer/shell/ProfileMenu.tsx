@@ -1,11 +1,10 @@
 import { useEffect, useRef } from 'react'
-import { LogOut, Settings as SettingsIcon } from 'lucide-react'
+import { LogOut, Settings as SettingsIcon, User } from 'lucide-react'
 import { useI18n } from '../i18n/LanguageContext.js'
 
 interface ProfileMenuProps {
   open: boolean
   name: string
-  initials: string
   isSignedIn: boolean
   busy?: boolean
   onClose(): void
@@ -14,7 +13,7 @@ interface ProfileMenuProps {
   onSignOut(): void
 }
 
-export function ProfileMenu({ open, name, initials, isSignedIn, busy, onClose, onOpenSettings, onSignIn, onSignOut }: ProfileMenuProps): React.JSX.Element | null {
+export function ProfileMenu({ open, name, isSignedIn, busy, onClose, onOpenSettings, onSignIn, onSignOut }: ProfileMenuProps): React.JSX.Element | null {
   const { t } = useI18n()
   const menuRef = useRef<HTMLDivElement>(null)
 
@@ -47,7 +46,7 @@ export function ProfileMenu({ open, name, initials, isSignedIn, busy, onClose, o
   return (
     <div ref={menuRef} className="shell-profile-menu" role="menu" aria-label={t('shell.profile')}>
       <div className="shell-profile-menu-head">
-        <span className="shell-avatar">{initials || 'LP'}</span>
+        <span className="shell-avatar"><User aria-hidden="true" /></span>
         <div className="shell-profile-menu-identity">
           <strong>{name}</strong>
           <span className={`shell-profile-menu-status${isSignedIn ? ' is-signed-in' : ''}`}>{isSignedIn ? t('shell.signedIn') : t('shell.signedOut')}</span>

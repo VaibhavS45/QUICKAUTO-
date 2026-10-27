@@ -11,9 +11,8 @@ import { buildToolApproval } from './tools.js'
 import { noteUntrustedIngested } from './read-guard.js'
 import type { ModelSettings } from '../settings/model-settings.js'
 import { DEFAULT_ACP_MODEL, type AgentProvider } from './agent-provider.js'
-import { runAcpPrompt } from './acp-client.js'
-import { runPiPrompt } from './pi-run.js'
-import { ensureOpencode, type EnsureOpencodeResult } from './opencode-install.js'
+import { runAcpPrompt } from '../engines/opencode/acp-client.js'
+import { ensureOpencode, type EnsureOpencodeResult } from '../engines/opencode/opencode-install.js'
 
 /**
  * Agent runner. Uses the Vercel AI SDK `ai` v7 `ToolLoopAgent` with
@@ -65,7 +64,7 @@ export interface RunnerDeps {
   getConfig: () => ModelSettings
   getApiKey: () => Promise<string | null>
   getTools?: (toolIds: ToolId[]) => Promise<ToolSet>
-  /** Selected agent harness; absent = builtin Vercel AI SDK loop. */
+  /** Selected engine; absent = builtin Vercel AI SDK loop (legacy value). */
   getAgentProvider?: () => AgentProvider
   getHarnessDirectory?: () => string
   /** ACP model id for opencode runs; null = free default (DEFAULT_ACP_MODEL). */
@@ -74,8 +73,6 @@ export interface RunnerDeps {
   runAcp?: (req: { prompt: string; systemPrompt?: string; model?: string; runId: string; signal?: AbortSignal; emit: (e: AgentEvent) => void; onPermission?: (perm: { id: string; toolCallId: string; toolName: string; input: unknown; reason?: string }) => Promise<boolean> }) => Promise<{ text: string; steps: number }>
   /** Checks for OpenCode and installs it when missing; injected in tests. */
   ensureOpenCode?: () => Promise<EnsureOpencodeResult>
-  /** Injected in tests to avoid spawning pi. */
-  runPi?: (req: { prompt: string; systemPrompt?: string; runId: string; signal?: AbortSignal; emit: (e: AgentEvent) => void }) => Promise<{ text: string; steps: number }>
   /** Injected in tests to avoid network/model calls. */
   createAgent?: (args: {
     model: unknown
@@ -162,7 +159,6 @@ function withScheduledTimeout(
 }
 
 interface HarnessRunArgs {
-  harness: 'opencode' | 'pi'
   prompt: string
   source: RunSource
   signal?: AbortSignal
@@ -174,9 +170,9 @@ interface HarnessRunArgs {
   sharedFolders?: string[]
 }
 
-/** Whole-run delegation to an external harness. Always emits done/error/aborted. */
+/** Whole-run delegation to OpenCode ACP. Always emits done/error/aborted. */
 async function runViaHarness(args: HarnessRunArgs): Promise<{ text: string; steps: number }> {
-  const { harness, prompt, signal, runId, emit, deps } = args
+  const { prompt, signal, runId, emit, deps } = args
   const fail = (message: string): { text: string; steps: number } => {
     emit({ type: 'error', runId, message })
     return { text: '', steps: 0 }
@@ -189,10 +185,6 @@ async function runViaHarness(args: HarnessRunArgs): Promise<{ text: string; step
     { runId, source: args.source, signal, sharedFolders: args.sharedFolders, untrustedIngested: false },
     async () => {
     try {
-      if (harness === 'pi') {
-        const runPi = deps.runPi ?? ((r) => runPiPrompt({ ...r, cwd: deps.getHarnessDirectory?.() }))
-        return await runPi({ prompt, systemPrompt: args.systemPrompt, runId, signal, emit })
-      }
       if (!deps.getHarnessDirectory) {
         return fail('OpenCode harness is not wired in this build.')
       }
@@ -259,7 +251,9 @@ export async function runAgent(opts: RunAgentOptions): Promise<{ text: string; s
   }
 
   const config = deps.getConfig()
-  const harness = deps.getAgentProvider?.() ?? 'builtin'
+  // Absent deps = the builtin SDK loop (unit-test path); the app always
+  // injects the stored engine, which is OpenCode.
+  const engine: AgentProvider = deps.getAgentProvider?.() ?? 'builtin'
 
   // Scheduled runs get an internal ctrl that the timeout fires on, so the
   // abort reaches the underlying provider stream (AI SDK abortSignal) and
@@ -270,22 +264,22 @@ export async function runAgent(opts: RunAgentOptions): Promise<{ text: string; s
   }
   const runSignal = scheduledController?.signal ?? signal
 
-  // Harness runs bring their own models + auth (opencode config, pi /login),
-  // so no model API key is needed. Scheduled runs go through opencode: its
-  // ACP permission protocol is fail-closed (deny without approval, see
-  // runViaHarness), so they still never execute writes unapproved. pi stays
-  // off scheduled runs — its print mode has no permission protocol.
-  if (harness === 'opencode' || (harness === 'pi' && source !== 'scheduled')) {
-    // Harness selected: authoritative, no builtin fall-through (one outcome
+  // OpenCode runs bring their own models + auth (`opencode auth login`), so no
+  // model API key is needed. Its ACP permission protocol is fail-closed (deny
+  // without approval, see runViaHarness), so scheduled runs still never
+  // execute writes unapproved. `builtin` only survives as a stored legacy
+  // value; the UI no longer offers it.
+  if (engine !== 'builtin') {
+    // Engine selected: authoritative, no builtin fall-through (one outcome
     // per run; failures emit a single error with the install/auth fix).
     // Scheduled runs keep their read-only framing via buildInstructions.
-    const harnessSystemPrompt =
+    const engineSystemPrompt =
       source === 'scheduled'
         ? [opts.systemPrompt?.trim() ?? '', buildInstructions('scheduled', tools)].filter(Boolean).join('\n\n')
         : opts.systemPrompt
     return withScheduledTimeout(
       source,
-      runViaHarness({ harness, prompt, source, signal: runSignal, runId, emit, systemPrompt: harnessSystemPrompt, decideApproval: opts.decideApproval, deps, sharedFolders: opts.sharedFolders }),
+      runViaHarness({ prompt, source, signal: runSignal, runId, emit, systemPrompt: engineSystemPrompt, decideApproval: opts.decideApproval, deps, sharedFolders: opts.sharedFolders }),
       deps.scheduledTimeoutMs,
       () => scheduledController?.abort()
     )
@@ -293,9 +287,7 @@ export async function runAgent(opts: RunAgentOptions): Promise<{ text: string; s
 
   const apiKey = await deps.getApiKey()
   if (!apiKey) {
-    return fail(
-      'No model API key set. Open Settings and add your provider API key first (stored with safeStorage, never leaves this device unencrypted).'
-    )
+    return fail('No OpenCode engine available. Install it from https://opencode.ai and retry.')
   }
 
   const toolSet = deps.getTools ? await deps.getTools(tools) : await getToolsForMentions(tools)

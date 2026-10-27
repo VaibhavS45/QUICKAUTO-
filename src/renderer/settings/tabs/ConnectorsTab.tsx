@@ -3,7 +3,7 @@ import { Button } from '../../components/ui/button.js'
 import { Card, CardSub, CardTitle, Hint } from '../../components/ui/card.js'
 import { Input } from '../../components/ui/input.js'
 import { getConnectorLogo } from '../connectorLogos.js'
-import type { ComposioToolkit } from '../../../main/connectors/composio-marketplace.js'
+import type { ComposioToolkit } from '../../../main/engines/composio/composio-marketplace.js'
 
 interface ConnectorState {
   configured: boolean
@@ -93,6 +93,9 @@ export default function ConnectorsTab(): React.JSX.Element {
   const [connecting, setConnecting] = useState<string | null>(null)
   const [connectMessage, setConnectMessage] = useState<string | null>(null)
   const [confirmClearKey, setConfirmClearKey] = useState(false)
+  // Key input stays collapsed once a key is stored; the status row is enough.
+  const [showKeyForm, setShowKeyForm] = useState(false)
+  const [showRepoForm, setShowRepoForm] = useState(false)
   const [browserConnected, setBrowserConnected] = useState(true)
   const [gmailConnected, setGmailConnected] = useState(false)
   const [videoConnected, setVideoConnected] = useState(true)
@@ -139,6 +142,7 @@ export default function ConnectorsTab(): React.JSX.Element {
       return
     }
     setKey('')
+    setShowKeyForm(false)
     setMsg('Key verified and saved securely.')
     await refresh()
   }
@@ -452,10 +456,19 @@ export default function ConnectorsTab(): React.JSX.Element {
               {!state.encryptionAvailable && ' Secure credential storage is currently unavailable, so a key cannot be saved.'}
             </CardSub>
             <div className="set-row">
-              <div className="set-grow">
-                <Input monospace type="password" value={key} onChange={(e) => setKey(e.target.value)} placeholder="Paste a new ak_ project key" aria-label="Composio project key" autoComplete="new-password" />
-              </div>
-              <Button onClick={() => void saveKey()} disabled={!key.trim() || !state.encryptionAvailable}>{state.configured ? 'Replace key' : 'Save key'}</Button>
+              {(!state.configured || showKeyForm) && (
+                <>
+                  <div className="set-grow">
+                    <Input monospace type="password" value={key} onChange={(e) => setKey(e.target.value)} placeholder="Paste a new ak_ project key" aria-label="Composio project key" autoComplete="new-password" />
+                  </div>
+                  <Button onClick={() => void saveKey()} disabled={!key.trim() || !state.encryptionAvailable}>{state.configured ? 'Replace key' : 'Save key'}</Button>
+                </>
+              )}
+              {state.configured && (
+                <Button variant="secondary" onClick={() => { setShowKeyForm((open) => !open); setKey('') }}>
+                  {showKeyForm ? 'Cancel' : 'Change key'}
+                </Button>
+              )}
               {state.configured && <Button variant="destructive" onClick={() => setConfirmClearKey(true)}>Remove key</Button>}
             </div>
             {msg && <p className="set-msg">{msg}</p>}
@@ -526,7 +539,12 @@ export default function ConnectorsTab(): React.JSX.Element {
         </section>
       )}
       <Card style={{ marginTop: 24 }}>
-        <CardTitle>GitHub repos</CardTitle>
+        <div className="flex items-center justify-between gap-3">
+          <CardTitle>GitHub repos</CardTitle>
+          <Button variant="secondary" size="sm" onClick={() => { setShowRepoForm((open) => !open); setRepoMsg(null) }}>
+            {showRepoForm ? 'Cancel' : 'Add repo'}
+          </Button>
+        </div>
         <CardSub>
           {gh?.authenticated
             ? 'GitHub CLI is authenticated. Limit @github access to these local repositories.'
@@ -545,31 +563,34 @@ export default function ConnectorsTab(): React.JSX.Element {
             </div>
           ))}
         </div>
-        <div className="set-row">
-          <div className="set-grow">
-            <Input monospace value={newPath} onChange={(e) => setNewPath(e.target.value)} placeholder="/home/you/code/repo" aria-label="Local path" />
+        {showRepoForm && (
+          <div className="set-row">
+            <div className="set-grow">
+              <Input monospace value={newPath} onChange={(e) => setNewPath(e.target.value)} placeholder="/home/you/code/repo" aria-label="Local path" />
+            </div>
+            <Input monospace value={newRepo} onChange={(e) => setNewRepo(e.target.value)} placeholder="owner/name" aria-label="owner/name" />
+            <Button
+              onClick={() => {
+                const path = newPath.trim()
+                const repo = newRepo.trim()
+                if (!path || !repo) {
+                  setRepoMsg('Enter both a local path and owner/name.')
+                  return
+                }
+                if (repos.some((r) => r.repo.toLowerCase() === repo.toLowerCase())) {
+                  setRepoMsg(`"${repo}" is already in the list.`)
+                  return
+                }
+                setNewPath('')
+                setNewRepo('')
+                setShowRepoForm(false)
+                void saveRepos([...repos, { path, repo }])
+              }}
+            >
+              Add
+            </Button>
           </div>
-          <Input monospace value={newRepo} onChange={(e) => setNewRepo(e.target.value)} placeholder="owner/name" aria-label="owner/name" />
-          <Button
-            onClick={() => {
-              const path = newPath.trim()
-              const repo = newRepo.trim()
-              if (!path || !repo) {
-                setRepoMsg('Enter both a local path and owner/name.')
-                return
-              }
-              if (repos.some((r) => r.repo.toLowerCase() === repo.toLowerCase())) {
-                setRepoMsg(`"${repo}" is already in the list.`)
-                return
-              }
-              setNewPath('')
-              setNewRepo('')
-              void saveRepos([...repos, { path, repo }])
-            }}
-          >
-            Add
-          </Button>
-        </div>
+        )}
         {repoMsg && <p className="set-msg">{repoMsg}</p>}
         <Hint>Each path must exist and be a git repo whose origin matches owner/name.</Hint>
       </Card>

@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest'
+import { join } from 'node:path'
 import {
   AcpModelService,
   AgentProviderService,
@@ -10,7 +11,6 @@ import {
   pickAutoEngine,
   resolveOpenCodeBinary
 } from '../../src/main/agent/agent-provider.js'
-import { foldPiEvent, piMessageText } from '../../src/main/agent/pi-run.js'
 
 function memStore() {
   const data = new Map<string, unknown>()
@@ -21,21 +21,23 @@ function memStore() {
 }
 
 describe('AgentProviderService', () => {
-  it('defaults to builtin and round-trips opencode/pi', () => {
+  it('defaults to opencode and round-trips it', () => {
     const svc = new AgentProviderService(memStore())
-    expect(svc.get()).toBe('builtin')
+    expect(svc.get()).toBe('opencode')
     expect(svc.set('opencode')).toBe('opencode')
     expect(svc.get()).toBe('opencode')
-    expect(svc.set('pi')).toBe('pi')
-    expect(svc.get()).toBe('pi')
   })
 
-  it('rejects unknown providers and falls back on corrupt state', () => {
+  it('rejects unknown and retired engines, falling back on stored values', () => {
     const svc = new AgentProviderService(memStore())
     expect(() => svc.set('nope')).toThrow()
-    const store = memStore()
-    store.set('agent-provider', '???')
-    expect(new AgentProviderService(store).get()).toBe('builtin')
+    expect(() => svc.set('pi')).toThrow()
+    expect(() => svc.set('builtin')).toThrow()
+    for (const stale of ['pi', 'builtin', '???']) {
+      const store = memStore()
+      store.set('agent-provider', stale)
+      expect(new AgentProviderService(store).get()).toBe('opencode')
+    }
   })
 
   it('tracks whether the user explicitly chose an engine', () => {
@@ -50,23 +52,13 @@ describe('AgentProviderService', () => {
 })
 
 describe('pickAutoEngine', () => {
-  const both = [
-    { id: 'opencode', installed: true },
-    { id: 'pi', installed: true }
-  ]
-  it('auto-connects opencode first, then pi, when builtin has no key', () => {
-    expect(pickAutoEngine({ explicit: false, keySet: false, harnesses: both })).toBe('opencode')
-    expect(
-      pickAutoEngine({ explicit: false, keySet: false, harnesses: [{ id: 'opencode', installed: false }, { id: 'pi', installed: true }] })
-    ).toBe('pi')
-    expect(
-      pickAutoEngine({ explicit: false, keySet: false, harnesses: [{ id: 'opencode', installed: false }, { id: 'pi', installed: false }] })
-    ).toBe(null)
+  it('auto-connects opencode when it is installed', () => {
+    expect(pickAutoEngine({ explicit: false, harnesses: [{ id: 'opencode', installed: true }] })).toBe('opencode')
+    expect(pickAutoEngine({ explicit: false, harnesses: [{ id: 'opencode', installed: false }] })).toBe(null)
   })
 
-  it('never overrides an explicit choice or a ready builtin', () => {
-    expect(pickAutoEngine({ explicit: true, keySet: false, harnesses: both })).toBe(null)
-    expect(pickAutoEngine({ explicit: false, keySet: true, harnesses: both })).toBe(null)
+  it('never overrides an explicit choice', () => {
+    expect(pickAutoEngine({ explicit: true, harnesses: [{ id: 'opencode', installed: true }] })).toBe(null)
   })
 })
 
@@ -100,18 +92,44 @@ describe('resolveOpenCodeBinary', () => {
   })
 
   it('finds the official install-script location before falling back to PATH', () => {
-    expect(openCodeCandidates({ HOME: '/home/me' })).toContain('/home/me/.opencode/bin/opencode')
-    expect(findOpenCodeBinary({ HOME: '/home/me' }, (p) => p === '/home/me/.opencode/bin/opencode')).toBe(
-      '/home/me/.opencode/bin/opencode'
-    )
+    expect(openCodeCandidates({ HOME: '/home/me' }, 'linux')).toContain('/home/me/.opencode/bin/opencode')
     expect(
-      findOpenCodeBinary({ HOME: '/home/me', PATH: '/custom/bin:/usr/bin' }, (p) => p === '/custom/bin/opencode')
+      findOpenCodeBinary({ HOME: '/home/me' }, (p) => p === '/home/me/.opencode/bin/opencode', 'linux')
+    ).toBe('/home/me/.opencode/bin/opencode')
+    expect(
+      findOpenCodeBinary(
+        { HOME: '/home/me', PATH: '/custom/bin:/usr/bin' },
+        (p) => p === '/custom/bin/opencode',
+        'linux'
+      )
     ).toBe('/custom/bin/opencode')
   })
 
   it('reports no binary when neither known paths nor PATH contain opencode', () => {
-    expect(findOpenCodeBinary({ HOME: '/home/me', PATH: '/custom/bin' }, () => false)).toBe(null)
+    expect(findOpenCodeBinary({ HOME: '/home/me', PATH: '/custom/bin' }, () => false, 'linux')).toBe(null)
     expect(resolveOpenCodeBinary({ HOME: '/home/me', PATH: '/custom/bin' }, () => false)).toBe('opencode')
+  })
+
+  it('detects Windows installs (npm, scoop, choco) and .exe/.cmd shims', () => {
+    const env = {
+      USERPROFILE: 'C:\\Users\\me',
+      APPDATA: 'C:\\Users\\me\\AppData\\Roaming',
+      LOCALAPPDATA: 'C:\\Users\\me\\AppData\\Local',
+      PATH: 'C:\\tools'
+    }
+    const candidates = openCodeCandidates(env, 'win32').map((p) => p.replace(/\\/g, '/'))
+    expect(candidates).toContain('C:/Users/me/scoop/shims/opencode.exe')
+    expect(candidates).toContain('C:/Users/me/AppData/Roaming/npm/opencode.cmd')
+    expect(candidates).toContain('C:/ProgramData/chocolatey/bin/opencode.exe')
+
+    const onPath = findOpenCodeBinary(env, (p) => /tools[\\/]opencode\.cmd$/.test(p), 'win32')
+    expect(onPath).toBe(join('C:\\tools', 'opencode.cmd'))
+    expect(findOpenCodeBinary(env, () => false, 'win32')).toBe(null)
+  })
+
+  it('does not look for .exe names on macOS/Linux', () => {
+    expect(openCodeCandidates({ HOME: '/home/me' }, 'linux').every((p) => !p.endsWith('.exe'))).toBe(true)
+    expect(openCodeCandidates({ HOME: '/home/me' }, 'darwin')).toContain('/usr/local/bin/opencode')
   })
 })
 
@@ -125,15 +143,14 @@ describe('parseVersion', () => {
 describe('detectHarnesses', () => {
   it('reports installed + missing binaries without touching the network', async () => {
     const out = await detectHarnesses({
-      resolveBinary: (id) => id,
+      resolveBinary: () => 'opencode',
       run: async (bin) => {
         if (bin === 'opencode') return 'opencode v2.0.20\n'
         throw Object.assign(new Error('not found'), { code: 'ENOENT' })
       }
     })
     expect(out).toEqual([
-      { id: 'opencode', installed: true, version: '2.0.20', detail: 'opencode 2.0.20 detected' },
-      { id: 'pi', installed: false, detail: 'pi not found on PATH.' }
+      { id: 'opencode', installed: true, version: '2.0.20', detail: 'opencode 2.0.20 detected' }
     ])
   })
 
@@ -148,29 +165,5 @@ describe('detectHarnesses', () => {
     })
     expect(seen).toContain('/home/me/.opencode/bin/opencode')
     expect(out[0]?.installed).toBe(false)
-  })
-})
-
-describe('pi JSONL folding', () => {
-  it('streams text deltas and ends with authoritative message text', () => {
-    const seen: string[] = []
-    const d = foldPiEvent({ type: 'message_update', assistantMessageEvent: { type: 'text_delta', contentIndex: 0, delta: 'Hello ' } })
-    for (const item of d.emit) if (item.kind === 'text' && item.text) seen.push(item.text)
-    const end = foldPiEvent({ type: 'message_end', message: { role: 'assistant', content: [{ type: 'text', text: 'Hello world' }] } })
-    expect(seen).toEqual(['Hello '])
-    expect(end.finalText).toBe('Hello world')
-  })
-
-  it('maps tool execution start/end to tool-call/tool-result', () => {
-    const start = foldPiEvent({ type: 'tool_execution_start', toolCallId: 'c1', toolName: 'bash', args: { command: 'ls' } })
-    expect(start.emit[0]).toMatchObject({ kind: 'tool-call', toolCallId: 'c1', toolName: 'pi: bash' })
-    const end = foldPiEvent({ type: 'tool_execution_end', toolCallId: 'c1', toolName: 'bash', result: { content: [] }, isError: false })
-    expect(end.emit[0]).toMatchObject({ kind: 'tool-result', toolCallId: 'c1', toolName: 'pi: bash' })
-  })
-
-  it('ignores unknown events and reads string content', () => {
-    expect(foldPiEvent({ type: 'agent_start' }).emit).toEqual([])
-    expect(piMessageText({ content: 'plain' })).toBe('plain')
-    expect(piMessageText({ content: [{ type: 'other' }] })).toBe('')
   })
 })

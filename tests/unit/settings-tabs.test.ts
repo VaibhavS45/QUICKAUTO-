@@ -11,21 +11,20 @@ describe('settings sidebar', () => {
 })
 
 describe('buildEngines', () => {
-  it('splits ready vs needs-setup and keeps the active engine', () => {
-    const { ready, needsSetup, active } = buildEngines({
+  it('offers OpenCode only and moves it to needs-setup when missing', () => {
+    const installed = buildEngines({
       active: 'opencode',
-      harnesses: [
-        { id: 'opencode', installed: true, version: '2.0.20' },
-        { id: 'pi', installed: false }
-      ],
-      model: 'claude-sonnet-4-5',
-      keySet: false
+      harnesses: [{ id: 'opencode', installed: true, version: '2.0.20' }]
     })
-    expect(ready.map((e) => e.id)).toEqual(['opencode'])
-    expect(needsSetup.map((e) => e.id)).toEqual(['builtin', 'pi'])
-    expect(active).toBe('opencode')
-    expect(ready[0]?.version).toBe('2.0.20')
-    expect(needsSetup[0]?.hint).toMatch(/API key/)
+    expect(installed.ready.map((e) => e.id)).toEqual(['opencode'])
+    expect(installed.needsSetup).toEqual([])
+    expect(installed.active).toBe('opencode')
+    expect(installed.ready[0]?.version).toBe('2.0.20')
+
+    const missing = buildEngines({ active: 'opencode', harnesses: [{ id: 'opencode', installed: false }] })
+    expect(missing.ready).toEqual([])
+    expect(missing.needsSetup.map((e) => e.id)).toEqual(['opencode'])
+    expect(missing.needsSetup[0]?.hint).toContain('opencode.ai')
   })
 })
 

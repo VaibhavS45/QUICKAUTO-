@@ -1,5 +1,5 @@
 import type { FeatureModule } from '../../contracts/feature.js'
-import AutomationsView from './AutomationsView.js'
+import AutomationsView from './shared/AutomationsView.js'
 
 const AutomationsFeature: FeatureModule = {
   id: 'automations',

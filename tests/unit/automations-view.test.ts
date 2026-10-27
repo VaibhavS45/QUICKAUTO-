@@ -1,8 +1,8 @@
 import { createElement } from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { describe, expect, it, vi } from 'vitest'
-import { addDaysKey, dayLabel, localDayKey, monthGrid, monthLabel, pastDayLabel, routineOccursOn, routineTitle } from '../../src/renderer/features/automations/dates.js'
-import AutomationsView, { CanvasLanding, UpdatesList, automationsTrail, stepsForRoutine } from '../../src/renderer/features/automations/AutomationsView.js'
+import { addDaysKey, dayLabel, localDayKey, monthGrid, monthLabel, pastDayLabel, routineOccursOn, routineTitle } from '../../src/renderer/features/automations/shared/dates.js'
+import AutomationsView, { CanvasLanding, UpdatesList, automationsTrail, stepsForRoutine } from '../../src/renderer/features/automations/shared/AutomationsView.js'
 import type { ShellApi } from '../../src/renderer/contracts/feature.js'
 
 const shell: ShellApi = {

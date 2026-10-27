@@ -13,9 +13,9 @@ import {
   GMAIL_WRITE_TOOLS,
   isBudgetGuardedTool,
   type ComposioClientLike
-} from '../../src/main/connectors/composio.js'
+} from '../../src/main/engines/composio/composio.js'
 import { APPROVAL_REQUIRED_TOOLS, buildToolApproval } from '../../src/main/agent/tools.js'
-import { BudgetGuard, MemoryBudgetStore } from '../../src/main/connectors/budget-guard.js'
+import { BudgetGuard, MemoryBudgetStore } from '../../src/main/engines/composio/budget-guard.js'
 import { runWithContext } from '../../src/main/agent/run-context.js'
 import { buildInstructions } from '../../src/main/agent/registry.js'
 import { runAgent, type AgentLike } from '../../src/main/agent/runner.js'

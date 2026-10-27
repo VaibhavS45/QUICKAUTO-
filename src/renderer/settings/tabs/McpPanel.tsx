@@ -28,6 +28,8 @@ export default function McpPanel(): React.JSX.Element {
   const [secretText, setSecretText] = useState('')
   const [pendingRemove, setPendingRemove] = useState('')
   const [error, setError] = useState('')
+  // Add/edit form is collapsed by default; the server list is the page.
+  const [showForm, setShowForm] = useState(false)
 
   const refresh = useCallback(async (): Promise<void> => {
     const result = await window.app.mcpList()
@@ -48,6 +50,7 @@ export default function McpPanel(): React.JSX.Element {
     setUrl(server.transport === 'http' ? server.url : '')
     const keys = server.transport === 'stdio' ? server.envKeys : server.headerKeys
     setSecretText(keys.map((key) => `${key}=`).join('\n'))
+    setShowForm(true)
   }
 
   function resetForm(): void {
@@ -72,6 +75,7 @@ export default function McpPanel(): React.JSX.Element {
       const result = await window.app.mcpUpsert(config, secrets)
       if (!result.ok) throw new Error(result.error || 'Could not save MCP server.')
       resetForm()
+      setShowForm(false)
       await refresh()
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : String(reason))
@@ -110,7 +114,19 @@ export default function McpPanel(): React.JSX.Element {
         <p>Configure local tools or streamable HTTP servers. Calls made through MCP always require your approval.</p>
       </div>
       <Card>
-        <CardTitle>Configured servers <span className="settings-count">{servers.length}</span></CardTitle>
+        <div className="flex items-center justify-between gap-3">
+          <CardTitle>Configured servers <span className="settings-count">{servers.length}</span></CardTitle>
+          <Button
+            variant="secondary"
+            size="sm"
+            onClick={() => {
+              if (showForm) resetForm()
+              setShowForm((open) => !open)
+            }}
+          >
+            {showForm ? 'Cancel' : 'Add server'}
+          </Button>
+        </div>
         <CardSub>Started server tools are available through @mcp.</CardSub>
         {servers.length === 0 ? (
           <div className="set-empty-state">
@@ -147,6 +163,7 @@ export default function McpPanel(): React.JSX.Element {
           </div>
         )}
       </Card>
+      {(showForm || Boolean(id)) && (
       <Card>
         <CardTitle>{id ? `Edit ${name || 'MCP server'}` : 'Add MCP server'}</CardTitle>
         <CardSub>{transport === 'stdio' ? 'Run a local executable and pass its arguments.' : 'Connect to an HTTP server on a trusted remote host or localhost.'}</CardSub>
@@ -177,10 +194,11 @@ export default function McpPanel(): React.JSX.Element {
           <p className="text-[11px] text-neutral-500">Credential values are encrypted with Electron safeStorage and never returned to the UI. Put credentials only here—not in the command, arguments, or URL. Quote arguments that contain spaces. After saving, select Start; running tools then appear when you mention @mcp.</p>
           <div className="flex gap-2">
             <Button type="submit">{id && servers.some((server) => server.id === id) ? 'Save server' : 'Add server'}</Button>
-            {id && <Button type="button" variant="secondary" onClick={resetForm}>Cancel</Button>}
+            <Button type="button" variant="secondary" onClick={() => { resetForm(); setShowForm(false) }}>Cancel</Button>
           </div>
         </form>
       </Card>
+      )}
       {error && <p className="text-xs text-red-300" role="alert">{error}</p>}
     </div>
   )

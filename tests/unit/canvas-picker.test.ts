@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
-import { ACTION_PICKS, LOGIC_PICKS, TRIGGER_PICKS, clockLabel, filterPicks } from '../../src/renderer/features/automations/canvas-picker.js'
-import { defaultCanvasSteps, insertCanvasStep, parseRepeatTime } from '../../src/renderer/features/automations/canvas-steps.js'
+import { ACTION_PICKS, LOGIC_PICKS, TRIGGER_PICKS, clockLabel, filterPicks } from '../../src/renderer/features/automations/canvas/canvas-picker.js'
+import { defaultCanvasSteps, insertCanvasStep, parseRepeatTime } from '../../src/renderer/features/automations/canvas/canvas-steps.js'
 
 describe('canvas step picker', () => {
   it('offers a schedule plus app triggers, and the tool actions', () => {

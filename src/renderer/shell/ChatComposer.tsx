@@ -9,7 +9,6 @@ interface ChatComposerProps {
   busy: boolean
   compact?: boolean
   onSend(text: string): Promise<boolean>
-  onOpenSettings(): void
   onOpenConnections(): void
   onOpenAutomations(): void
   onSelectTemplate(template: AutomationTemplate): void
@@ -19,7 +18,6 @@ export function ChatComposer({
   busy,
   compact = false,
   onSend,
-  onOpenSettings,
   onOpenConnections,
   onOpenAutomations,
   onSelectTemplate
@@ -28,8 +26,6 @@ export function ChatComposer({
   const [value, setValue] = useState('')
   const [caret, setCaret] = useState(0)
   const [error, setError] = useState('')
-  const [engine, setEngine] = useState('builtin')
-  const [installed, setInstalled] = useState<string[]>([])
   const [model, setModel] = useState('')
   const [models, setModels] = useState<Array<{ value: string; name: string }>>([])
   const [modelsError, setModelsError] = useState('')
@@ -49,32 +45,7 @@ export function ChatComposer({
   const selectedTools = parseMentionedTools(value)
 
   useEffect(() => {
-    let active = true
-    void Promise.all([window.app.getAgentProvider(), window.app.detectHarnesses()])
-      .then(([provider, detected]) => {
-        if (!active) return
-        if (provider.ok && provider.provider) setEngine(provider.provider)
-        if (detected.ok && detected.harnesses) {
-          setInstalled(detected.harnesses.filter((h) => h.installed).map((h) => h.id))
-        }
-      })
-      .catch(() => {
-        /* picker keeps builtin; Settings has the full engine list */
-      })
-    return () => {
-      active = false
-    }
-  }, [])
-
-  async function changeEngine(id: string): Promise<void> {
-    setError('')
-    const res = (await window.app.setAgentProvider(id)) as { ok: boolean; error?: string }
-    if (res.ok) setEngine(id)
-    else setError(res.error ?? 'Could not switch engine.')
-  }
-
-  useEffect(() => {
-    if (engine !== 'opencode') return
+    // OpenCode is the only engine; no provider/model/API-key setup needed here.
     let active = true
     setModelsError('')
     void Promise.all([window.app.opencodeModelGet(), window.app.opencodeModels()])
@@ -93,7 +64,7 @@ export function ChatComposer({
     return () => {
       active = false
     }
-  }, [engine, modelsRefresh])
+  }, [modelsRefresh])
 
   async function changeModel(value: string): Promise<void> {
     setError('')
@@ -218,20 +189,7 @@ export function ChatComposer({
               <path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48" />
             </svg>
           </button>
-          <label className="chat-agent-picker">
-            <span>Engine</span>
-            <select aria-label="Engine" value={engine} onChange={(event) => void changeEngine(event.currentTarget.value)}>
-              <option value="builtin">Built-in</option>
-              <option value="opencode" disabled={!installed.includes('opencode')}>
-                OpenCode{installed.includes('opencode') ? '' : ' (not installed)'}
-              </option>
-              <option value="pi" disabled={!installed.includes('pi')}>
-                pi{installed.includes('pi') ? '' : ' (not installed)'}
-              </option>
-            </select>
-          </label>
-          {engine === 'opencode' && (
-            <div className="chat-agent-picker chat-model-picker">
+          <div className="chat-agent-picker chat-model-picker">
               <span>Model</span>
               <button
                 type="button"
@@ -272,7 +230,6 @@ export function ChatComposer({
                 </div>
               )}
             </div>
-          )}
           <span className="chat-tool-selection" aria-label="Selected tools">
             {selectedTools.filter((id) => id !== 'calendar').map((id) => <span key={id}>{TOOL_META[id].label}</span>)}
           </span>
@@ -282,7 +239,7 @@ export function ChatComposer({
         </div>
       </div>
       {error && <p className="chat-inline-error" role="alert">{error}</p>}
-      {engine === 'opencode' && modelsError && (
+      {modelsError && (
         <p className="chat-inline-error" role="alert">
           {modelsError}
           <button type="button" className="chat-inline-action" onClick={() => setModelsRefresh((value) => value + 1)}>
@@ -293,7 +250,7 @@ export function ChatComposer({
       {modelMissing && (
         <p className="chat-inline-hint">The free OpenCode model is not available for this account. Run `opencode auth login` in a terminal, then refresh the model list.</p>
       )}
-      {engine === 'opencode' && /auth|login|provider authentication required/i.test(error) && (
+      {/auth|login|provider authentication required/i.test(error) && (
         <p className="chat-inline-hint">OpenCode needs an active provider login. Run `opencode auth login` in a terminal, then click Refresh models and retry.</p>
       )}
       {!compact && (
@@ -307,9 +264,6 @@ export function ChatComposer({
             onConnect={onOpenConnections}
           />
         </>
-      )}
-      {error.toLowerCase().includes('api key') && (
-        <button type="button" className="chat-settings-link" onClick={onOpenSettings}>Open Provider settings</button>
       )}
     </div>
   )

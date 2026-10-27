@@ -1,9 +1,9 @@
 import { createElement } from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { describe, expect, it } from 'vitest'
-import StartChoice from '../../src/renderer/features/automations/start-choice.js'
-import Builder, { BuilderSettingsMenu } from '../../src/renderer/features/automations/builder.js'
-import { blankDraft, blankTrigger } from '../../src/renderer/features/automations/builder-compile.js'
+import StartChoice from '../../src/renderer/features/automations/schedule/start-choice.js'
+import Builder, { BuilderSettingsMenu } from '../../src/renderer/features/automations/schedule/builder.js'
+import { blankDraft, blankTrigger } from '../../src/renderer/features/automations/schedule/builder-compile.js'
 
 describe('start choice', () => {
   it('offers schedule, triggered, and advanced paths', () => {

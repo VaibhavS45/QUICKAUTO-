@@ -6,7 +6,7 @@ import {
   draftToAutomation,
   templateToDraft,
   titleFromTask
-} from '../../src/renderer/features/automations/builder-compile.js'
+} from '../../src/renderer/features/automations/schedule/builder-compile.js'
 
 describe('builder compile', () => {
   it('turns the picks into the contract payload', () => {

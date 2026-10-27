@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { blankDraft, blankTrigger, draftToAutomation } from '../../src/renderer/features/automations/builder-compile.js'
+import { blankDraft, blankTrigger, draftToAutomation } from '../../src/renderer/features/automations/schedule/builder-compile.js'
 import {
   GMAIL_EVENTS,
   TIMER_TRIGGER,
@@ -8,8 +8,8 @@ import {
   triggerApp,
   triggerEvent,
   triggerMention
-} from '../../src/renderer/features/automations/trigger-events.js'
-import { hasTriggerIcon } from '../../src/renderer/features/automations/trigger-icons.js'
+} from '../../src/renderer/features/automations/trigger/trigger-events.js'
+import { hasTriggerIcon } from '../../src/renderer/features/automations/trigger/trigger-icons.js'
 
 describe('trigger events', () => {
   it('catalogs every Gmail event with a label and phrase', () => {

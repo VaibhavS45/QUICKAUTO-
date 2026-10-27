@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { getScheduleSource, registerScheduleSource } from '../../src/main/agent/schedule-registry.js'
+import { getScheduleSource, registerScheduleSource } from '../../src/main/automations/schedule/schedule-registry.js'
 import {
   configureNotificationStorage,
   listNotifications,

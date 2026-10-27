@@ -18,9 +18,9 @@ import {
   classifyOpencodePermission,
   parseResolveOutcome,
   runOpencodeResolve
-} from '../../src/main/agent/opencode-resolve.js'
-import { OpencodeServerManager } from '../../src/main/agent/opencode-server.js'
-import type { ServerManagerDeps } from '../../src/main/agent/opencode-server.js'
+} from '../../src/main/engines/opencode/opencode-resolve.js'
+import { OpencodeServerManager } from '../../src/main/engines/opencode/opencode-server.js'
+import type { ServerManagerDeps } from '../../src/main/engines/opencode/opencode-server.js'
 import type { GitHubRepoEntry, RunResult } from '../../src/main/connectors/github-cli.js'
 
 afterEach(() => {

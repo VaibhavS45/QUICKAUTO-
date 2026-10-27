@@ -121,6 +121,7 @@ export interface ComposioDeps {
   getApiKey: () => Promise<string | null>
   fallbackApiKey?: string
   getGuard: () => BudgetGuard
+  getUserId?: () => string
   /** Injected in tests; production builds the real SDK client. */
   createClient?: (apiKey: string) => ComposioClientLike
 }
@@ -233,6 +234,10 @@ export class ComposioConnectorProvider implements ConnectorProvider {
   private statusCache: { at: number; connected: boolean; detail?: string } | null = null
 
   constructor(private readonly deps: ComposioDeps) {}
+
+  private userId(): string {
+    return this.deps.getUserId?.() ?? COMPOSIO_USER_ID
+  }
 
   private async client(): Promise<ComposioClientLike | null> {
     const key = (await this.deps.getApiKey()) || this.deps.fallbackApiKey || null
@@ -505,14 +510,14 @@ export class ComposioConnectorProvider implements ConnectorProvider {
   ): Promise<{ data?: unknown; error?: string | null; successful?: boolean }> {
     try {
       return await client.tools.execute(slug, {
-        userId: COMPOSIO_USER_ID,
+        userId: this.userId(),
         version: GMAIL_TOOLKIT_VERSION,
         arguments: args
       })
     } catch (err) {
       if (!isVersionError(err)) throw err
       return client.tools.execute(slug, {
-        userId: COMPOSIO_USER_ID,
+        userId: this.userId(),
         arguments: args,
         dangerouslySkipVersionCheck: true
       })
@@ -524,7 +529,7 @@ export class ComposioConnectorProvider implements ConnectorProvider {
     if (this.statusCache && now - this.statusCache.at < 60_000) return this.statusCache.connected
     try {
       const res = await client.connectedAccounts.list({
-        userIds: [COMPOSIO_USER_ID],
+        userIds: [this.userId()],
         toolkitSlugs: [GMAIL_TOOLKIT],
         statuses: ['ACTIVE']
       })
@@ -574,7 +579,7 @@ export class ComposioConnectorProvider implements ConnectorProvider {
       }
     }
     try {
-      const req = await client.connectedAccounts.link(COMPOSIO_USER_ID, authConfigId)
+      const req = await client.connectedAccounts.link(this.userId(), authConfigId)
       const url = req.redirectUrl ?? req.redirect_url
       if (!url) return { ok: false, error: 'Composio returned no auth URL.' }
       return { ok: true, url }

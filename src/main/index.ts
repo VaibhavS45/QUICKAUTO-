@@ -61,6 +61,7 @@ import {
 } from './agent/nested-approval.js'
 import { BudgetGuard, type BudgetStore, type BudgetUsageState } from './engines/composio/budget-guard.js'
 import { ConnectorSettingsService, type ConnectorStore } from './settings/connector-settings.js'
+import { InstallIdentityService } from './settings/install-identity.js'
 import { ComposioProvider, isComposioBudgetGuardedTool } from './engines/composio/composio-tools.js'
 import { GitHubCliProvider, isZeroCostTool, validateRepoEntry } from './connectors/github-cli.js'
 import { ComposioConnectorProvider, isBudgetGuardedTool } from './engines/composio/composio.js'
@@ -76,16 +77,13 @@ import { shouldAutoOpenApp } from './shell/launch-policy.js'
 import { applyAppBehaviorPatch, resolveAppBehavior, type AppBehavior } from './shell/app-prefs.js'
 import { installStdioGuard } from './engines/opencode/stdio-guard.js'
 import { createAppTray, watchDockVisibility } from './shell/app-lifecycle.js'
-import { AuthService } from './auth/auth-service.js'
-import { AuthChannels, registerAuthIpc } from './auth/auth-ipc.js'
-import { OAuthClient, readOAuthConfig } from './auth/oidc-client.js'
-import { startLoopback } from './auth/loopback.js'
-import { SafeStorageMcpVault } from './shell/mcp-vault.js'
+import { registerAuthIpc } from './auth/auth-ipc.js'
+import { LocalAccountService } from './auth/local-accounts.js'
+import { bootstrapLocalAccountUserData } from './auth/user-data-bootstrap.js'
 import { getShellAppWindow, openShellAppWindow } from './shell/shell-app-window.js'
 import type { RunSource } from '../shared/agent.js'
 import type { RunLogRecord } from '../shared/contracts/schedule.js'
-import { ChatStore } from './shell/chat-store.js'
-import { ScopedKeyValueStore, scopeFor, type KeyValueStore } from './shell/user-scope.js'
+import { ChatStore, type ChatStoreStorage } from './shell/chat-store.js'
 import { registerChatIpc } from './shell/chat-ipc.js'
 import { AutomationService } from './automations/schedule/automation-service.js'
 import { registerAutomationIpc } from './automations/schedule/automation-ipc.js'
@@ -98,10 +96,24 @@ installStdioGuard()
 const gotLock = app.requestSingleInstanceLock()
 if (!gotLock) app.quit()
 
+const accountBootstrap = gotLock
+  ? bootstrapLocalAccountUserData()
+  : { baseDir: app.getPath('userData'), account: null, loginMode: true }
+const localAccounts = new LocalAccountService(accountBootstrap.baseDir, accountBootstrap.account?.id ?? null)
+
 const store = new Store<{ openAtLogin: boolean; keepBackground: boolean; shader: boolean; theme: string; hotkey?: string }>({
   defaults: { openAtLogin: false, keepBackground: true, shader: true, theme: 'system' }
 })
 store.delete('hotkey')
+
+const deviceStore = new Store<{ openAtLogin: boolean }>({
+  name: 'palette-device',
+  cwd: accountBootstrap.baseDir,
+  defaults: { openAtLogin: false }
+})
+if (!accountBootstrap.loginMode && !deviceStore.has('openAtLogin')) {
+  deviceStore.set('openAtLogin', store.get('openAtLogin', false))
+}
 
 function storedAppBehavior(): AppBehavior {
   return resolveAppBehavior({
@@ -147,39 +159,20 @@ const agentProviderService = new AgentProviderService(new ElectronSettingsStore(
 const acpModelService = new AcpModelService(new ElectronSettingsStore())
 
 const chatFile = new Store<{ 'chat-threads': unknown[] }>({
-  name: 'palette-chats'
+  name: 'palette-chats',
+  defaults: { 'chat-threads': [] }
 })
 
-const chatStore = new ChatStore(
-  new ScopedKeyValueStore(chatFile as unknown as KeyValueStore, userScope)
-)
-
-const authFile = new Store<Record<string, unknown>>({ name: 'palette-auth', defaults: {} })
-const authKv = {
-  get: (key: string): unknown => (authFile as unknown as { get: (k: string) => unknown }).get(key),
-  set: (key: string, value: unknown): void => (authFile as unknown as { set: (k: string, v: unknown) => void }).set(key, value)
-}
-const authService = new AuthService({
-  config: readOAuthConfig(),
-  vault: new SafeStorageMcpVault(authKv, safeStorage),
-  identityStore: authKv,
-  canEncrypt: () => safeStorage.isAsyncEncryptionAvailable(),
-  openExternal: (url) => shell.openExternal(url),
-  createClient: (config) => new OAuthClient(config),
-  startLoopback: (state) => startLoopback(state)
-})
-
-/**
- * Storage namespace of the account using the app right now. Undefined until a
- * session is restored and whenever nobody is signed in — that is the
- * signed-out namespace, where pre-account data already lives.
- */
-let activeScope: string | undefined
-
-function userScope(): string | undefined {
-  return activeScope
+class ElectronChatStore implements ChatStoreStorage {
+  get(key: string): unknown {
+    return (chatFile as unknown as { get: (k: string) => unknown }).get(key)
+  }
+  set(key: string, value: unknown): void {
+    ;(chatFile as unknown as { set: (k: string, v: unknown) => void }).set(key, value)
+  }
 }
 
+const chatStore = new ChatStore(new ElectronChatStore())
 const settingsShellRuntime = createSettingsShellRuntime(safeStorage)
 
 const connectorFile = new Store<Record<string, unknown>>({ name: 'palette-connectors', defaults: {} })
@@ -200,19 +193,35 @@ const connectorSettings = new ConnectorSettingsService(new ElectronConnectorStor
 })
 
 const COMPOSIO_FALLBACK_KEY = process.env['COMPOSIO_API_KEY']?.trim() || undefined
+const primaryComposioFallbackKey = accountBootstrap.account?.primary ? COMPOSIO_FALLBACK_KEY : undefined
 let runtimeConnectorKey: string | null = null
+
+const identityFile = new Store<Record<string, unknown>>({ name: 'palette-identity', defaults: {} })
+const installIdentity = new InstallIdentityService({
+  get: (key) => identityFile.get(key),
+  set: (key, value) => identityFile.set(key, value)
+})
+const composioUserId = (): string => installIdentity.getInstallId()
 
 const getComposioApiKey = async (): Promise<string | null> => {
   if (runtimeConnectorKey) return runtimeConnectorKey
   if (runtimeConnectorKey === '') return null
-  if (COMPOSIO_FALLBACK_KEY) return COMPOSIO_FALLBACK_KEY
+  if (primaryComposioFallbackKey) return primaryComposioFallbackKey
   return (await connectorSettings.getKey()) || null
 }
 
-registerConnectorProvider(new ComposioProvider(getComposioApiKey, () => getGuard()))
+registerConnectorProvider(
+  new ComposioProvider(
+    getComposioApiKey,
+    () => getGuard(),
+    undefined,
+    composioUserId
+  )
+)
 const composioMarketplace = new ComposioMarketplace({
   getApiKey: getComposioApiKey,
-  fallbackApiKey: COMPOSIO_FALLBACK_KEY
+  fallbackApiKey: primaryComposioFallbackKey,
+  getUserId: composioUserId
 })
 
 // Read-only @github via the local `gh` CLI + git (zero Composio cost).
@@ -249,8 +258,9 @@ registerConnectorProvider(githubResolveProvider)
 // exactly one BudgetGuard hit per Composio call.
 const gmailProvider = new ComposioConnectorProvider({
   getApiKey: getComposioApiKey,
-  fallbackApiKey: COMPOSIO_FALLBACK_KEY,
-  getGuard: () => getGuard()
+  fallbackApiKey: primaryComposioFallbackKey,
+  getGuard: () => getGuard(),
+  getUserId: composioUserId
 })
 registerConnectorProvider(gmailProvider)
 registerConnectorProvider(settingsShellRuntime.mcpProvider)
@@ -259,27 +269,27 @@ registerConnectorProvider(settingsShellRuntime.mcpProvider)
 // Connection itself goes through the existing composio:connect marketplace flow.
 const driveService = new DriveService({
   getApiKey: getComposioApiKey,
-  fallbackApiKey: COMPOSIO_FALLBACK_KEY,
-  getGuard: () => getGuard()
+  fallbackApiKey: primaryComposioFallbackKey,
+  getGuard: () => getGuard(),
+  getUserId: composioUserId
 })
 const driveProvider = new DriveConnectorProvider({
   getApiKey: getComposioApiKey,
-  fallbackApiKey: COMPOSIO_FALLBACK_KEY,
-  getGuard: () => getGuard()
+  fallbackApiKey: primaryComposioFallbackKey,
+  getGuard: () => getGuard(),
+  getUserId: composioUserId
 })
 registerConnectorProvider(driveProvider)
 
-const routineFile = new Store<{ routines: Routine[] }>({ name: 'palette-routines' })
-const routineKeys = new ScopedKeyValueStore(routineFile as unknown as KeyValueStore, userScope)
+const routineFile = new Store<{ routines: Routine[] }>({ name: 'palette-routines', defaults: { routines: [] } })
 let routineChangeHook = (): void => {}
 
 class ElectronRoutineStore implements RoutineStore {
   load(): Routine[] {
-    const raw = routineKeys.get('routines')
-    return Array.isArray(raw) ? (raw as Routine[]) : []
+    return routineFile.get('routines', [])
   }
   save(routines: Routine[]): void {
-    routineKeys.set('routines', routines)
+    routineFile.set('routines', routines)
     routineChangeHook()
   }
 }
@@ -364,7 +374,7 @@ setNestedApprovalHandler(
 app.on('second-instance', () => openShellAppWindow())
 
 function applyAutostart(): void {
-  const openAtLogin = store.get('openAtLogin', false)
+  const openAtLogin = deviceStore.get('openAtLogin', false)
   app.setLoginItemSettings({ openAtLogin })
 }
 
@@ -386,9 +396,9 @@ function showSettingsInShell(tab?: string): void {
 function createTray(): void {
   createAppTray(
     () => showSettingsInShell(),
-    () => store.get('openAtLogin', false),
+    () => deviceStore.get('openAtLogin', false),
     (enabled) => {
-      store.set('openAtLogin', enabled)
+      deviceStore.set('openAtLogin', enabled)
       applyAutostart()
     }
   )
@@ -409,14 +419,24 @@ function applyStrictCsp(): void {
   })
 }
 
+let accountRelaunchScheduled = false
+
+function scheduleAccountRelaunch(): void {
+  if (accountRelaunchScheduled) return
+  accountRelaunchScheduled = true
+  setTimeout(() => {
+    app.relaunch({ args: process.argv.slice(1).filter((arg) => arg !== '--background') })
+    app.quit()
+  }, 250)
+}
+
 function wireIpc(): void {
   const shellRuntime = createShellRuntime(
     ipcMain,
     () => scheduler.list(),
     getShellAppWindow,
     (id, status) => scheduler.markRan(id, status),
-    () => app.getPath('userData'),
-    userScope
+    () => app.getPath('userData')
   )
   routineChangeHook = () => shellRuntime.scheduleChanged()
   missedRoutine = (routine) => {
@@ -436,18 +456,23 @@ function wireIpc(): void {
   }
   registerChatIpc(ipcMain, chatStore)
   settingsShellRuntime.registerIpc(ipcMain)
-  registerAuthIpc(ipcMain, authService)
-  authService.onChange((state) => {
-    // Account switch: chats, automations and run history are per account, so
-    // stop the previous account's runs, load the new account's routines and
-    // have the UI refetch everything.
-    activeScope = state.signedIn ? scopeFor(state.email) : undefined
-    for (const active of activeRuns.values()) active.controller.abort()
-    scheduler.reload()
-    getShellAppWindow()?.webContents.send(AuthChannels.changed, state)
-    shellRuntime.scheduleChanged()
-    shellRuntime.updatesChanged()
-    shellRuntime.notificationsChanged()
+  registerAuthIpc(ipcMain, {
+    getState: () => localAccounts.getState(),
+    login: async (credentials) => {
+      const state = await localAccounts.login(credentials)
+      scheduleAccountRelaunch()
+      return state
+    },
+    register: async (credentials) => {
+      const state = await localAccounts.register(credentials)
+      scheduleAccountRelaunch()
+      return state
+    },
+    logout: async () => {
+      const state = await localAccounts.logout()
+      scheduleAccountRelaunch()
+      return state
+    }
   })
   fireRoutine = (routine) => {
     // Expired automations pause themselves and never fire.
@@ -1030,50 +1055,53 @@ async function onReady(): Promise<void> {
   watchDockVisibility()
   await settingsShellRuntime.loadPlugins(app.getPath('userData'))
   wireIpc()
-  void authService.restore()
-  scheduler.startAll()
-  createTray()
-  applyAutostart()
+  if (!accountBootstrap.loginMode) {
+    scheduler.startAll()
+    createTray()
+    applyAutostart()
 
-  // Pre-seed or sync user's Composio key if safeStorage is available
-  void (async () => {
-    try {
-      if (COMPOSIO_FALLBACK_KEY) {
-        const existingKey = await connectorSettings.getKey()
-        if (!existingKey || existingKey !== COMPOSIO_FALLBACK_KEY) {
-          await connectorSettings.setKey(COMPOSIO_FALLBACK_KEY)
-        }
-      }
-    } catch {
-      // Ignored if encryption unavailable
-    }
-  })()
-
-  // OpenCode is the only engine: record it explicitly once the CLI is present
-  // so chat works immediately. Never overrides an explicit choice.
-  void (async () => {
-    try {
-      const harnesses = await detectHarnesses()
-      const pick = pickAutoEngine({ explicit: agentProviderService.hasExplicit(), harnesses })
-      if (pick) agentProviderService.set(pick)
-      // Default chat to big-pickle when it is actually available (needs
-      // `opencode auth login`); never overrides an explicit model choice.
-      if (agentProviderService.get() === 'opencode' && !acpModelService.get()) {
+    if (accountBootstrap.account?.primary) {
+      // Pre-seed or sync user's Composio key if safeStorage is available
+      void (async () => {
         try {
-          const models = await listAcpModels({ cwd: os.homedir() })
-          if (models.options.some((o) => o.value === DEFAULT_ACP_MODEL)) {
-            acpModelService.set(DEFAULT_ACP_MODEL)
+          if (primaryComposioFallbackKey) {
+            const existingKey = await connectorSettings.getKey()
+            if (!existingKey || existingKey !== primaryComposioFallbackKey) {
+              await connectorSettings.setKey(primaryComposioFallbackKey)
+            }
           }
         } catch {
-          /* picker stays on the agent default; models IPC explains */
+          // Ignored if encryption unavailable
         }
-      }
-    } catch {
-      /* Settings explains setup */
+      })()
     }
-  })()
 
-  if (shouldAutoOpenApp(process.argv)) openShellAppWindow()
+    // OpenCode is the only engine: record it explicitly once the CLI is present
+    // so chat works immediately. Never overrides an explicit choice.
+    void (async () => {
+      try {
+        const harnesses = await detectHarnesses()
+        const pick = pickAutoEngine({ explicit: agentProviderService.hasExplicit(), harnesses })
+        if (pick) agentProviderService.set(pick)
+        // Default chat to big-pickle when it is actually available (needs
+        // `opencode auth login`); never overrides an explicit model choice.
+        if (agentProviderService.get() === 'opencode' && !acpModelService.get()) {
+          try {
+            const models = await listAcpModels({ cwd: os.homedir() })
+            if (models.options.some((o) => o.value === DEFAULT_ACP_MODEL)) {
+              acpModelService.set(DEFAULT_ACP_MODEL)
+            }
+          } catch {
+            /* picker stays on the agent default; models IPC explains */
+          }
+        }
+      } catch {
+        /* Settings explains setup */
+      }
+    })()
+  }
+
+  if (accountBootstrap.loginMode || shouldAutoOpenApp(process.argv)) openShellAppWindow()
   app.on('activate', () => openShellAppWindow())
 }
 
@@ -1082,7 +1110,7 @@ app.whenReady().then(() => void onReady())
 // Tray keeps the app alive after windows close so schedules can fire —
 // unless the user turned off "keep in background" in Settings.
 app.on('window-all-closed', () => {
-  if (!storedAppBehavior().keepBackground) app.quit()
+  if (accountBootstrap.loginMode || !storedAppBehavior().keepBackground) app.quit()
   // Otherwise do not quit — tray keeps the app alive.
 })
 

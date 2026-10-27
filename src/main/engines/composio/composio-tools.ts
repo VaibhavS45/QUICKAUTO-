@@ -86,7 +86,8 @@ export class ComposioProvider implements ConnectorProvider {
     private readonly getKey: () => Promise<string | null>,
     private readonly getGuard: () => BudgetGuard,
     private readonly makeClient: (apiKey: string) => RouterClient = (apiKey) =>
-      new Composio({ apiKey, provider: new VercelProvider() }) as unknown as RouterClient
+      new Composio({ apiKey, provider: new VercelProvider() }) as unknown as RouterClient,
+    private readonly getUserId: () => string = () => COMPOSIO_USER_ID
   ) {
     this.all = createComposioTools()
   }
@@ -104,7 +105,7 @@ export class ComposioProvider implements ConnectorProvider {
     let session: RouterSession
     let connectedResult: Awaited<ReturnType<RouterSession['toolkits']>>
     try {
-      session = await client.sessions.create(COMPOSIO_USER_ID, { manageConnections: false })
+      session = await client.sessions.create(this.getUserId(), { manageConnections: false })
       connectedResult = await session.toolkits({ isConnected: true })
     } catch (error) {
       throw new Error(describeComposioError(error))

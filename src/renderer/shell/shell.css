@@ -2648,3 +2648,162 @@
 .shell-profile-menu button[role="menuitem"].shell-profile-menu-item--signout .shell-profile-menu-icon {
   color: var(--danger-bright);
 }
+
+.shell-auth-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  -webkit-app-region: drag;
+}
+
+.shell-auth-gate {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  height: 100%;
+  box-sizing: border-box;
+  padding: 24px;
+  background:
+    radial-gradient(circle at 50% 0%, rgb(255 106 42 / 10%), transparent 45%),
+    var(--black-0);
+}
+
+.shell-auth-card {
+  box-sizing: border-box;
+  width: min(380px, 100%);
+  padding: 28px;
+  border: 1px solid var(--line-2);
+  border-radius: 18px;
+  background: var(--black-2);
+  box-shadow: 0 28px 80px rgb(0 0 0 / 55%);
+  -webkit-app-region: no-drag;
+}
+
+.shell-auth-kicker {
+  display: inline-block;
+  margin-bottom: 10px;
+  color: var(--ember-hot);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+}
+
+.shell-auth-card h1 {
+  margin: 0 0 8px;
+  color: var(--text);
+  font-size: 24px;
+  font-weight: 600;
+  line-height: 1.2;
+}
+
+.shell-auth-card > p {
+  margin: 0 0 20px;
+  color: var(--text-muted);
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.shell-auth-card > .shell-auth-note {
+  margin: -8px 0 18px;
+  color: var(--ember-hot);
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.shell-auth-form {
+  display: grid;
+  gap: 14px;
+}
+
+.shell-auth-form label {
+  display: grid;
+  gap: 6px;
+}
+
+.shell-auth-form label > span {
+  color: var(--ash-1);
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.shell-auth-form input {
+  box-sizing: border-box;
+  width: 100%;
+  height: 40px;
+  padding: 0 12px;
+  border: 1px solid var(--line-2);
+  border-radius: 9px;
+  color: var(--text);
+  background: var(--black-3);
+  font: inherit;
+  font-size: 14px;
+  outline: none;
+}
+
+.shell-auth-form input:focus-visible {
+  border-color: var(--ember);
+  box-shadow: 0 0 0 3px rgb(255 106 42 / 18%);
+}
+
+.shell-auth-form input:disabled {
+  opacity: 0.55;
+}
+
+.shell-auth-form button[type="submit"] {
+  height: 42px;
+  margin-top: 4px;
+  border: 0;
+  border-radius: 9px;
+  color: var(--text-on-accent);
+  background: var(--ember);
+  font: inherit;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.shell-auth-form button[type="submit"]:hover:not(:disabled) {
+  background: var(--ember-hot);
+}
+
+.shell-auth-form button[type="submit"]:disabled {
+  cursor: default;
+  opacity: 0.6;
+}
+
+.shell-auth-status {
+  min-height: 18px;
+  margin: 14px 0 0;
+  color: var(--text-muted);
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.shell-auth-switch {
+  width: 100%;
+  margin-top: 14px;
+  padding: 0;
+  border: 0;
+  color: var(--ash-1);
+  background: transparent;
+  font: inherit;
+  font-size: 12px;
+  text-align: center;
+  cursor: pointer;
+}
+
+.shell-auth-switch:hover:not(:disabled) {
+  color: var(--text);
+}
+
+.shell-auth-switch:disabled {
+  cursor: default;
+  opacity: 0.55;
+}
+
+.shell-auth-loading {
+  color: var(--text-muted);
+  font-size: 13px;
+}

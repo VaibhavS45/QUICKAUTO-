@@ -52,6 +52,7 @@ interface ComposioClientLike {
 export interface ComposioMarketplaceDependencies {
   getApiKey: () => Promise<string | null>
   fallbackApiKey?: string
+  getUserId?: () => string
   fetch?: typeof fetch
   createClient?: (apiKey: string) => ComposioClientLike
 }
@@ -88,6 +89,10 @@ export class ComposioMarketplace {
     this.fetchImpl = deps.fetch ?? fetch
   }
 
+  private userId(): string {
+    return this.deps.getUserId?.() ?? COMPOSIO_USER_ID
+  }
+
   private async apiKey(): Promise<string> {
     const key = (await this.deps.getApiKey()) || this.deps.fallbackApiKey || null
     if (!key) throw new Error('Add your Composio project key to browse and connect apps.')
@@ -106,7 +111,7 @@ export class ComposioMarketplace {
     }
     try {
       await (this.deps.createClient ?? createClient)(key)
-        .sessions.create(COMPOSIO_USER_ID, { manageConnections: false })
+        .sessions.create(this.userId(), { manageConnections: false })
     } catch (error) {
       throw new Error(describeComposioError(error))
     }
@@ -130,7 +135,7 @@ export class ComposioMarketplace {
     let connected = new Set<string>()
     try {
       const session = await (this.deps.createClient ?? createClient)(key)
-        .sessions.create(COMPOSIO_USER_ID, { manageConnections: false })
+        .sessions.create(this.userId(), { manageConnections: false })
       const connectionState = await session.toolkits({ isConnected: true })
       connected = new Set(
         (connectionState?.items ?? [])
@@ -160,7 +165,7 @@ export class ComposioMarketplace {
     if (!key) return new Set()
     try {
       const session = await (this.deps.createClient ?? createClient)(key)
-        .sessions.create(COMPOSIO_USER_ID, { manageConnections: false })
+        .sessions.create(this.userId(), { manageConnections: false })
       const connectionState = await session.toolkits({ isConnected: true })
       return new Set(
         (connectionState?.items ?? [])
@@ -182,7 +187,7 @@ export class ComposioMarketplace {
     const slug = slugMap[toolkit.toLowerCase()] || toolkit
     let request: { redirectUrl?: string }
     try {
-      const session = await (await this.client()).sessions.create(COMPOSIO_USER_ID, {
+      const session = await (await this.client()).sessions.create(this.userId(), {
         manageConnections: false
       })
       request = await session.authorize(slug)

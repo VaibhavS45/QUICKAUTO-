@@ -49,13 +49,14 @@ function fakeClient(opts: {
 
 function providerWith(
   fake: { client: ComposioClientLike; calls: ExecCall[] },
-  opts: { key?: string | null; guard?: BudgetGuard } = {}
+  opts: { key?: string | null; guard?: BudgetGuard; userId?: () => string } = {}
 ): { provider: ComposioConnectorProvider; guard: BudgetGuard } {
   const guard = opts.guard ?? new BudgetGuard({ store: new MemoryBudgetStore() })
   const provider = new ComposioConnectorProvider({
     getApiKey: async () => (opts.key === undefined ? 'test-composio-key' : opts.key),
     getGuard: () => guard,
-    createClient: () => fake.client
+    createClient: () => fake.client,
+    ...(opts.userId ? { getUserId: opts.userId } : {})
   })
   return { provider, guard }
 }
@@ -82,6 +83,13 @@ describe('gmail read-only tools', () => {
     const { provider } = providerWith(fake)
     expect(provider.getTools(['notion'])).toEqual({})
     expect(provider.getTools([])).toEqual({})
+  })
+
+  it('scopes calls to the per-install user id when one is provided', async () => {
+    const fake = fakeClient()
+    const { provider } = providerWith(fake, { userId: () => 'palette-test-install' })
+    await searchEmails(provider, {})
+    expect(fake.calls[0]!.body['userId']).toBe('palette-test-install')
   })
 
   it('marks its tools so the generic BudgetGuard wrapper skips them (one hit per call)', () => {

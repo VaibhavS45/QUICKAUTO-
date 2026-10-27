@@ -78,6 +78,7 @@ export interface DriveDeps {
   getApiKey: () => Promise<string | null>
   fallbackApiKey?: string
   getGuard: () => BudgetGuard
+  getUserId?: () => string
   /** Injected in tests; production builds the real SDK client. */
   createClient?: (apiKey: string) => ComposioClientLike
 }
@@ -113,6 +114,10 @@ export class DriveService {
 
   constructor(private readonly deps: DriveDeps) {}
 
+  private userId(): string {
+    return this.deps.getUserId?.() ?? COMPOSIO_USER_ID
+  }
+
   private async client(): Promise<ComposioClientLike | null> {
     const apiKey = (await this.deps.getApiKey()) || this.deps.fallbackApiKey || null
     if (!apiKey) return null
@@ -128,7 +133,7 @@ export class DriveService {
     if (!force && this.statusCache && now - this.statusCache.at < 60_000) return this.statusCache.connected
     try {
       const res = await client.connectedAccounts.list({
-        userIds: [COMPOSIO_USER_ID],
+        userIds: [this.userId()],
         toolkitSlugs: [DRIVE_TOOLKIT],
         statuses: ['ACTIVE']
       })
@@ -244,14 +249,14 @@ export class DriveService {
   ): Promise<{ data?: unknown; error?: string | null; successful?: boolean }> {
     try {
       return await client.tools.execute(slug, {
-        userId: COMPOSIO_USER_ID,
+        userId: this.userId(),
         version: DRIVE_TOOLKIT_VERSION,
         arguments: args
       })
     } catch (err) {
       if (!isVersionError(err)) throw err
       return client.tools.execute(slug, {
-        userId: COMPOSIO_USER_ID,
+        userId: this.userId(),
         arguments: args,
         dangerouslySkipVersionCheck: true
       })

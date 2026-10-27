@@ -108,6 +108,20 @@ function MenuChevronIcon(): React.JSX.Element {
   )
 }
 
+function FolderIcon(): React.JSX.Element {
+  return (
+    <svg width="14" height="14" viewBox="0 0 24 24" aria-hidden="true">
+      <path
+        d="M3 7.5A2.5 2.5 0 0 1 5.5 5h3.2c.7 0 1.4.3 1.9.8l1.1 1.2h6.8A2.5 2.5 0 0 1 21 9.5v7A2.5 2.5 0 0 1 18.5 19h-13A2.5 2.5 0 0 1 3 16.5v-9Z"
+        fill="none"
+        stroke="#8C8C8C"
+        strokeWidth="2"
+        strokeLinejoin="round"
+      />
+    </svg>
+  )
+}
+
 function PlusLocalIcon(): React.JSX.Element {
   return (
     <svg width="16" height="16" viewBox="0 0 24 24" aria-hidden="true">
@@ -369,6 +383,7 @@ export default function Builder(props: BuilderProps): React.JSX.Element {
   const [recentTasks, setRecentTasks] = useState<RunRecord[]>([])
   const [driveOpen, setDriveOpen] = useState(false)
   const [driveQuery, setDriveQuery] = useState('')
+  const [drivePath, setDrivePath] = useState<Array<{ id: string; name: string }>>([])
   const [driveFiles, setDriveFiles] = useState<DriveFile[] | null>(null)
   const [driveState, setDriveState] = useState<'idle' | 'loading' | 'ready' | 'connect' | 'error'>('idle')
   const [driveMessage, setDriveMessage] = useState('')
@@ -512,18 +527,23 @@ export default function Builder(props: BuilderProps): React.JSX.Element {
     await attachments.attachLocal()
   }
 
-  /** Open the Drive picker and load the first page of real Drive files. */
+  /** Open the Drive picker at My Drive and load the first real folder page. */
   async function openDrivePicker(): Promise<void> {
-    setDriveOpen((open) => !open)
-    await loadDriveFiles('')
+    const next = !driveOpen
+    setDriveOpen(next)
+    if (!next) return
+    setDrivePath([])
+    setDriveQuery('')
+    await loadDriveFiles('', '')
   }
 
-  async function loadDriveFiles(query: string): Promise<void> {
+  /** `folderId` empty means "everything"; a folder id browses that folder. */
+  async function loadDriveFiles(query: string, folderId: string): Promise<void> {
     setDriveState('loading')
     setDriveMessage('')
     setDriveFiles(null)
     try {
-      const res = await window.app.driveListFiles(query)
+      const res = await window.app.driveListFiles(query, folderId || undefined)
       if (res.ok && res.files) {
         setDriveFiles(res.files)
         setDriveState('ready')
@@ -561,6 +581,27 @@ export default function Builder(props: BuilderProps): React.JSX.Element {
   function attachDriveFile(file: DriveFile): void {
     attachments.attachDrive({ id: file.id, name: file.name, mimeType: file.mimeType })
     setDriveOpen(false)
+  }
+
+  /** The folder currently open in the picker (undefined at My Drive root). */
+  const driveFolder = drivePath[drivePath.length - 1]
+
+  async function enterDriveFolder(file: DriveFile): Promise<void> {
+    setDrivePath((path) => [...path, { id: file.id, name: file.name }])
+    setDriveQuery('')
+    await loadDriveFiles('', file.id)
+  }
+
+  /** One level up the breadcrumb; at My Drive root this closes the picker. */
+  async function leaveDriveFolder(): Promise<void> {
+    if (drivePath.length === 0) {
+      setDriveOpen(false)
+      return
+    }
+    const next = drivePath.slice(0, -1)
+    setDrivePath(next)
+    setDriveQuery('')
+    await loadDriveFiles('', next[next.length - 1]?.id ?? '')
   }
 
   async function loadRecentTasks(): Promise<void> {
@@ -1236,23 +1277,25 @@ export default function Builder(props: BuilderProps): React.JSX.Element {
                               <button
                                 type="button"
                                 className="drive-picker-back"
-                                aria-label="Close Drive picker"
-                                onClick={() => setDriveOpen(false)}
+                                aria-label={drivePath.length === 0 ? 'Close Drive picker' : 'Up one folder'}
+                                onClick={() => void leaveDriveFolder()}
                               >
                                 ‹
                               </button>
-                              <span>Google Drive</span>
+                              <span title={drivePath.map((p) => p.name).join(' / ') || 'My Drive'}>
+                                {drivePath.length === 0 ? 'My Drive' : drivePath.map((p) => p.name).join(' / ')}
+                              </span>
                             </div>
                             <form
                               className="drive-picker-search"
                               onSubmit={(event) => {
                                 event.preventDefault()
-                                void loadDriveFiles(driveQuery)
+                                void loadDriveFiles(driveQuery, driveQuery.trim() ? '' : (driveFolder?.id ?? ''))
                               }}
                             >
                               <input
                                 aria-label="Search Google Drive"
-                                placeholder="Search files"
+                                placeholder="Search Drive"
                                 value={driveQuery}
                                 onChange={(e) => setDriveQuery(e.currentTarget.value)}
                                 disabled={driveState === 'loading'}
@@ -1267,7 +1310,7 @@ export default function Builder(props: BuilderProps): React.JSX.Element {
                                 <button type="button" className="drive-picker-connect" onClick={() => void connectDrive()}>
                                   Connect Google Drive
                                 </button>
-                                <button type="button" className="drive-picker-refresh" onClick={() => void loadDriveFiles(driveQuery)}>
+                                <button type="button" className="drive-picker-refresh" onClick={() => void loadDriveFiles('', driveFolder?.id ?? '')}>
                                   Refresh
                                 </button>
                               </div>
@@ -1278,22 +1321,30 @@ export default function Builder(props: BuilderProps): React.JSX.Element {
                             {driveState === 'ready' && (
                               <>
                                 {driveFiles && driveFiles.length > 0 ? (
-                                  driveFiles.map((file) => (
-                                    <button
-                                      key={file.id}
-                                      type="button"
-                                      className="drive-picker-item"
-                                      onClick={() => attachDriveFile(file)}
-                                    >
-                                      <span className="drive-picker-name" title={file.name}>{file.name}</span>
-                                      <small title={file.webViewLink ?? file.id}>
-                                        {file.modifiedTime ? `${file.modifiedTime.slice(0, 10)} · ` : ''}
-                                        {file.webViewLink ?? file.id}
-                                      </small>
-                                    </button>
-                                  ))
+                                  [...driveFiles]
+                                    .sort((a, b) => Number(Boolean(b.folder)) - Number(Boolean(a.folder)))
+                                    .map((file) => (
+                                      <button
+                                        key={file.id}
+                                        type="button"
+                                        className="drive-picker-item"
+                                        onClick={() => (file.folder ? void enterDriveFolder(file) : attachDriveFile(file))}
+                                      >
+                                        <span className="drive-picker-name" title={file.name}>
+                                          {file.folder && <FolderIcon />}
+                                          {file.name}
+                                        </span>
+                                        <small title={file.webViewLink ?? file.id}>
+                                          {file.folder
+                                            ? 'Folder'
+                                            : `${file.modifiedTime ? `${file.modifiedTime.slice(0, 10)} · ` : ''}${file.webViewLink ?? file.id}`}
+                                        </small>
+                                      </button>
+                                    ))
                                 ) : (
-                                  <div className="plus-submenu-empty">No files match “{driveQuery}”.</div>
+                                  <div className="plus-submenu-empty">
+                                    {driveQuery.trim() ? `No files match “${driveQuery}”.` : 'This folder is empty.'}
+                                  </div>
                                 )}
                               </>
                             )}

@@ -168,12 +168,16 @@ export default function ShellApp(): React.JSX.Element {
     void window.app.authGetState().then((res) => {
       if (active && res.ok) setAuth(res.state)
     }).catch((error: unknown) => console.error('Could not load account state.', error))
-    const off = window.app.onAuthChanged((state) => setAuth(state))
+    const off = window.app.onAuthChanged((state) => {
+      setAuth(state)
+      // Chats belong to the account that is signed in now.
+      void refreshThreads().catch((error: unknown) => setChatError(errorText(error)))
+    })
     return () => {
       active = false
       off()
     }
-  }, [])
+  }, [refreshThreads])
 
   useEffect(() => window.app.onNotificationsChanged(() => {
     void refreshNotifications().catch((error: unknown) => setDashboardError(errorText(error)))

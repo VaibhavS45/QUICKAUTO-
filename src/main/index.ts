@@ -27,7 +27,7 @@ import {
   UpdatesListRequestSchema
 } from './ipc.js'
 import { TOOL_IDS, type ToolId } from '../shared/types.js'
-import type { AgentEvent } from '../shared/agent.js'
+import type { AgentEvent, RunAttachment } from '../shared/agent.js'
 import { runAgent, type ApprovalDecision } from './agent/runner.js'
 import { sharedPathsForRun } from './agent/read-guard.js'
 import { coordinateQuit } from './shell/quit-coordinator.js'
@@ -68,7 +68,8 @@ import { SafeStorageMcpVault } from './shell/mcp-vault.js'
 import { getShellAppWindow, openShellAppWindow } from './shell/shell-app-window.js'
 import type { RunSource } from '../shared/agent.js'
 import type { RunLogRecord } from '../shared/contracts/schedule.js'
-import { ChatStore, type ChatStoreStorage } from './shell/chat-store.js'
+import { ChatStore } from './shell/chat-store.js'
+import { ScopedKeyValueStore, scopeFor, type KeyValueStore } from './shell/user-scope.js'
 import { registerChatIpc } from './shell/chat-ipc.js'
 import { AutomationService } from './automations/schedule/automation-service.js'
 import { registerAutomationIpc } from './automations/schedule/automation-ipc.js'
@@ -130,20 +131,12 @@ const agentProviderService = new AgentProviderService(new ElectronSettingsStore(
 const acpModelService = new AcpModelService(new ElectronSettingsStore())
 
 const chatFile = new Store<{ 'chat-threads': unknown[] }>({
-  name: 'palette-chats',
-  defaults: { 'chat-threads': [] }
+  name: 'palette-chats'
 })
 
-class ElectronChatStore implements ChatStoreStorage {
-  get(key: string): unknown {
-    return (chatFile as unknown as { get: (k: string) => unknown }).get(key)
-  }
-  set(key: string, value: unknown): void {
-    ;(chatFile as unknown as { set: (k: string, v: unknown) => void }).set(key, value)
-  }
-}
-
-const chatStore = new ChatStore(new ElectronChatStore())
+const chatStore = new ChatStore(
+  new ScopedKeyValueStore(chatFile as unknown as KeyValueStore, userScope)
+)
 
 const authFile = new Store<Record<string, unknown>>({ name: 'palette-auth', defaults: {} })
 const authKv = {
@@ -159,6 +152,17 @@ const authService = new AuthService({
   createClient: (config) => new OAuthClient(config),
   startLoopback: (state) => startLoopback(state)
 })
+
+/**
+ * Storage namespace of the account using the app right now. Undefined until a
+ * session is restored and whenever nobody is signed in — that is the
+ * signed-out namespace, where pre-account data already lives.
+ */
+let activeScope: string | undefined
+
+function userScope(): string | undefined {
+  return activeScope
+}
 
 const settingsShellRuntime = createSettingsShellRuntime(safeStorage)
 
@@ -241,15 +245,17 @@ const driveProvider = new DriveConnectorProvider({
 })
 registerConnectorProvider(driveProvider)
 
-const routineFile = new Store<{ routines: Routine[] }>({ name: 'palette-routines', defaults: { routines: [] } })
+const routineFile = new Store<{ routines: Routine[] }>({ name: 'palette-routines' })
+const routineKeys = new ScopedKeyValueStore(routineFile as unknown as KeyValueStore, userScope)
 let routineChangeHook = (): void => {}
 
 class ElectronRoutineStore implements RoutineStore {
   load(): Routine[] {
-    return routineFile.get('routines', [])
+    const raw = routineKeys.get('routines')
+    return Array.isArray(raw) ? (raw as Routine[]) : []
   }
   save(routines: Routine[]): void {
-    routineFile.set('routines', routines)
+    routineKeys.set('routines', routines)
     routineChangeHook()
   }
 }
@@ -385,7 +391,8 @@ function wireIpc(): void {
     () => scheduler.list(),
     getShellAppWindow,
     (id, status) => scheduler.markRan(id, status),
-    () => app.getPath('userData')
+    () => app.getPath('userData'),
+    userScope
   )
   routineChangeHook = () => shellRuntime.scheduleChanged()
   missedRoutine = (routine) => {
@@ -407,7 +414,16 @@ function wireIpc(): void {
   settingsShellRuntime.registerIpc(ipcMain)
   registerAuthIpc(ipcMain, authService)
   authService.onChange((state) => {
+    // Account switch: chats, automations and run history are per account, so
+    // stop the previous account's runs, load the new account's routines and
+    // have the UI refetch everything.
+    activeScope = state.signedIn ? scopeFor(state.email) : undefined
+    for (const active of activeRuns.values()) active.controller.abort()
+    scheduler.reload()
     getShellAppWindow()?.webContents.send(AuthChannels.changed, state)
+    shellRuntime.scheduleChanged()
+    shellRuntime.updatesChanged()
+    shellRuntime.notificationsChanged()
   })
   fireRoutine = (routine) => {
     // Expired automations pause themselves and never fire.
@@ -563,7 +579,8 @@ function wireIpc(): void {
     history?: import('../shared/chat.js').ChatMessage[],
     systemPrompt?: string,
     chatId?: string,
-    scheduledFor?: number
+    scheduledFor?: number,
+    attachments?: RunAttachment[]
   ): string {
     const runId = randomUUID()
     const startedAt = Date.now()
@@ -599,6 +616,7 @@ function wireIpc(): void {
       systemPrompt,
       signal: controller.signal,
       runId,
+      ...(attachments?.length ? { attachments } : {}),
       // W3: folders the user shared with this run via @/path mentions
       // (attachments/references in the prompt and recent USER history only —
       // assistant/tool text never widens access).
@@ -701,7 +719,9 @@ function wireIpc(): void {
       undefined,
       history,
       parsed.data.systemPrompt,
-      parsed.data.chatId
+      parsed.data.chatId,
+      undefined,
+      parsed.data.attachments
     )
     return { ok: true as const, runId }
   })
@@ -931,7 +951,7 @@ function wireIpc(): void {
   ipcMain.handle(IpcChannels.driveListFiles, async (_event, payload: unknown) => {
     const parsed = DriveListFilesSchema.safeParse(payload)
     if (!parsed.success) return { ok: false as const, error: 'Invalid Drive list request.' }
-    return driveService.listFiles(parsed.data.query)
+    return driveService.listFiles(parsed.data.query, parsed.data.folderId)
   })
 
 }

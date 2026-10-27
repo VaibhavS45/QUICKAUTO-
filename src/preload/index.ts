@@ -171,13 +171,13 @@ const api = {
       ok: false,
       error: error instanceof Error ? error.message : String(error)
     })),
-  driveListFiles: (query = ''): Promise<{
+  driveListFiles: (query = '', folderId?: string): Promise<{
     ok: boolean
-    files?: Array<{ id: string; name: string; mimeType: string; size?: string; modifiedTime?: string; webViewLink?: string }>
+    files?: Array<{ id: string; name: string; mimeType: string; folder?: boolean; size?: string; modifiedTime?: string; webViewLink?: string }>
     notConnected?: boolean
     error?: string
   }> =>
-    ipcRenderer.invoke('drive:list', { query }).catch((error: unknown) => ({
+    ipcRenderer.invoke('drive:list', { query, ...(folderId ? { folderId } : {}) }).catch((error: unknown) => ({
       ok: false,
       error: error instanceof Error ? error.message : String(error)
     })),

@@ -4312,6 +4312,19 @@ button.builder-setrow { cursor: pointer; }
 /* Google Drive picker (opens from the plus menu) */
 .drive-picker {
   width: 320px;
+  /* Taller than the tool submenus: it lists folders, not three skill rows. */
+  max-height: 320px;
+}
+
+.drive-picker-head span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.drive-picker-name svg {
+  margin-right: 6px;
+  vertical-align: -2px;
 }
 
 .drive-picker-head {

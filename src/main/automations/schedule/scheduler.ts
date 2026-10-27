@@ -288,6 +288,13 @@ export class Scheduler {
     for (const r of this.routines) this.arm(r)
   }
 
+  /** Swap accounts: drop this account's timers and load the other one's routines. */
+  reload(): void {
+    this.stopAll()
+    this.routines = this.store.load().filter((r) => RoutineSchema.safeParse(r).success)
+    this.startAll()
+  }
+
   stopAll(): void {
     for (const id of this.timers.keys()) this.disarm(id)
   }

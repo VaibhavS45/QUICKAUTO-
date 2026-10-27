@@ -151,7 +151,14 @@ const OpenFileDialogSchema = z.object({
 }).strict()
 
 export const DriveListFilesSchema = z.object({
-  query: z.string().max(120).default('')
+  query: z.string().max(120).default(''),
+  /** Folder to browse; omitted means the My Drive root (or a search when query is set). */
+  folderId: z
+    .string()
+    .min(1)
+    .max(128)
+    .regex(/^[A-Za-z0-9_-]+$/)
+    .optional()
 }).strict()
 
 export {

@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
-import { ensureOpencode, OPENCODE_INSTALL_COMMAND } from '../../src/main/agent/opencode-install.js'
+import { ensureOpencode, OPENCODE_INSTALL_COMMAND } from '../../src/main/engines/opencode/opencode-install.js'
 
 function deps(overrides: {
   resolve: () => string | null

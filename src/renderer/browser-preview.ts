@@ -121,7 +121,7 @@ const replies: Record<string, unknown> = {
   githubStatus: async () => ({ ok: true, installed: false, authenticated: false, repos: [] }),
   opencodeModels: async () => ({ ok: true, options: [] }),
   detectHarnesses: async () => ({ ok: true, harnesses: [] }),
-  getAgentProvider: async () => ({ ok: true, provider: 'acp' }),
+  getAgentProvider: async () => ({ ok: true, provider: 'opencode' }),
   driveStatus: async () => ({ ok: false, connected: false }),
   driveListFiles: async () => ({ ok: false, files: [] }),
   // Window controls map onto hash routing so the settings surface opens here too.

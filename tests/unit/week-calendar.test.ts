@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { createElement } from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
-import WeekCalendar from '../../src/renderer/features/automations/week-calendar.js'
+import WeekCalendar from '../../src/renderer/features/automations/shared/week-calendar.js'
 import {
   BOTTOM_PAD,
   DAY_HEADER_H,
@@ -24,7 +24,7 @@ import {
   weekDays,
   weekStartFor,
   type WeekEvent
-} from '../../src/renderer/features/automations/week-calendar-model.js'
+} from '../../src/renderer/features/automations/shared/week-calendar-model.js'
 
 function routineEvent(id: string, at: number, repeat: string, extra: Partial<WeekEvent> = {}): WeekEvent {
   return { id, title: `Do ${id}`, meta: `${repeat} 8:00 AM`, repeat, at, enabled: true, tools: [], ...extra }

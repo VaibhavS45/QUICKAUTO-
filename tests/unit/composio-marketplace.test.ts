@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
-import { ComposioMarketplace, type ComposioMarketplaceDependencies } from '../../src/main/connectors/composio-marketplace.js'
+import { ComposioMarketplace, type ComposioMarketplaceDependencies } from '../../src/main/engines/composio/composio-marketplace.js'
 
 function setup(options?: {
   key?: string | null

@@ -6,7 +6,7 @@ import {
   DRIVE_NOT_CONNECTED,
   DriveConnectorProvider
 } from '../../src/main/connectors/drive.js'
-import { BudgetGuard, MemoryBudgetStore } from '../../src/main/connectors/budget-guard.js'
+import { BudgetGuard, MemoryBudgetStore } from '../../src/main/engines/composio/budget-guard.js'
 import { currentOrFallbackContext, runWithContext } from '../../src/main/agent/run-context.js'
 
 interface ExecCall {

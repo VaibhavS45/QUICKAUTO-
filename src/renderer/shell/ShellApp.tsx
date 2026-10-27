@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { flushSync } from 'react-dom'
+import { User } from 'lucide-react'
 import type { ShellApi } from '../contracts/feature.js'
 import type { ChatThread } from '../../shared/chat.js'
 import type { AgentEvent } from '../../shared/agent.js'
@@ -360,7 +361,6 @@ export default function ShellApp(): React.JSX.Element {
     getRunLog: (runId) => window.app.getRunLog(runId)
   }), [navigate])
   const shownName = auth.signedIn && auth.name ? auth.name : displayName(profile, t('shell.defaultProfile'))
-  const initials = shownName.split(/\s+/).slice(0, 2).map((part) => part[0]?.toUpperCase()).join('')
 
   async function sendMessage(text: string): Promise<boolean> {
     if (busyRef.current) return false
@@ -539,12 +539,11 @@ export default function ShellApp(): React.JSX.Element {
                 setNotificationsOpen(false)
               }}
             >
-              <span className="shell-avatar">{initials || 'L'}</span>
+              <span className="shell-avatar"><User aria-hidden="true" /></span>
             </button>
             <ProfileMenu
               open={profileMenuOpen}
               name={shownName}
-              initials={initials}
               isSignedIn={auth.signedIn}
               busy={authBusy}
               onClose={closeProfileMenu}
@@ -601,7 +600,6 @@ export default function ShellApp(): React.JSX.Element {
                       onSend={sendMessage}
                       onApprove={(approvalId, approved) => void decideApproval(approvalId, approved)}
                       onStop={() => void stopRun()}
-                      onOpenSettings={() => window.app.openSettingsWindow('agents')}
                       onOpenConnections={() => window.app.openSettingsWindow('connectors')}
                       onOpenAutomations={() => navigate('automations')}
                       onSelectTemplate={(template: AutomationTemplate) => navigate('home', { templateId: template.id })}

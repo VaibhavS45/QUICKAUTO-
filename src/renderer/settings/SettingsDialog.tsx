@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
+import { Bot, ChartColumn, CircleQuestionMark, CircleUserRound, Palette, Plug, Search, Server, Settings2, SlidersHorizontal, X, type LucideIcon } from 'lucide-react'
 import { ShaderBackdrop } from '../components/ShaderBackdrop.js'
 import { Card, CardSub, CardTitle } from '../components/ui/card.js'
 import { Input, Textarea } from '../components/ui/input.js'
@@ -108,7 +109,7 @@ function AccountPanel(): React.JSX.Element {
             <span className="set-field-label">
               {t('account.aboutLabel')}{' '}
               <span title="Shared with the agent as background context." className="set-help">
-                ?
+                <CircleQuestionMark aria-hidden />
               </span>
             </span>
             <Textarea
@@ -408,66 +409,19 @@ const TAB_TITLES: Record<string, UiKey> = {
   usage: 'settings.tab.usage'
 }
 
+const NAV_ICONS: Record<string, LucideIcon> = {
+  general: SlidersHorizontal,
+  appearance: Palette,
+  account: CircleUserRound,
+  agents: Bot,
+  connectors: Plug,
+  usage: ChartColumn,
+  mcp: Server
+}
+
 function NavGlyph({ id }: { id: SettingsTabId }): React.JSX.Element {
-  if (id === 'general') {
-    return (
-      <svg viewBox="0 0 16 16" fill="none" aria-hidden>
-        <path d="M2.8 4.4h6.4M11.6 4.4h1.6" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" />
-        <circle cx="10.2" cy="4.4" r="1.35" stroke="currentColor" strokeWidth="1.3" />
-        <path d="M2.8 8h1.6M6.8 8h6.4" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" />
-        <circle cx="5.6" cy="8" r="1.35" stroke="currentColor" strokeWidth="1.3" />
-        <path d="M2.8 11.6h5.4M10.6 11.6h2.6" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" />
-        <circle cx="9.4" cy="11.6" r="1.35" stroke="currentColor" strokeWidth="1.3" />
-      </svg>
-    )
-  }
-  if (id === 'appearance') {
-    return (
-      <svg viewBox="0 0 16 16" fill="none" aria-hidden>
-        <circle cx="8" cy="8" r="5" stroke="currentColor" strokeWidth="1.3" />
-        <path d="M8 3v10A5 5 0 0 0 8 3Z" fill="currentColor" />
-      </svg>
-    )
-  }
-  if (id === 'account') {
-    return (
-      <svg viewBox="0 0 16 16" fill="none" aria-hidden>
-        <circle cx="8" cy="6" r="2.2" stroke="currentColor" strokeWidth="1.3" />
-        <path d="M3.5 13c.8-2.2 2.4-3.3 4.5-3.3S11.7 10.8 12.5 13" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" />
-      </svg>
-    )
-  }
-  if (id === 'agents') {
-    return (
-      <svg viewBox="0 0 16 16" fill="none" aria-hidden>
-        <path d="M4 11.5 8 3.5l4 8" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round" />
-        <path d="M5.5 8.5h5" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" />
-      </svg>
-    )
-  }
-  if (id === 'connectors') {
-    return (
-      <svg viewBox="0 0 16 16" fill="none" aria-hidden>
-        <path d="M6.2 9.8 4.4 11.6a2 2 0 1 1-2.8-2.8l1.8-1.8" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" />
-        <path d="M9.8 6.2 11.6 4.4a2 2 0 1 1 2.8 2.8L12.6 9" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" />
-        <path d="M6.5 9.5l3-3" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" />
-      </svg>
-    )
-  }
-  if (id === 'usage') {
-    return (
-      <svg viewBox="0 0 16 16" fill="none" aria-hidden>
-        <path d="M4 13.2V8.8M8 13.2V4.4M12 13.2V6.8" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
-      </svg>
-    )
-  }
-  return (
-    <svg viewBox="0 0 16 16" fill="none" aria-hidden>
-      <rect x="2.5" y="4.5" width="11" height="7" rx="1.6" stroke="currentColor" strokeWidth="1.3" />
-      <path d="M5 8h2.4" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" />
-      <circle cx="11.1" cy="8" r="0.55" fill="currentColor" />
-    </svg>
-  )
+  const Icon = NAV_ICONS[id] ?? Settings2
+  return <Icon aria-hidden />
 }
 
 /** Floating settings panel: grouped sidebar + content, shadcn components on the app theme. */
@@ -517,9 +471,8 @@ export default function SettingsApp({ initialTab }: { initialTab?: string }): Re
         <ShaderBackdrop enabled={shader} />
         <div className="settings-dragover" />
         <div className="settings-side-head">
-          <h2>{t('settings.title')}</h2>
           <div className="settings-search">
-            <span className="settings-search-icon">⌕</span>
+            <Search className="settings-search-icon" aria-hidden />
             <input
               value={query}
               onChange={(e) => setQuery(e.target.value)}
@@ -561,7 +514,7 @@ export default function SettingsApp({ initialTab }: { initialTab?: string }): Re
             aria-label={t('settings.close')}
             className="settings-close"
           >
-            ✕
+            <X aria-hidden />
           </button>
         </div>
         <div className="settings-body">

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { BudgetGuard, MemoryBudgetStore } from '../../src/main/connectors/budget-guard.js'
+import { BudgetGuard, MemoryBudgetStore } from '../../src/main/engines/composio/budget-guard.js'
 import {
   COMPOSIO_USER_ID,
   ComposioConnectorProvider,
@@ -11,7 +11,7 @@ import {
   GMAIL_WRITE_TOOLS,
   isBudgetGuardedTool,
   type ComposioClientLike
-} from '../../src/main/connectors/composio.js'
+} from '../../src/main/engines/composio/composio.js'
 import { runWithContext } from '../../src/main/agent/run-context.js'
 
 interface ExecCall {

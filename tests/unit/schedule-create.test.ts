@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
-import { blankDraft, blankTrigger, draftToAutomation } from '../../src/renderer/features/automations/builder-compile.js'
-import { AutomationService } from '../../src/main/automations/automation-service.js'
-import { MemoryRoutineStore, Scheduler } from '../../src/main/agent/scheduler.js'
+import { blankDraft, blankTrigger, draftToAutomation } from '../../src/renderer/features/automations/schedule/builder-compile.js'
+import { AutomationService } from '../../src/main/automations/schedule/automation-service.js'
+import { MemoryRoutineStore, Scheduler } from '../../src/main/automations/schedule/scheduler.js'
 
 describe('Schedule Automation Creation Flow', () => {
   const NOW = new Date(2026, 9, 12, 8, 0, 0) // Monday Oct 12 2026 8:00 AM

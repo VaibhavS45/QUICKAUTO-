@@ -3,7 +3,7 @@ import type { ToolId } from '../../shared/types.js'
 import type { RunSource } from '../../shared/agent.js'
 import { createBuiltinTools } from './tools.js'
 import { GITHUB_SYSTEM_PROMPT } from '../connectors/github-cli.js'
-import { GMAIL_SYSTEM_PROMPT, GMAIL_WRITE_PROMPT } from '../connectors/composio.js'
+import { GMAIL_SYSTEM_PROMPT, GMAIL_WRITE_PROMPT } from '../engines/composio/composio.js'
 import { GITHUB_RESOLVE_PROMPT } from '../connectors/github-resolve.js'
 import type { ConnectorProvider } from '../connectors/provider.js'
 

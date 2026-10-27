@@ -10,8 +10,8 @@ import {
   type RunResult
 } from './github-cli.js'
 import type { ConnectorProvider, ToolStatus } from './provider.js'
-import { runOpencodeResolve, type OpencodePermission } from '../agent/opencode-resolve.js'
-import type { OpencodeServerManager } from '../agent/opencode-server.js'
+import { runOpencodeResolve, type OpencodePermission } from '../engines/opencode/opencode-resolve.js'
+import type { OpencodeServerManager } from '../engines/opencode/opencode-server.js'
 
 /**
  * PR conflict resolution via OpenCode (@opencode-ai/sdk).

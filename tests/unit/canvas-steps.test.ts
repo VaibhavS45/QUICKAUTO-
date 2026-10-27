@@ -24,7 +24,7 @@ import {
   scheduleFromSteps,
   tidyCanvasSteps,
   updateCanvasStep
-} from '../../src/renderer/features/automations/canvas-steps.js'
+} from '../../src/renderer/features/automations/canvas/canvas-steps.js'
 
 describe('canvas steps', () => {
   it('builds the blank Zap-style starter chain', () => {

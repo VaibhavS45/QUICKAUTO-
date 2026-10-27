@@ -14,6 +14,8 @@ export default function AgentsPanel(): React.JSX.Element {
   const [editing, setEditing] = useState(false)
   const [pendingDelete, setPendingDelete] = useState('')
   const [error, setError] = useState('')
+  // Form is collapsed by default: the list is the page, adding is one click.
+  const [showForm, setShowForm] = useState(false)
 
   const refresh = useCallback(async (): Promise<void> => {
     const result = await window.app.agentsList()
@@ -29,6 +31,7 @@ export default function AgentsPanel(): React.JSX.Element {
     if (agent.builtin) return
     setForm({ id: agent.id, name: agent.name, systemPrompt: agent.systemPrompt })
     setEditing(true)
+    setShowForm(true)
     setError('')
   }
 
@@ -42,6 +45,7 @@ export default function AgentsPanel(): React.JSX.Element {
       if (!result.ok) throw new Error(result.error || 'Could not save agent.')
       setForm(blank)
       setEditing(false)
+      setShowForm(false)
       await refresh()
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : String(reason))
@@ -63,7 +67,21 @@ export default function AgentsPanel(): React.JSX.Element {
   return (
     <div className="space-y-4">
       <Card>
-        <CardTitle>Agents ({agents.length}/20)</CardTitle>
+        <div className="flex items-center justify-between gap-3">
+          <CardTitle>Agents ({agents.length}/20)</CardTitle>
+          {!editing && (
+            <Button
+              variant="secondary"
+              size="sm"
+              onClick={() => {
+                setForm(blank)
+                setShowForm((open) => !open)
+              }}
+            >
+              {showForm ? 'Cancel' : 'New agent'}
+            </Button>
+          )}
+        </div>
         <CardSub>Chat is built in and cannot be edited or deleted. Custom agents are saved locally; their system prompt is not active in Chat yet.</CardSub>
         <div className="space-y-2 pt-3">
           {agents.map((agent) => (
@@ -89,6 +107,7 @@ export default function AgentsPanel(): React.JSX.Element {
           </div>
         )}
       </Card>
+      {(showForm || editing) && (
       <Card>
         <CardTitle>{editing ? 'Edit agent' : 'Create agent'}</CardTitle>
         <form className="space-y-3 pt-3" onSubmit={(event) => void save(event)}>
@@ -114,11 +133,12 @@ export default function AgentsPanel(): React.JSX.Element {
           />
           <div className="flex gap-2">
             <Button type="submit">{editing ? 'Save changes' : 'Create agent'}</Button>
-            {editing && <Button type="button" variant="secondary" onClick={() => { setEditing(false); setForm(blank) }}>Cancel</Button>}
+            <Button type="button" variant="secondary" onClick={() => { setEditing(false); setForm(blank); setShowForm(false) }}>Cancel</Button>
           </div>
         </form>
         {error && <p className="pt-2 text-xs text-red-300" role="alert">{error}</p>}
       </Card>
+      )}
     </div>
   )
 }

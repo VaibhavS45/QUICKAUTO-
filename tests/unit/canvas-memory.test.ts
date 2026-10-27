@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { readCanvasMemory, writeCanvasMemory } from '../../src/renderer/features/automations/canvas-memory.js'
+import { readCanvasMemory, writeCanvasMemory } from '../../src/renderer/features/automations/canvas/canvas-memory.js'
 
 function store(initial?: string) {
   let value = initial ?? null

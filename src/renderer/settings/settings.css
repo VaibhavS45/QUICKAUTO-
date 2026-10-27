@@ -78,15 +78,7 @@
 .settings-side-head {
   position: relative;
   z-index: 1;
-  padding: 8px 16px 10px;
-}
-
-.settings-side-head h2 {
-  margin: 0;
-  padding: 0 0 10px;
-  font-size: var(--font-sm);
-  font-weight: 600;
-  color: var(--ash-1);
+  padding: 0 12px 8px;
 }
 
 .settings-search {
@@ -97,9 +89,10 @@
   position: absolute;
   left: 10px;
   top: 50%;
+  width: 13px;
+  height: 13px;
   transform: translateY(-50%);
-  font-family: var(--font-mono);
-  font-size: 12px;
+  stroke-width: 1.9;
   color: var(--ash-3);
   pointer-events: none;
 }
@@ -132,7 +125,7 @@
   display: flex;
   flex: 1;
   flex-direction: column;
-  gap: 14px;
+  gap: 10px;
   min-height: 0;
   overflow-y: auto;
   padding: 0 12px 16px;
@@ -177,6 +170,7 @@
   width: 16px;
   height: 16px;
   flex: 0 0 auto;
+  stroke-width: 1.6;
   color: var(--ash-3);
   transition: color 150ms ease;
 }
@@ -256,14 +250,23 @@
 }
 
 .settings-close {
+  display: grid;
+  width: 26px;
+  height: 26px;
+  place-items: center;
   border: 0;
   border-radius: 6px;
   background: transparent;
-  padding: 2px 8px;
+  padding: 0;
   color: var(--ash-3);
-  font-size: var(--font-md);
   cursor: pointer;
   -webkit-app-region: no-drag;
+}
+
+.settings-close svg {
+  width: 14px;
+  height: 14px;
+  stroke-width: 2;
 }
 
 .settings-close:hover {
@@ -516,8 +519,16 @@
 }
 
 .set-help {
+  display: inline-flex;
   color: var(--ash-3);
   cursor: help;
+  vertical-align: -2px;
+}
+
+.set-help svg {
+  width: 12px;
+  height: 12px;
+  stroke-width: 1.8;
 }
 
 .set-body-text {
@@ -943,7 +954,6 @@
   border-right-color: var(--line);
 }
 
-.light .settings-side-head h2,
 .light .settings-header-title {
   color: var(--ash-2);
 }

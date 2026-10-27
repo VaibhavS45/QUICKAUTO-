@@ -1,6 +1,6 @@
 import { EventEmitter } from 'node:events'
 import { describe, expect, it } from 'vitest'
-import { installStdioGuard } from '../../src/main/agent/stdio-guard.js'
+import { installStdioGuard } from '../../src/main/engines/opencode/stdio-guard.js'
 
 function epipe(): Error {
   return Object.assign(new Error('write EPIPE'), { code: 'EPIPE' })

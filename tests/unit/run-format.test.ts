@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
   formatDuration, parseBlocks, parseInline, previewText, statusLabel, statusTone
-} from '../../src/renderer/features/automations/run-format.js'
+} from '../../src/renderer/features/automations/shared/run-format.js'
 
 const SAMPLE = [
   'Here is the code for printing Hello World:', '',

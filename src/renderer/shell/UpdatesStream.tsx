@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import type { ShellApi } from '../contracts/feature.js'
 import type { RunRecord } from '../../shared/contracts/schedule.js'
-import { localDayKey, pastDayLabel, routineTitle, timeLabel } from '../features/automations/dates.js'
+import { localDayKey, pastDayLabel, routineTitle, timeLabel } from '../features/automations/shared/dates.js'
 import { UpdatesGlyph } from '../components/ui/primitives.js'
 
 const SEEN_KEY = 'palette:updates-since'

@@ -4,9 +4,9 @@ import {
   resolveRunAt,
   scheduleOf,
   toAutomation
-} from '../../src/main/automations/automation-service.js'
-import { registerAutomationIpc } from '../../src/main/automations/automation-ipc.js'
-import { MemoryRoutineStore, Scheduler, type Routine } from '../../src/main/agent/scheduler.js'
+} from '../../src/main/automations/schedule/automation-service.js'
+import { registerAutomationIpc } from '../../src/main/automations/schedule/automation-ipc.js'
+import { MemoryRoutineStore, Scheduler, type Routine } from '../../src/main/automations/schedule/scheduler.js'
 
 const BASE = new Date(2026, 9, 7, 12, 0, 0) // Wed Oct 7 2026 noon local
 

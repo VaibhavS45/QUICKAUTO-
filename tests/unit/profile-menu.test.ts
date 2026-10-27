@@ -5,7 +5,6 @@ import { ProfileMenu } from '../../src/renderer/shell/ProfileMenu.js'
 
 const baseProps = {
   name: 'Ada Lovelace',
-  initials: 'AL',
   isSignedIn: false,
   onClose: vi.fn(),
   onOpenSettings: vi.fn(),

@@ -4,7 +4,7 @@ import { automationsApi } from './automations.js'
 import { authApi } from './auth.js'
 import type { ChatMessage, ChatThread } from '../shared/chat.js'
 import { AgentEventSchema, type AgentEvent } from '../shared/agent.js'
-import type { ComposioToolkit } from '../main/connectors/composio-marketplace.js'
+import type { ComposioToolkit } from '../main/engines/composio/composio-marketplace.js'
 
 /**
  * Preload: contextBridge API only. No API keys or tokens ever reach the renderer.

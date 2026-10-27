@@ -35,30 +35,30 @@ import { ModelSettingsService, type SettingsStore } from './settings/model-setti
 import { AgentProviderService, AcpModelService, DEFAULT_ACP_MODEL, detectHarnesses, pickAutoEngine } from './agent/agent-provider.js'
 import { ProfileSettingsService } from './agent/profile-settings.js'
 import { GitHubResolveProvider } from './connectors/github-resolve.js'
-import { OpencodeServerManager } from './agent/opencode-server.js'
-import { listAcpModels } from './agent/acp-client.js'
-import { runOpencodeResolve, type OpencodePermission } from './agent/opencode-resolve.js'
+import { OpencodeServerManager } from './engines/opencode/opencode-server.js'
+import { listAcpModels } from './engines/opencode/acp-client.js'
+import { runOpencodeResolve, type OpencodePermission } from './engines/opencode/opencode-resolve.js'
 import {
   setNestedApprovalHandler,
   nextNestedApprovalId,
   requestNestedApprovalForCurrentRun
 } from './agent/nested-approval.js'
-import { BudgetGuard, type BudgetStore, type BudgetUsageState } from './connectors/budget-guard.js'
+import { BudgetGuard, type BudgetStore, type BudgetUsageState } from './engines/composio/budget-guard.js'
 import { ConnectorSettingsService, type ConnectorStore } from './settings/connector-settings.js'
-import { ComposioProvider, isComposioBudgetGuardedTool } from './connectors/composio-tools.js'
+import { ComposioProvider, isComposioBudgetGuardedTool } from './engines/composio/composio-tools.js'
 import { GitHubCliProvider, isZeroCostTool, validateRepoEntry } from './connectors/github-cli.js'
-import { ComposioConnectorProvider, isBudgetGuardedTool } from './connectors/composio.js'
-import { ComposioMarketplace } from './connectors/composio-marketplace.js'
+import { ComposioConnectorProvider, isBudgetGuardedTool } from './engines/composio/composio.js'
+import { ComposioMarketplace } from './engines/composio/composio-marketplace.js'
 import { DriveConnectorProvider, DriveService } from './connectors/drive.js'
 import { registerConnectorProvider, getToolsForMentions } from './agent/registry.js'
 import {
   Scheduler,
   type Routine,
   type RoutineStore
-} from './agent/scheduler.js'
+} from './automations/schedule/scheduler.js'
 import { shouldAutoOpenApp } from './shell/launch-policy.js'
 import { applyAppBehaviorPatch, resolveAppBehavior, type AppBehavior } from './shell/app-prefs.js'
-import { installStdioGuard } from './agent/stdio-guard.js'
+import { installStdioGuard } from './engines/opencode/stdio-guard.js'
 import { createAppTray, watchDockVisibility } from './shell/app-lifecycle.js'
 import { AuthService } from './auth/auth-service.js'
 import { AuthChannels, registerAuthIpc } from './auth/auth-ipc.js'
@@ -70,8 +70,8 @@ import type { RunSource } from '../shared/agent.js'
 import type { RunLogRecord } from '../shared/contracts/schedule.js'
 import { ChatStore, type ChatStoreStorage } from './shell/chat-store.js'
 import { registerChatIpc } from './shell/chat-ipc.js'
-import { AutomationService } from './automations/automation-service.js'
-import { registerAutomationIpc } from './automations/automation-ipc.js'
+import { AutomationService } from './automations/schedule/automation-service.js'
+import { registerAutomationIpc } from './automations/schedule/automation-ipc.js'
 import { createShellRuntime, runLogStatusFor } from './shell/runtime.js'
 import { createSettingsShellRuntime } from './shell/settings-runtime.js'
 
@@ -960,21 +960,16 @@ async function onReady(): Promise<void> {
     }
   })()
 
-  // First run with an installed harness but no model key: auto-connect the
-  // harness (opencode preferred) so chat works immediately. Never overrides
-  // an explicit engine choice or a ready builtin key.
+  // OpenCode is the only engine: record it explicitly once the CLI is present
+  // so chat works immediately. Never overrides an explicit choice.
   void (async () => {
     try {
-      const [key, harnesses] = await Promise.all([settingsService.getApiKey(), detectHarnesses()])
-      const pick = pickAutoEngine({
-        explicit: agentProviderService.hasExplicit(),
-        keySet: key !== null,
-        harnesses
-      })
+      const harnesses = await detectHarnesses()
+      const pick = pickAutoEngine({ explicit: agentProviderService.hasExplicit(), harnesses })
       if (pick) agentProviderService.set(pick)
       // Default chat to big-pickle when it is actually available (needs
       // `opencode auth login`); never overrides an explicit model choice.
-      if ((pick === 'opencode' || agentProviderService.get() === 'opencode') && !acpModelService.get()) {
+      if (agentProviderService.get() === 'opencode' && !acpModelService.get()) {
         try {
           const models = await listAcpModels({ cwd: os.homedir() })
           if (models.options.some((o) => o.value === DEFAULT_ACP_MODEL)) {
@@ -985,7 +980,7 @@ async function onReady(): Promise<void> {
         }
       }
     } catch {
-      /* stay on builtin; Settings explains setup */
+      /* Settings explains setup */
     }
   })()
 

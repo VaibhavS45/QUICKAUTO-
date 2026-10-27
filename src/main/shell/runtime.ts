@@ -4,13 +4,13 @@ import type { AppNotification } from '../../shared/contracts/notifications.js'
 import type { AgentEvent } from '../../shared/agent.js'
 import type { RunLogRecord, RunLogRawStorage, RunRecord } from '../../shared/contracts/schedule.js'
 import { IpcChannels } from '../ipc.js'
-import type { Routine } from '../agent/scheduler.js'
+import type { Routine } from '../automations/schedule/scheduler.js'
 import { configureNotificationStorage, notify, type NotificationStorage } from './notifications.js'
 import { registerNotificationIpc } from './notification-ipc.js'
-import { registerScheduleIpc } from './schedule-ipc.js'
+import { registerScheduleIpc } from '../automations/schedule/schedule-ipc.js'
 import { registerArtifactIpc } from './artifact-ipc.js'
 import { RunArtifactService, type RunArtifactStorage } from './run-artifacts.js'
-import { ScheduleService, type RunRecordStorage } from './schedule-service.js'
+import { ScheduleService, type RunRecordStorage } from '../automations/schedule/schedule-service.js'
 
 type RunStatus = RunRecord['status']
 

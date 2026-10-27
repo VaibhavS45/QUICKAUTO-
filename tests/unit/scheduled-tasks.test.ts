@@ -12,7 +12,7 @@ import {
   validateDraft,
   weekdayText,
   type AutomationDraft
-} from '../../src/renderer/features/automations/scheduled.js'
+} from '../../src/renderer/features/automations/schedule/scheduled.js'
 import type { Automation } from '../../src/shared/contracts/automations.js'
 
 function automation(over: Partial<Automation> = {}): Automation {

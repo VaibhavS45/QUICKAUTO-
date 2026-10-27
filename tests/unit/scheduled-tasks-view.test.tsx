@@ -1,10 +1,10 @@
 import { createElement, type ReactNode } from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { describe, expect, it, vi } from 'vitest'
-import { AutomationActionsProvider, type AutomationActions } from '../../src/renderer/features/automations/automation-actions.js'
-import { automationMenuItems } from '../../src/renderer/features/automations/AutomationActionsMenu.js'
-import { AutomationCard } from '../../src/renderer/features/automations/AutomationCard.js'
-import { AutomationDetail } from '../../src/renderer/features/automations/AutomationDetail.js'
+import { AutomationActionsProvider, type AutomationActions } from '../../src/renderer/features/automations/schedule/automation-actions.js'
+import { automationMenuItems } from '../../src/renderer/features/automations/schedule/AutomationActionsMenu.js'
+import { AutomationCard } from '../../src/renderer/features/automations/schedule/AutomationCard.js'
+import { AutomationDetail } from '../../src/renderer/features/automations/schedule/AutomationDetail.js'
 import type { Automation } from '../../src/shared/contracts/automations.js'
 
 vi.stubGlobal('window', {})

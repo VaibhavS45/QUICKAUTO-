@@ -3,7 +3,7 @@ import {
   BudgetGuard,
   MemoryBudgetStore,
   periodKeyFor
-} from '../../src/main/connectors/budget-guard.js'
+} from '../../src/main/engines/composio/budget-guard.js'
 
 function guardWith(opts: { at?: number; resetDay?: number; softBudget?: number } = {}) {
   let t = opts.at ?? new Date(2026, 9, 7, 12, 0, 0).getTime()

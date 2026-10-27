@@ -26,7 +26,7 @@ export const SETTINGS_GROUPS: Array<{ id: SettingsGroupId; label: string }> = [
 const BUILTIN_SETTINGS_NAV: SettingsNavItem[] = [
   { id: 'general', label: 'General', group: 'app', keywords: ['background', 'stay', 'routines', 'schedule', 'shortcuts', 'keyboard', 'keys'] },
   { id: 'appearance', label: 'Appearance', group: 'app', keywords: ['shader', 'theme', 'day', 'night', 'light', 'dark', 'mode', 'language', 'sidebar'] },
-  { id: 'agents', label: 'Agents', group: 'ai', keywords: ['model', 'engine', 'harness', 'opencode', 'pi', 'anthropic', 'openai', 'api', 'key', 'custom', 'assistant', 'prompt'] },
+  { id: 'agents', label: 'Agents', group: 'ai', keywords: ['model', 'engine', 'harness', 'opencode', 'acp', 'custom', 'assistant', 'prompt'] },
   { id: 'connectors', label: 'Connectors', group: 'ai', keywords: ['composio', 'gmail', 'github', 'notion', 'sheets', 'integrations'] },
   { id: 'usage', label: 'Usage', group: 'system', keywords: ['budget', 'composio'] },
 ]

@@ -4,8 +4,8 @@ import {
   MemoryConnectorStore,
   type SafeStorageLike
 } from '../../src/main/settings/connector-settings.js'
-import { ComposioProvider, createComposioTools, isComposioBudgetGuardedTool } from '../../src/main/connectors/composio-tools.js'
-import { BudgetGuard } from '../../src/main/connectors/budget-guard.js'
+import { ComposioProvider, createComposioTools, isComposioBudgetGuardedTool } from '../../src/main/engines/composio/composio-tools.js'
+import { BudgetGuard } from '../../src/main/engines/composio/budget-guard.js'
 import { APPROVAL_REQUIRED_TOOLS, buildToolApproval, createBuiltinTools } from '../../src/main/agent/tools.js'
 
 const getGuard = (): BudgetGuard => new BudgetGuard()

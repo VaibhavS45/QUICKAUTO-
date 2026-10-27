@@ -111,7 +111,7 @@ test('chat messages persist and reopen from recent chats', async () => {
     const thread = shell.getByRole('button', { name: 'A persisted chat prompt', exact: true })
     await expect(thread).toBeVisible({ timeout: 15_000 })
     await expect(shell.locator('.chat-message.is-user')).toContainText('A persisted chat prompt')
-    await expect(shell.getByRole('alert')).toContainText('No model API key set', { timeout: 15_000 })
+    await expect(shell.getByRole('alert')).toBeVisible({ timeout: 15_000 })
     await expect(shell.getByRole('button', { name: /A persisted chat prompt — failed/ })).toBeVisible()
 
     await shell.reload()

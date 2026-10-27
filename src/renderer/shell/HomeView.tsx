@@ -1,11 +1,11 @@
 import type { ShellApi } from '../contracts/feature.js'
-import { START_OPTIONS, type StartKind } from '../features/automations/start-choice.js'
-import { CreateFlow } from '../features/automations/create-flow.js'
+import { START_OPTIONS, type StartKind } from '../features/automations/schedule/start-choice.js'
+import { CreateFlow } from '../features/automations/schedule/create-flow.js'
 import { useI18n } from '../i18n/LanguageContext.js'
 import { createFeatureProps } from './FeatureHost.js'
 import { parseAutomationCreate } from './nav.js'
 import { UpdatesStream } from './UpdatesStream.js'
-import '../features/automations/automations.css'
+import '../features/automations/shared/automations.css'
 
 export function HomeView({ shell, params }: { shell: ShellApi; params?: Record<string, unknown> }): React.JSX.Element {
   const { t } = useI18n()

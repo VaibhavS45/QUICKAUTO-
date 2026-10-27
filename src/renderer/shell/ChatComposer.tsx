@@ -53,7 +53,11 @@ export function ChatComposer({
         if (!active) return
         if (list.ok && list.options) {
           setModels(list.options)
-          setModel(current.ok && current.model ? current.model : (list.current ?? ''))
+          // A stored pick the CLI no longer offers (retired free model) would
+          // otherwise show a model that cannot run; show the CLI's current one.
+          const stored = current.ok && current.model ? current.model : ''
+          const known = list.options.some((option) => option.value === stored)
+          setModel(known ? stored : (list.current ?? ''))
         } else {
           setModelsError(list.error ?? 'Could not list OpenCode models.')
         }
@@ -74,16 +78,11 @@ export function ChatComposer({
     else setError(res.error ?? 'Could not switch model.')
   }
 
-  const availableModels = useMemo(() => {
-    const freeModel = { value: 'opencode/muse-spark-1.3-contributor-free', name: 'Muse Spark 1.3 (Free)' }
-    return [freeModel, ...models.filter((option) => option.value !== freeModel.value)]
-  }, [models])
-  const filteredModels = availableModels.filter((option) => {
+  const filteredModels = models.filter((option) => {
     const query = modelQuery.trim().toLowerCase()
     return !query || option.name.toLowerCase().includes(query) || option.value.toLowerCase().includes(query)
   })
-  const selectedModelName = availableModels.find((option) => option.value === model)?.name ?? (model || 'Choose a model')
-  const modelMissing = model === 'opencode/muse-spark-1.3-contributor-free' && models.length > 0 && !models.some((o) => o.value === model)
+  const selectedModelName = models.find((option) => option.value === model)?.name ?? (model || 'Choose a model')
 
   async function send(): Promise<void> {
     const base = value.trim()
@@ -246,9 +245,6 @@ export function ChatComposer({
             Refresh models
           </button>
         </p>
-      )}
-      {modelMissing && (
-        <p className="chat-inline-hint">The free OpenCode model is not available for this account. Run `opencode auth login` in a terminal, then refresh the model list.</p>
       )}
       {/auth|login|provider authentication required/i.test(error) && (
         <p className="chat-inline-hint">OpenCode needs an active provider login. Run `opencode auth login` in a terminal, then click Refresh models and retry.</p>

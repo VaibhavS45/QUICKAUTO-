@@ -27,6 +27,9 @@ import { resolveOpenCodeBinary } from '../../agent/agent-provider.js'
  * turns if spawn latency (~1s) ever matters.
  */
 
+/** Free OpenCode Zen model, preferred when a stored pick is no longer offered. */
+export const FREE_ACP_MODEL = 'opencode/beam-free'
+
 export interface AcpPermission {
   id: string
   toolCallId: string
@@ -104,8 +107,9 @@ function toolText(contents: unknown): string {
 export function foldAcpUpdate(update: unknown): EmitAction[] {
   const u = asRecord(update)
   switch (u['sessionUpdate']) {
-    case 'agent_message_chunk':
-    case 'agent_thought_chunk': {
+    case 'agent_message_chunk': {
+      // Only the answer is user-facing; agent_thought_chunk is private
+      // reasoning and would otherwise leak into the run output.
       const text = acpContentText(u['content'])
       return text ? [{ kind: 'text', text }] : []
     }
@@ -543,21 +547,29 @@ export async function runAcpPrompt(req: AcpRunRequest, deps: AcpRunDeps = {}): P
     const model = req.model?.trim()
     if (model) {
       // Only select a model the CLI actually advertises: a stale stored id
-      // (e.g. a retired free model) is rejected and would kill the run.
+      // (e.g. a retired free model) is rejected and would kill the run. Fall
+      // back to the advertised free model, else keep the CLI's own choice.
       const configOptions = Array.isArray(created['configOptions']) ? (created['configOptions'] as unknown[]).map(asRecord) : []
       const modelOption = configOptions.find((o) => o['id'] === 'model')
       const advertised = modelOption ? flattenConfigOptions(modelOption).map((o) => o.value) : []
       const current = str(modelOption?.['currentValue'])
       // Unknown/empty list = older CLI; try the stored pick as before.
-      const canSelect = advertised.length === 0 || advertised.includes(model) || model === current
-      if (canSelect) {
+      const chosen =
+        advertised.length === 0
+          ? model
+          : advertised.includes(model) || model === current
+            ? model
+            : advertised.includes(FREE_ACP_MODEL)
+              ? FREE_ACP_MODEL
+              : null
+      if (chosen) {
         try {
-          await request('session/set_config_option', { sessionId, configId: 'model', value: model })
+          await request('session/set_config_option', { sessionId, configId: 'model', value: chosen })
         } catch (err) {
           const message = err instanceof Error ? err.message : String(err)
           // Process death surfaces here too — keep that diagnosis, not a model error.
           if (/exited|not found on PATH|before initialize/i.test(message)) throw err
-          throw new Error(`OpenCode rejected model "${model}": ${message.slice(0, 200)} Pick another in the chat model picker.`)
+          throw new Error(`OpenCode rejected model "${chosen}": ${message.slice(0, 200)} Pick another in the chat model picker.`)
         }
       }
     }

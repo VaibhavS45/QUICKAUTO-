@@ -29,9 +29,7 @@ describe('foldAcpUpdate', () => {
     expect(foldAcpUpdate({ sessionUpdate: 'agent_message_chunk', content: { type: 'text', text: 'hello' } })).toEqual([
       { kind: 'text', text: 'hello' }
     ])
-    expect(foldAcpUpdate({ sessionUpdate: 'agent_thought_chunk', content: { type: 'text', text: 'hmm' } })).toEqual([
-      { kind: 'text', text: 'hmm' }
-    ])
+    expect(foldAcpUpdate({ sessionUpdate: 'agent_thought_chunk', content: { type: 'text', text: 'hmm' } })).toEqual([])
     expect(foldAcpUpdate({ sessionUpdate: 'agent_message_chunk', content: { type: 'image' } })).toEqual([])
   })
 
@@ -323,6 +321,51 @@ describe('runAcpPrompt', () => {
     expect(seen).toEqual([])
     expect(out).toEqual({ text: 'sunny', steps: 0 })
     expect(events.at(-1)).toMatchObject({ type: 'text-delta', delta: 'sunny' })
+  })
+
+  it('falls back to the advertised free model when the stored pick is stale', async () => {
+    const seen: unknown[] = []
+    const { spawnFn } = scriptedChild((child, msg) => {
+      if (msg.method === 'initialize') child.emitLine({ jsonrpc: '2.0', id: msg.id, result: { protocolVersion: 1 } })
+      if (msg.method === 'session/new') {
+        child.emitLine({
+          jsonrpc: '2.0',
+          id: msg.id,
+          result: {
+            sessionId: 's1',
+            configOptions: [
+              {
+                id: 'model',
+                currentValue: 'cerebras/gpt-oss-120b',
+                options: [
+                  { value: 'cerebras/gpt-oss-120b', name: 'GPT OSS' },
+                  { value: 'opencode/beam-free', name: 'Beam (Free)' }
+                ]
+              }
+            ]
+          }
+        })
+      }
+      if (msg.method === 'session/set_config_option') {
+        seen.push(msg.params)
+        child.emitLine({ jsonrpc: '2.0', id: msg.id, result: { configOptions: [] } })
+      }
+      if (msg.method === 'session/prompt') {
+        child.emitLine({
+          jsonrpc: '2.0',
+          method: 'session/update',
+          params: { sessionId: 's1', update: { sessionUpdate: 'agent_message_chunk', content: { type: 'text', text: 'cloudy' } } }
+        })
+        child.emitLine({ jsonrpc: '2.0', id: msg.id, result: { stopReason: 'end_turn' } })
+      }
+    })
+    const { emit } = collect()
+    const out = await runAcpPrompt(
+      { prompt: 'weather?', model: 'opencode/muse-spark-1.3-contributor-free', runId: 'r9', emit },
+      { spawnFn: spawnFn as never, timeoutMs: 0 }
+    )
+    expect(seen).toEqual([{ sessionId: 's1', configId: 'model', value: 'opencode/beam-free' }])
+    expect(out).toEqual({ text: 'cloudy', steps: 0 })
   })
 
   it('fails a turn that produced no assistant text instead of reporting empty success', async () => {

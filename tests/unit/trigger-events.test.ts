@@ -86,21 +86,52 @@ describe('trigger events', () => {
           ...blankTrigger('event'),
           app: 'gmail',
           event: 'a new email is received',
-          config: { query: 'from:boss@company.com', labelIds: 'INBOX' }
+          config: { contains: 'arrived', from: 'boss@company.com', query: 'is:unread', labelIds: 'INBOX' }
         }
       ]
     })
     expect(compiled.valid).toBe(true)
     expect(compiled.create?.prompt).toContain(
-      'check @gmail for a new email is received with config query="from:boss@company.com", labelIds="INBOX"'
+      'check @gmail for a new email is received with config contains="arrived", from="boss@company.com", query="is:unread", labelIds="INBOX"'
     )
   })
 
   it('exposes only the config fields the Composio trigger declares', () => {
-    expect(triggerEvent('gmail', 'a new email is received')?.config?.map((field) => field.key)).toEqual(['query', 'labelIds'])
+    expect(triggerEvent('gmail', 'a new email is received')?.config?.map((field) => field.key)).toEqual([
+      'contains',
+      'subject',
+      'from',
+      'labelIds',
+      'query'
+    ])
+    expect(triggerEvent('gmail', 'a new email matching your keyword search is received')?.config?.map((field) => field.key)).toEqual([
+      'keyword',
+      'subject',
+      'from',
+      'labelIds',
+      'query'
+    ])
     expect(triggerEvent('slack', 'a new message is posted in a channel')?.config?.map((field) => field.key)).toContain('channel_id')
-    expect(triggerEvent('github', 'a new pull request is opened')?.config?.map((field) => field.key)).toEqual(['owner', 'repo'])
-    expect(triggerEvent('instagram', 'a new post is published')?.config).toBeUndefined()
+    expect(triggerEvent('slack', 'a new message is posted in a channel')?.config?.map((field) => field.key)).toContain('text_contains')
+    expect(triggerEvent('notion', 'a new page is added to a database')?.config?.map((field) => field.key)).toEqual([
+      'database_id',
+      'title_contains',
+      'parent_page_id'
+    ])
+    expect(triggerEvent('sheets', 'a new row is added to a spreadsheet')?.config?.map((field) => field.key)).toEqual([
+      'spreadsheet_id',
+      'query',
+      'sheet_name',
+      'range'
+    ])
+    expect(triggerEvent('github', 'a new pull request is opened')?.config?.map((field) => field.key)).toEqual([
+      'owner',
+      'repo',
+      'title_contains',
+      'branch',
+      'state'
+    ])
+    expect(triggerEvent('instagram', 'a new post is published')?.config?.map((field) => field.key)).toEqual(['caption_contains'])
     expect(triggerEvent('nope', 'anything')).toBeUndefined()
   })
 

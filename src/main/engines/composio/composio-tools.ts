@@ -96,7 +96,12 @@ export class ComposioProvider implements ConnectorProvider {
     const out: ToolSet = {}
     if (toolIds.includes('websearch')) out['web_search'] = this.all.web_search
 
-    const remoteMentioned = toolIds.some((id) => id === 'composio' || id === 'notion' || id === 'sheets')
+    const ids: (ToolId | string)[] = toolIds
+    const remoteMentioned = ids.some((id) =>
+      id === 'composio' || id === 'notion' || id === 'sheets' ||
+      id === 'calendar' || id === 'drive' || id === 'slack' ||
+      id === 'instagram' || id === 'outlook' || id === 'meta-ads'
+    )
     if (!remoteMentioned) return out
 
     const key = await this.getKey()
@@ -114,10 +119,22 @@ export class ComposioProvider implements ConnectorProvider {
       .filter((item) => item.connection?.isActive ?? true)
       .map((item) => item.slug)
     const scoped = new Set<string>()
-    if (toolIds.includes('composio')) connected.forEach((slug) => scoped.add(slug))
-    if (toolIds.includes('notion') && connected.includes('notion')) scoped.add('notion')
-    if (toolIds.includes('sheets')) {
+    if (ids.includes('composio')) connected.forEach((slug) => scoped.add(slug))
+    if (ids.includes('notion') && connected.includes('notion')) scoped.add('notion')
+    if (ids.includes('sheets')) {
       connected.filter((slug) => /sheet/i.test(slug)).forEach((slug) => scoped.add(slug))
+    }
+    if (ids.includes('calendar')) {
+      connected.filter((slug) => /calendar/i.test(slug)).forEach((slug) => scoped.add(slug))
+    }
+    if (ids.includes('drive')) {
+      connected.filter((slug) => /drive/i.test(slug)).forEach((slug) => scoped.add(slug))
+    }
+    if (ids.includes('slack') && connected.includes('slack')) scoped.add('slack')
+    if (ids.includes('instagram') && connected.includes('instagram')) scoped.add('instagram')
+    if (ids.includes('outlook') && connected.includes('outlook')) scoped.add('outlook')
+    if (ids.includes('meta-ads')) {
+      connected.filter((slug) => /meta|facebook|ads/i.test(slug)).forEach((slug) => scoped.add(slug))
     }
     const discovered = new Set<string>()
 

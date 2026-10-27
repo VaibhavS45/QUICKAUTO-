@@ -1,4 +1,4 @@
-import { Clock, Mail, Webhook } from 'lucide-react'
+import { Clock, Mail, Table2, Webhook } from 'lucide-react'
 import gmailLogo from '../../../assets/connector-logos/gmail.svg'
 import googleCalendarLogo from '../../../assets/connector-logos/google-calendar.svg'
 import googleWorkspaceLogo from '../../../assets/connector-logos/google-workspace.svg'
@@ -26,13 +26,15 @@ const LOGOS: Record<string, string> = {
   googleads: googleAdsLogo,
   googleworkspace: googleWorkspaceLogo,
   shopify: shopifyLogo,
-  rss: rssLogo
+  rss: rssLogo,
+  sheets: googleWorkspaceLogo
 }
 
 const NEUTRAL: Record<string, typeof Mail> = {
   mailmanus: Mail,
   webhook: Webhook,
-  timer: Clock
+  timer: Clock,
+  sheets: Table2
 }
 
 export function hasTriggerIcon(id: string): boolean {

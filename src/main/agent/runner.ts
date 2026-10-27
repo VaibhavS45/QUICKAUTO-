@@ -277,10 +277,10 @@ export async function runAgent(opts: RunAgentOptions): Promise<{ text: string; s
     // Engine selected: authoritative, no builtin fall-through (one outcome
     // per run; failures emit a single error with the install/auth fix).
     // Scheduled runs keep their read-only framing via buildInstructions.
-    const engineSystemPrompt =
-      source === 'scheduled'
-        ? [opts.systemPrompt?.trim() ?? '', buildInstructions('scheduled', tools)].filter(Boolean).join('\n\n')
-        : opts.systemPrompt
+    const engineSystemPrompt = [
+      opts.systemPrompt?.trim() ?? '',
+      buildInstructions(source, tools)
+    ].filter(Boolean).join('\n\n')
     return withScheduledTimeout(
       source,
       runViaHarness({ prompt, source, signal: runSignal, runId, emit, systemPrompt: engineSystemPrompt, decideApproval: opts.decideApproval, deps, sharedFolders: opts.sharedFolders, attachments: opts.attachments }),

@@ -1,5 +1,6 @@
 import type { AutomationTemplate } from '../../../../shared/contracts/automation-templates.js'
 import type { AutomationCreate, AutomationSchedule, ScheduleType } from '../../../../shared/contracts/automations.js'
+import { TOOL_ALIASES } from '../../../../shared/types.js'
 import { triggerMention } from '../trigger/trigger-events.js'
 
 /** The schedule types the contract supports. */
@@ -62,12 +63,19 @@ export function blankDraft(): BuilderDraft {
 }
 
 function mentionsIn(text: string): string[] {
-  return [...text.matchAll(/(?:^|\s)@([a-zA-Z]+)/g)].map((m) => m[1]!.toLowerCase())
+  const re = /(?:^|\s)@([a-zA-Z0-9_-]+)/g
+  const found: string[] = []
+  for (const m of text.matchAll(re)) {
+    const raw = m[1]!.toLowerCase()
+    const aliased = (raw in TOOL_ALIASES ? TOOL_ALIASES[raw] : raw) ?? raw
+    if (!found.includes(aliased)) found.push(aliased)
+  }
+  return found
 }
 
 /** Strip @tool tags so they never show in inputs; ids travel via draft.tools instead. */
 export function stripMentions(text: string): string {
-  return text.replace(/(?:^|\s)@[a-zA-Z]+/g, ' ').replace(/\s+/g, ' ').trim()
+  return text.replace(/(?:^|\s)@[a-zA-Z0-9_-]+/g, ' ').replace(/\s+/g, ' ').trim()
 }
 
 export interface CompiledAutomation {

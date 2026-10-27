@@ -188,7 +188,8 @@ export function filterMentionTools(tools: MentionToolItem[], typedQuery: string)
   if (!q) return tools
   return tools.filter((t) =>
     t.id.toLowerCase().includes(q) ||
-    t.label.toLowerCase().includes(q)
+    t.label.toLowerCase().includes(q) ||
+    (t.id === 'websearch' && ('browser'.includes(q) || 'web'.includes(q) || 'search'.includes(q)))
   )
 }
 
@@ -218,6 +219,8 @@ export function parsePromptMentionedTools(text: string, availableTools: MentionT
 
 const ALL_CATALOG_MAP: Record<string, MentionToolItem> = {
   websearch: BUILTIN_TOOLS[0]!,
+  browser: { id: 'browser', label: 'Browser', hint: 'Browse and search web pages', kind: 'builtin' },
+  web: { id: 'web', label: 'Web', hint: 'Search the web for up-to-date information', kind: 'builtin' },
   files: BUILTIN_TOOLS[1]!,
   github: BUILTIN_TOOLS[2]!,
   opencode: SYSTEM_SKILLS[0]!,
@@ -244,8 +247,18 @@ export function ToolPillIcon({ tool }: { tool: MentionToolItem }): React.JSX.Ele
   }
 
   switch (tool.id) {
-    case 'websearch':
     case 'browser':
+      return (
+        <span className="chat-tool-pill-icon is-browser" aria-hidden="true">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+            <circle cx="12" cy="12" r="10" />
+            <line x1="2" y1="12" x2="22" y2="12" />
+            <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z" />
+          </svg>
+        </span>
+      )
+    case 'websearch':
+    case 'web':
       return (
         <span className="chat-tool-pill-icon is-web" aria-hidden="true">
           <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
@@ -255,17 +268,19 @@ export function ToolPillIcon({ tool }: { tool: MentionToolItem }): React.JSX.Ele
           </svg>
         </span>
       )
-    case 'calendar':
+    case 'calendar': {
+      const now = new Date()
+      const monthStr = now.toLocaleString('en-US', { month: 'short' }).toUpperCase()
+      const dayStr = String(now.getDate())
       return (
         <span className="chat-tool-pill-icon is-calendar" aria-hidden="true">
-          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-            <rect x="3" y="4" width="18" height="18" rx="3" />
-            <line x1="16" y1="2" x2="16" y2="6" />
-            <line x1="8" y1="2" x2="8" y2="6" />
-            <line x1="3" y1="10" x2="21" y2="10" />
-          </svg>
+          <span className="chat-tool-calendar-mini">
+            <span className="chat-tool-calendar-month">{monthStr}</span>
+            <span className="chat-tool-calendar-day">{dayStr}</span>
+          </span>
         </span>
       )
+    }
     case 'sheets':
       return (
         <span className="chat-tool-pill-icon is-sheets" aria-hidden="true">

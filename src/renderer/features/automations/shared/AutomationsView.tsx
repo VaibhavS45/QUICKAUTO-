@@ -31,7 +31,7 @@ import ScheduledTasks from '../schedule/ScheduledTasks.js'
 import { MANAGE_FILTERS, automationMeta, type ManageFilter } from '../schedule/scheduled.js'
 import { ConfirmDialog } from './ConfirmDialog.js'
 import { CanvasNodeIcon, CanvasStepEditor, CanvasStepPicker, type CanvasPick, type CanvasPickTarget } from '../canvas/canvas-picker.js'
-import { readCanvasMemory, writeCanvasMemory, type CanvasMemory } from '../canvas/canvas-memory.js'
+import { readCanvasMemory, writeCanvasMemory, readCanvasSteps, writeCanvasSteps, type CanvasMemory } from '../canvas/canvas-memory.js'
 import { UpdatesGlyph } from '../../../components/ui/primitives.js'
 import { RunHeader, RunOutput } from './run-view.js'
 import './automations.css'
@@ -638,6 +638,7 @@ export default function AutomationsView(props: FeatureProps): React.JSX.Element 
       }
       await refresh()
       // The nodes on screen are what was just created: don't rebuild them.
+      writeCanvasSteps(res.automation.id, canvasSteps, canvasStorage())
       keepCanvasRef.current = res.automation.id
       savedStepsRef.current = canvasSteps
       stepsOwnerRef.current = res.automation.id
@@ -674,7 +675,8 @@ export default function AutomationsView(props: FeatureProps): React.JSX.Element 
       keepCanvasRef.current = ''
       return
     }
-    const loaded = canvasStepsForRoutine(canvasRoutine)
+    const saved = canvasRoutineKey !== 'blank' ? readCanvasSteps<CanvasStep>(canvasRoutineKey, canvasStorage()) : null
+    const loaded = saved ?? canvasStepsForRoutine(canvasRoutine)
     savedStepsRef.current = loaded
     stepsOwnerRef.current = canvasRoutineKey
     setCanvasSteps(loaded)
@@ -698,6 +700,7 @@ export default function AutomationsView(props: FeatureProps): React.JSX.Element 
   /** Write the edited nodes back onto the automation they came from. */
   const persistCanvas = useCallback(async (automation: Automation | undefined, steps: CanvasStep[]): Promise<boolean> => {
     if (!automation) return false
+    writeCanvasSteps(automation.id, steps, canvasStorage())
     const patch = canvasToPatch(steps, automation)
     if (Object.keys(patch).length === 0) return true
     const res = await window.app.automationsUpdate(automation.id, patch)
@@ -708,6 +711,26 @@ export default function AutomationsView(props: FeatureProps): React.JSX.Element 
     setAutomations((list) => list.map((item) => (item.id === res.automation!.id ? res.automation! : item)))
     return true
   }, [])
+
+  const [canvasRunning, setCanvasRunning] = useState(false)
+  async function runCanvasAutomation(): Promise<void> {
+    if (!canvasAutomation || canvasRunning) return
+    setCanvasRunning(true)
+    setError('')
+    try {
+      await saveCanvas()
+      const res = await window.app.automationsTestRun(canvasAutomation.id)
+      if (!res.ok) {
+        setError(res.error || 'Could not run the automation.')
+      } else {
+        props.shell.notify({ kind: 'info', title: 'Automation triggered', body: `Running ${canvasAutomation.title}...` })
+      }
+    } catch (err) {
+      setError(errorText(err))
+    } finally {
+      setCanvasRunning(false)
+    }
+  }
 
   /** A debounced edit waiting to be written; flushed when the canvas closes. */
   const pendingSaveRef = useRef<{ automation: Automation; steps: CanvasStep[] } | null>(null)
@@ -816,7 +839,7 @@ export default function AutomationsView(props: FeatureProps): React.JSX.Element 
   }
 
   /** Step inspector save: update the node; the autosave writes it back. */
-  function applyStepEdit(patch: Partial<Pick<CanvasStep, 'kind' | 'title' | 'subtitle'>>): void {
+  function applyStepEdit(patch: Partial<CanvasStep>): void {
     if (!selectedStep) return
     setCanvasSteps(updateCanvasStep(canvasSteps, selectedStep.id, patch))
   }
@@ -1185,15 +1208,26 @@ export default function AutomationsView(props: FeatureProps): React.JSX.Element 
                 <span aria-hidden="true">+</span> New
               </button>
               {canvasAutomation ? (
-                <button
-                  type="button"
-                  className="canvas-head-create"
-                  title="Save changes to this automation"
-                  disabled={canvasSaving}
-                  onClick={() => void saveCanvas()}
-                >
-                  {canvasSaving ? 'Saving…' : 'Save'}
-                </button>
+                <>
+                  <button
+                    type="button"
+                    className="canvas-head-run"
+                    title="Run this automation now"
+                    disabled={canvasRunning || canvasSaving}
+                    onClick={() => void runCanvasAutomation()}
+                  >
+                    {canvasRunning ? 'Running…' : '▶ Run'}
+                  </button>
+                  <button
+                    type="button"
+                    className="canvas-head-create"
+                    title="Save changes to this automation"
+                    disabled={canvasSaving}
+                    onClick={() => void saveCanvas()}
+                  >
+                    {canvasSaving ? 'Saving…' : 'Save'}
+                  </button>
+                </>
               ) : (
                 <button
                   type="button"

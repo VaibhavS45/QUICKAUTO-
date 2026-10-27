@@ -1,6 +1,13 @@
 import { Fragment, useEffect, useMemo, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
-import { TOOL_IDS, TOOL_META, type ActiveToolId } from '../../../../shared/types.js'
+import { activeMention, type ActiveToolId } from '../../../../shared/types.js'
+import {
+  getAvailableMentionTools,
+  filterMentionTools,
+  parsePromptMentionedTools,
+  ToolPillIcon,
+  type ConnectorStatusContext
+} from '../../../shell/mentionTools.js'
 import { TIMER_TRIGGER, TRIGGER_APPS, triggerApp, triggerEvent, triggerMention } from '../trigger/trigger-events.js'
 import { TriggerAppIcon } from '../trigger/trigger-icons.js'
 import { blankTrigger, draftToAutomation, makeTriggerId, type BuilderDraft, type BuilderRepeat, type BuilderTrigger } from './builder-compile.js'
@@ -367,6 +374,14 @@ export default function Builder(props: BuilderProps): React.JSX.Element {
   const [triggers, setTriggers] = useState(props.initial.triggers)
   const [task, setTask] = useState(props.initial.task)
   const [tools, setTools] = useState<string[]>(props.initial.tools)
+  const [taskCaret, setTaskCaret] = useState(0)
+  const [mentionDismissed, setMentionDismissed] = useState(false)
+  const [selectedMentionIndex, setSelectedMentionIndex] = useState(0)
+  const [mentionBox, setMentionBox] = useState<{ top: number; left: number; width: number } | null>(null)
+  const taskTextareaRef = useRef<HTMLTextAreaElement>(null)
+  const mentionMenuRef = useRef<HTMLDivElement>(null)
+  const [connectorState, setConnectorState] = useState<ConnectorStatusContext | null>(null)
+  const [gmailConnected, setGmailConnected] = useState(Boolean(props.gmailConnected))
   const [agent, setAgent] = useState(props.initial.agent)
   const [expiresAt, setExpiresAt] = useState('')
   const [agents, setAgents] = useState<AgentProfile[]>([])
@@ -404,14 +419,120 @@ export default function Builder(props: BuilderProps): React.JSX.Element {
     void window.app.agentsList()
       .then((res) => { if (live && res.ok && res.agents) setAgents(res.agents) })
       .catch(() => {})
-    void window.app.getConnector()
-      .then((res) => {
+
+    async function loadConnectors(): Promise<void> {
+      try {
+        const [conn, gm] = await Promise.all([
+          window.app.getConnector().catch(() => null),
+          window.app.connectionStatus('gmail').catch(() => null)
+        ])
         if (!live) return
-        setConnectorOptions((res.services ?? []).filter((service) => service.connected).map((service) => service.id))
-      })
-      .catch(() => {})
+        if (conn) {
+          setConnectorState(conn as ConnectorStatusContext)
+          setConnectorOptions((conn.services ?? []).filter((service) => service.connected).map((service) => service.id))
+        }
+        if (gm && gm.ok) setGmailConnected(Boolean(gm.connected))
+      } catch {
+        /* ignore */
+      }
+    }
+    void loadConnectors()
     return () => { live = false }
   }, [])
+
+  const availableTools = useMemo(() => {
+    return getAvailableMentionTools({
+      configured: connectorState?.configured,
+      services: connectorState?.services,
+      connectedSlugs: connectorState?.connectedSlugs,
+      gmailConnected
+    })
+  }, [connectorState, gmailConnected])
+
+  const taskMention = mentionDismissed ? null : activeMention(task, taskCaret)
+  const suggestions = useMemo(
+    () => (taskMention ? filterMentionTools(availableTools, taskMention.typed) : []),
+    [taskMention?.start, taskMention?.typed, availableTools]
+  )
+
+  useEffect(() => {
+    setSelectedMentionIndex(0)
+  }, [suggestions.length, taskMention?.typed])
+
+  useEffect(() => {
+    if (!taskMention) {
+      setMentionBox(null)
+      return
+    }
+    const updatePosition = (): void => {
+      const rect = taskTextareaRef.current?.getBoundingClientRect()
+      if (!rect) return
+      const spaceBelow = window.innerHeight - rect.bottom
+      const top = spaceBelow > 240 ? rect.bottom + 6 : Math.max(10, rect.top - 240)
+      setMentionBox({ top, left: rect.left, width: rect.width })
+    }
+    updatePosition()
+    window.addEventListener('resize', updatePosition)
+    window.addEventListener('scroll', updatePosition, true)
+    return () => {
+      window.removeEventListener('resize', updatePosition)
+      window.removeEventListener('scroll', updatePosition, true)
+    }
+  }, [taskMention])
+
+  function insertMention(id: string): void {
+    if (!taskMention) return
+    const replacement = `@${id} `
+    const next = `${task.slice(0, taskMention.start)}${replacement}${task.slice(taskCaret)}`
+    const nextCaret = taskMention.start + replacement.length
+    setTask(next)
+    setTaskCaret(nextCaret)
+    setMentionDismissed(false)
+    requestAnimationFrame(() => {
+      taskTextareaRef.current?.focus()
+      taskTextareaRef.current?.setSelectionRange(nextCaret, nextCaret)
+    })
+  }
+
+  function removeMention(id: string): void {
+    const re = new RegExp(`@${id}\\b\\s*`, 'gi')
+    const next = task.replace(re, '')
+    setTask(next)
+    setTools((prev) => prev.filter((t) => t.toLowerCase() !== id.toLowerCase()))
+    setTaskCaret(Math.min(taskCaret, next.length))
+    taskTextareaRef.current?.focus()
+  }
+
+  function handleTaskKeyDown(event: React.KeyboardEvent<HTMLTextAreaElement>): void {
+    if (taskMention && suggestions.length > 0) {
+      if (event.key === 'ArrowDown') {
+        event.preventDefault()
+        setSelectedMentionIndex((prev) => (prev + 1) % suggestions.length)
+        return
+      }
+      if (event.key === 'ArrowUp') {
+        event.preventDefault()
+        setSelectedMentionIndex((prev) => (prev - 1 + suggestions.length) % suggestions.length)
+        return
+      }
+      if ((event.key === 'Enter' || event.key === 'Tab') && !event.shiftKey) {
+        event.preventDefault()
+        const target = suggestions[selectedMentionIndex] ?? suggestions[0]
+        if (target) insertMention(target.id)
+        return
+      }
+      if (event.key === 'Escape') {
+        event.preventDefault()
+        setMentionDismissed(true)
+        return
+      }
+    }
+  }
+
+  const activePromptTools = useMemo(
+    () => parsePromptMentionedTools(task, availableTools),
+    [task, availableTools]
+  )
 
   // The sheet's backdrop-filter clips in-flow popovers and the builder overlay
   // scrolls, so the picker is portalled and anchored to the trigger button.
@@ -452,8 +573,15 @@ export default function Builder(props: BuilderProps): React.JSX.Element {
   }, [pickerOpen])
 
   const compiled = useMemo(
-    () => draftToAutomation({ title: props.initial.title, triggers, task, tools, agent }),
-    [props.initial.title, triggers, task, tools, agent]
+    () =>
+      draftToAutomation({
+        title: props.initial.title,
+        triggers,
+        task,
+        tools: [...new Set([...tools, ...activePromptTools.map((t) => t.id)])],
+        agent
+      }),
+    [props.initial.title, triggers, task, tools, activePromptTools, agent]
   )
 
   async function submit(event: React.FormEvent): Promise<void> {
@@ -1092,13 +1220,89 @@ export default function Builder(props: BuilderProps): React.JSX.Element {
                     <div className="builder-willlabel">
                       Palette will
                     </div>
+                    {activePromptTools.length > 0 && (
+                      <div className="chat-composer-pills-row builder-taskbox-pills-row" aria-label="Mentioned tools">
+                        {activePromptTools.map((tool) => (
+                          <span key={tool.id} className="chat-tool-pill-modern" title={tool.hint}>
+                            <ToolPillIcon tool={tool} />
+                            <span className="chat-tool-pill-label">{tool.label}</span>
+                            <button
+                              type="button"
+                              className="chat-tool-pill-remove"
+                              aria-label={`Remove ${tool.label}`}
+                              onClick={() => removeMention(tool.id)}
+                            >
+                              ×
+                            </button>
+                          </span>
+                        ))}
+                      </div>
+                    )}
                     <textarea
+                      ref={taskTextareaRef}
                       className="builder-taskbox"
                       rows={3}
                       value={task}
-                      onChange={(e) => setTask(e.currentTarget.value)}
+                      onChange={(e) => {
+                        setTask(e.currentTarget.value)
+                        setTaskCaret(e.currentTarget.selectionStart)
+                        setMentionDismissed(false)
+                      }}
+                      onClick={(e) => {
+                        setTaskCaret(e.currentTarget.selectionStart)
+                        setMentionDismissed(false)
+                      }}
+                      onKeyUp={(e) => {
+                        setTaskCaret(e.currentTarget.selectionStart)
+                      }}
+                      onKeyDown={handleTaskKeyDown}
                       placeholder="Describe what Palette should do, e.g. summarize the latest AI news and send me the highlights"
                     />
+                    {taskMention && mentionBox && createPortal(
+                      <div
+                        ref={mentionMenuRef}
+                        className="chat-mention-menu builder-portalled-mention-menu"
+                        role="listbox"
+                        aria-label="Available tools"
+                        style={{
+                          position: 'fixed',
+                          top: `${mentionBox.top}px`,
+                          left: `${mentionBox.left}px`,
+                          width: `${mentionBox.width}px`,
+                          zIndex: 10000
+                        }}
+                      >
+                        {suggestions.map((tool, index) => (
+                          <button
+                            key={tool.id}
+                            type="button"
+                            role="option"
+                            aria-selected={index === selectedMentionIndex}
+                            className={`chat-mention-option ${index === selectedMentionIndex ? 'is-selected' : ''}`}
+                            onMouseDown={(e) => e.preventDefault()}
+                            onClick={() => insertMention(tool.id)}
+                          >
+                            <ToolPillIcon tool={tool} />
+                            <div className="chat-mention-option-info">
+                              <div className="chat-mention-option-header">
+                                <span className="chat-mention-option-name">{tool.label}</span>
+                                <span className="chat-mention-option-id">@{tool.id}</span>
+                                <span className={`chat-mention-badge is-${tool.kind}`}>
+                                  {tool.kind === 'builtin' ? 'In-built' : tool.kind === 'skill' ? 'Skill' : 'Connected'}
+                                </span>
+                              </div>
+                              <span className="chat-mention-option-hint">{tool.hint}</span>
+                            </div>
+                          </button>
+                        ))}
+                        {suggestions.length === 0 && (
+                          <div className="chat-mention-empty">
+                            No connected tools match &quot;{taskMention.typed}&quot;
+                          </div>
+                        )}
+                      </div>,
+                      document.body
+                    )}
                     {attachments.files.length > 0 && (
                       <div className="builder-attached-files">
                         {attachments.files.map((file) => (
@@ -1236,18 +1440,18 @@ export default function Builder(props: BuilderProps): React.JSX.Element {
                         {/* Skills submenu */}
                         {skillsSubmenuOpen && (
                           <div className="plus-submenu">
-                            {TOOL_IDS.map((id: ActiveToolId) => (
+                            {availableTools.map((t) => (
                               <button
-                                key={id}
+                                key={t.id}
                                 type="button"
                                 className="plus-submenu-item"
                                 onClick={() => {
-                                  toggleTool(id)
+                                  toggleTool(t.id as ActiveToolId)
                                   setAddMenuOpen(false)
                                   setSkillsSubmenuOpen(false)
                                 }}
                               >
-                                {tools.includes(id) ? '✓ ' : ''}{TOOL_META[id].label}
+                                {tools.includes(t.id) || activePromptTools.some((pt) => pt.id === t.id) ? '✓ ' : ''}{t.label}
                               </button>
                             ))}
                           </div>

@@ -2,7 +2,7 @@ import type { BrowserWindow, IpcMain } from 'electron'
 import Store from 'electron-store'
 import type { AppNotification } from '../../shared/contracts/notifications.js'
 import type { AgentEvent } from '../../shared/agent.js'
-import type { RunLogRecord, RunLogRawStorage, RunRecord } from '../../shared/contracts/schedule.js'
+import type { RunLogRecord, RunRecord } from '../../shared/contracts/schedule.js'
 import { IpcChannels } from '../ipc.js'
 import type { Routine } from '../automations/schedule/scheduler.js'
 import { configureNotificationStorage, notify, type NotificationStorage } from './notifications.js'
@@ -10,72 +10,17 @@ import { registerNotificationIpc } from './notification-ipc.js'
 import { registerScheduleIpc } from '../automations/schedule/schedule-ipc.js'
 import { registerArtifactIpc } from './artifact-ipc.js'
 import { RunArtifactService, type RunArtifactStorage } from './run-artifacts.js'
-import { ScheduleService, type RunRecordStorage } from '../automations/schedule/schedule-service.js'
+import { ScheduleService } from '../automations/schedule/schedule-service.js'
+import { ScopedJsonStore, ScopedKeyValueStore, type KeyValueStore } from './user-scope.js'
 
 type RunStatus = RunRecord['status']
 
-class ElectronRunRecordStore implements RunRecordStorage {
-  private readonly store = new Store<{ 'recent-runs': unknown[] }>({
-    name: 'palette-shell',
-    defaults: { 'recent-runs': [] }
-  })
-
-  load(): unknown {
-    return this.store.get('recent-runs', [])
-  }
-
-  save(records: RunRecord[]): void {
-    this.store.set('recent-runs', records)
-  }
-}
-
-class ElectronRunLogStore implements RunLogRawStorage {
-  private readonly store = new Store<{ 'run-logs': unknown[] }>({
-    name: 'palette-shell',
-    defaults: { 'run-logs': [] }
-  })
-
-  load(): unknown {
-    return this.store.get('run-logs', [])
-  }
-
-  save(records: RunLogRecord[]): void {
-    this.store.set('run-logs', records)
-  }
-}
-
-interface RunArtifactStoreSchema {
-  'run-artifacts': unknown[]
-}
-
-class ElectronRunArtifactStore implements RunArtifactStorage {
-  private readonly store = new Store<RunArtifactStoreSchema>({
-    name: 'palette-shell',
-    defaults: { 'run-artifacts': [] }
-  })
-
-  load(): unknown {
-    return this.store.get('run-artifacts', [])
-  }
-
-  save(records: Parameters<RunArtifactStorage['save']>[0]): void {
-    this.store.set('run-artifacts', records)
-  }
-}
-
-class ElectronNotificationStore implements NotificationStorage {
-  private readonly store = new Store<{ notifications: unknown[] }>({
-    name: 'palette-notifications',
-    defaults: { notifications: [] }
-  })
-
-  load(): unknown {
-    return this.store.get('notifications', [])
-  }
-
-  save(notifications: AppNotification[]): void {
-    this.store.set('notifications', notifications)
-  }
+/** Per-account view of one electron-store file (see user-scope.ts). */
+function scopedFile(name: string, scope: () => string | undefined): ScopedKeyValueStore {
+  return new ScopedKeyValueStore(
+    new Store<Record<string, unknown>>({ name }) as unknown as KeyValueStore,
+    scope
+  )
 }
 
 export interface ShellRuntime {
@@ -106,6 +51,8 @@ export interface ShellRuntime {
   /** Capture the files a tool result produced (artifact detail page + downloads). */
   recordToolResult(runId: string, toolName: string, output: unknown): void
   scheduleChanged(): void
+  /** Tell the UI the activity feed belongs to another account now. */
+  updatesChanged(): void
   notify(input: Parameters<typeof notify>[0]): AppNotification
   notificationsChanged(): void
 }
@@ -133,12 +80,15 @@ export function createShellRuntime(
   getWindow: () => BrowserWindow | null,
   markRoutineRan: (id: string, status: string) => void,
   /** Root dir for cached run artifacts; the app's userData on production. */
-  getBaseDir: () => string = () => '.'
+  getBaseDir: () => string = () => '.',
+  /** Storage namespace of the account using the app right now. */
+  scope: () => string | undefined = () => undefined
 ): ShellRuntime {
-  const runs = new ElectronRunRecordStore()
-  const runLogs = new ElectronRunLogStore()
-  const runArtifacts = new ElectronRunArtifactStore()
-  const notificationStore = new ElectronNotificationStore()
+  const shellFile = scopedFile('palette-shell', scope)
+  const runs = new ScopedJsonStore<RunRecord[]>(shellFile, 'recent-runs')
+  const runLogs = new ScopedJsonStore<RunLogRecord[]>(shellFile, 'run-logs')
+  const runArtifacts = new ScopedJsonStore<Parameters<RunArtifactStorage['save']>[0]>(shellFile, 'run-artifacts')
+  const notificationStore: NotificationStorage = new ScopedJsonStore<AppNotification[]>(scopedFile('palette-notifications', scope), 'notifications')
   configureNotificationStorage(notificationStore)
   const scheduleService = new ScheduleService(getRoutines, runs, runLogs)
   const artifactService = new RunArtifactService({ baseDir: getBaseDir(), storage: runArtifacts })
@@ -233,6 +183,7 @@ export function createShellRuntime(
       void artifactService.observeToolResult(runId, toolName, output)
     },
     scheduleChanged: () => scheduleService.changed(),
+    updatesChanged: () => send(IpcChannels.updatesChanged),
     notify,
     notificationsChanged: () => send(IpcChannels.notificationsChanged)
   }

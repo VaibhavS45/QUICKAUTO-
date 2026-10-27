@@ -4,6 +4,7 @@ import {
   baseName,
   driveIdOf,
   driveRef,
+  fileExtension,
   localRef,
   mergeAttachments,
   needsComposioTools,
@@ -14,6 +15,14 @@ describe('baseName', () => {
   it('takes the last path segment on POSIX and Windows', () => {
     expect(baseName('/home/u/report final.txt')).toBe('report final.txt')
     expect(baseName('C:\\Users\\vaibhav\\notes.md')).toBe('notes.md')
+  })
+
+  describe('fileExtension', () => {
+    it('returns a compact uppercase file type label', () => {
+      expect(fileExtension('report.pdf')).toBe('PDF')
+      expect(fileExtension('/tmp/README')).toBe('FILE')
+      expect(fileExtension('archive.tar.gz')).toBe('GZ')
+    })
   })
 })
 

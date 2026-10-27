@@ -9,6 +9,7 @@ import {
   foldAcpUpdate,
   listAcpModels,
   pickPermissionOption,
+  promptBlocks,
   runAcpPrompt
 } from '../../src/main/engines/opencode/acp-client.js'
 import type { AgentEvent } from '../../src/shared/agent.js'
@@ -21,6 +22,19 @@ describe('acpContentText', () => {
     expect(acpContentText({ type: 'terminal', terminalId: 't1' })).toBe('[terminal t1]')
     expect(acpContentText({ type: 'image' })).toBe('')
     expect(acpContentText(null)).toBe('')
+  })
+})
+
+describe('promptBlocks', () => {
+  it('sends local attachments as file resource links', () => {
+    expect(promptBlocks('Review these files', [
+      { path: '/tmp/report final.txt', name: 'report final.txt' },
+      { path: '/tmp/notes.md' }
+    ])).toEqual([
+      { type: 'text', text: 'Review these files' },
+      { type: 'resource_link', uri: 'file:///tmp/report%20final.txt', name: 'report final.txt' },
+      { type: 'resource_link', uri: 'file:///tmp/notes.md', name: 'notes.md' }
+    ])
   })
 })
 

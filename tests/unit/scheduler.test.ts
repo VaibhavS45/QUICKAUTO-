@@ -121,6 +121,16 @@ describe('Scheduler store', () => {
     expect(s.remove(r.id)).toBe(true)
     expect(s.list()).toHaveLength(0)
   })
+
+  it('reload() swaps in the routines of the account that just signed in', () => {
+    let data: Routine[] = [routine({ id: 'account-a', enabled: false })]
+    const store = { load: () => data, save: (next: Routine[]) => { data = next } }
+    const s = new Scheduler(store, { fire: () => {} })
+    expect(s.list().map((r) => r.id)).toEqual(['account-a'])
+    data = [routine({ id: 'account-b', enabled: false })]
+    s.reload()
+    expect(s.list().map((r) => r.id)).toEqual(['account-b'])
+  })
 })
 
 describe('Scheduler timing', () => {

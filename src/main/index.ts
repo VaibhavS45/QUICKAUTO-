@@ -2,6 +2,22 @@ import { app, ipcMain, session, Notification, safeStorage, shell, dialog } from 
 import Store from 'electron-store'
 import { randomUUID } from 'node:crypto'
 import os from 'node:os'
+import path from 'node:path'
+
+try {
+  if (typeof process.loadEnvFile === 'function') {
+    process.loadEnvFile()
+  }
+} catch {
+  try {
+    const envPath = path.join(app.getAppPath(), '.env')
+    if (typeof process.loadEnvFile === 'function') {
+      process.loadEnvFile(envPath)
+    }
+  } catch {
+    /* .env not present or unreadable */
+  }
+}
 import {
   IpcChannels,
   ApiKeySchema,
@@ -27,7 +43,7 @@ import {
   UpdatesListRequestSchema
 } from './ipc.js'
 import { TOOL_IDS, type ToolId } from '../shared/types.js'
-import type { AgentEvent } from '../shared/agent.js'
+import type { AgentEvent, RunAttachment } from '../shared/agent.js'
 import { runAgent, type ApprovalDecision } from './agent/runner.js'
 import { sharedPathsForRun } from './agent/read-guard.js'
 import { coordinateQuit } from './shell/quit-coordinator.js'
@@ -157,7 +173,6 @@ class ElectronChatStore implements ChatStoreStorage {
 }
 
 const chatStore = new ChatStore(new ElectronChatStore())
-
 const settingsShellRuntime = createSettingsShellRuntime(safeStorage)
 
 const connectorFile = new Store<Record<string, unknown>>({ name: 'palette-connectors', defaults: {} })
@@ -179,6 +194,7 @@ const connectorSettings = new ConnectorSettingsService(new ElectronConnectorStor
 
 const COMPOSIO_FALLBACK_KEY = process.env['COMPOSIO_API_KEY']?.trim() || undefined
 const primaryComposioFallbackKey = accountBootstrap.account?.primary ? COMPOSIO_FALLBACK_KEY : undefined
+let runtimeConnectorKey: string | null = null
 
 const identityFile = new Store<Record<string, unknown>>({ name: 'palette-identity', defaults: {} })
 const installIdentity = new InstallIdentityService({
@@ -187,16 +203,23 @@ const installIdentity = new InstallIdentityService({
 })
 const composioUserId = (): string => installIdentity.getInstallId()
 
+const getComposioApiKey = async (): Promise<string | null> => {
+  if (runtimeConnectorKey) return runtimeConnectorKey
+  if (runtimeConnectorKey === '') return null
+  if (primaryComposioFallbackKey) return primaryComposioFallbackKey
+  return (await connectorSettings.getKey()) || null
+}
+
 registerConnectorProvider(
   new ComposioProvider(
-    () => connectorSettings.getKey(),
+    getComposioApiKey,
     () => getGuard(),
     undefined,
     composioUserId
   )
 )
 const composioMarketplace = new ComposioMarketplace({
-  getApiKey: () => connectorSettings.getKey(),
+  getApiKey: getComposioApiKey,
   fallbackApiKey: primaryComposioFallbackKey,
   getUserId: composioUserId
 })
@@ -234,7 +257,7 @@ registerConnectorProvider(githubResolveProvider)
 // dedupe keys), so the generic wrapper below skips them —
 // exactly one BudgetGuard hit per Composio call.
 const gmailProvider = new ComposioConnectorProvider({
-  getApiKey: () => connectorSettings.getKey(),
+  getApiKey: getComposioApiKey,
   fallbackApiKey: primaryComposioFallbackKey,
   getGuard: () => getGuard(),
   getUserId: composioUserId
@@ -245,13 +268,13 @@ registerConnectorProvider(settingsShellRuntime.mcpProvider)
 // Google Drive picker + gdrive_read agent tool (read-only, BudgetGuard-metered).
 // Connection itself goes through the existing composio:connect marketplace flow.
 const driveService = new DriveService({
-  getApiKey: () => connectorSettings.getKey(),
+  getApiKey: getComposioApiKey,
   fallbackApiKey: primaryComposioFallbackKey,
   getGuard: () => getGuard(),
   getUserId: composioUserId
 })
 const driveProvider = new DriveConnectorProvider({
-  getApiKey: () => connectorSettings.getKey(),
+  getApiKey: getComposioApiKey,
   fallbackApiKey: primaryComposioFallbackKey,
   getGuard: () => getGuard(),
   getUserId: composioUserId
@@ -605,7 +628,8 @@ function wireIpc(): void {
     history?: import('../shared/chat.js').ChatMessage[],
     systemPrompt?: string,
     chatId?: string,
-    scheduledFor?: number
+    scheduledFor?: number,
+    attachments?: RunAttachment[]
   ): string {
     const runId = randomUUID()
     const startedAt = Date.now()
@@ -641,6 +665,7 @@ function wireIpc(): void {
       systemPrompt,
       signal: controller.signal,
       runId,
+      ...(attachments?.length ? { attachments } : {}),
       // W3: folders the user shared with this run via @/path mentions
       // (attachments/references in the prompt and recent USER history only —
       // assistant/tool text never widens access).
@@ -743,7 +768,9 @@ function wireIpc(): void {
       undefined,
       history,
       parsed.data.systemPrompt,
-      parsed.data.chatId
+      parsed.data.chatId,
+      undefined,
+      parsed.data.attachments
     )
     return { ok: true as const, runId }
   })
@@ -775,22 +802,63 @@ function wireIpc(): void {
 
   ipcMain.handle(IpcChannels.getConnector, async () => {
     const pub = await connectorSettings.getPublicState()
-    // Gmail status is provided by its dedicated connection IPC; GitHub uses
-    // the local CLI. Composio status applies only to its other services.
-    const ids = ['notion', 'sheets', 'websearch'] as const
-    const services: Array<{ id: string; connected: boolean; detail?: string }> = await Promise.all(
-      ids.map(async (id) => {
-        const s = await new ComposioProvider(() => connectorSettings.getKey(), getGuard).status(id)
-        return { id, ...s }
-      })
-    )
+    const configured = pub.configured || Boolean(COMPOSIO_FALLBACK_KEY) || Boolean(runtimeConnectorKey)
+    const connectedSlugs = configured ? await composioMarketplace.getConnectedToolkits() : new Set<string>()
+
+    const services: Array<{ id: string; connected: boolean; detail?: string }> = [
+      {
+        id: 'notion',
+        connected: connectedSlugs.has('notion'),
+        detail: connectedSlugs.has('notion') ? 'Notion connected via Composio.' : 'No active Notion connection.'
+      },
+      {
+        id: 'calendar',
+        connected: connectedSlugs.has('googlecalendar') || connectedSlugs.has('calendar'),
+        detail: connectedSlugs.has('googlecalendar') ? 'Google Calendar connected via Composio.' : 'No active Google Calendar connection.'
+      },
+      {
+        id: 'instagram',
+        connected: connectedSlugs.has('instagram'),
+        detail: connectedSlugs.has('instagram') ? 'Instagram connected via Composio.' : 'No active Instagram connection.'
+      },
+      {
+        id: 'outlook',
+        connected: connectedSlugs.has('outlook'),
+        detail: connectedSlugs.has('outlook') ? 'Outlook Mail connected via Composio.' : 'No active Outlook connection.'
+      },
+      {
+        id: 'google-workspace',
+        connected: connectedSlugs.has('googledrive') || connectedSlugs.has('googleworkspace'),
+        detail: connectedSlugs.has('googledrive') ? 'Google Workspace connected via Composio.' : 'No active Google Workspace connection.'
+      },
+      {
+        id: 'slack',
+        connected: connectedSlugs.has('slack'),
+        detail: connectedSlugs.has('slack') ? 'Slack connected via Composio.' : 'No active Slack connection.'
+      },
+      {
+        id: 'meta-ads',
+        connected: connectedSlugs.has('facebook') || connectedSlugs.has('metaads') || connectedSlugs.has('meta-ads'),
+        detail: connectedSlugs.has('facebook') ? 'Meta Ads connected via Composio.' : 'No active Meta Ads connection.'
+      },
+      {
+        id: 'sheets',
+        connected: connectedSlugs.has('googlesheets') || connectedSlugs.has('sheets'),
+        detail: connectedSlugs.has('googlesheets') || connectedSlugs.has('sheets') ? 'Google Sheets connected via Composio.' : 'No active Google Sheets connection.'
+      },
+      {
+        id: 'websearch',
+        connected: true,
+        detail: 'Web search available via public fallback or configured provider keys.'
+      }
+    ]
     const gh = await githubProvider.checkGh()
     services.push({
       id: 'github',
       connected: gh.installed && gh.authenticated,
       detail: gh.detail
     })
-    return { ...pub, services }
+    return { ...pub, configured, services, connectedSlugs: Array.from(connectedSlugs) }
   })
 
   ipcMain.handle(IpcChannels.setConnectorKey, async (_event, payload: unknown) => {
@@ -799,6 +867,7 @@ function wireIpc(): void {
     try {
       await composioMarketplace.validateApiKey(parsed.data.key)
       await connectorSettings.setKey(parsed.data.key)
+      runtimeConnectorKey = parsed.data.key
       return { ok: true as const }
     } catch (err) {
       return { ok: false as const, error: err instanceof Error ? err.message : String(err) }
@@ -806,6 +875,7 @@ function wireIpc(): void {
   })
 
   ipcMain.handle(IpcChannels.clearConnectorKey, async () => {
+    runtimeConnectorKey = ''
     await connectorSettings.clearKey()
     return { ok: true as const }
   })
@@ -973,7 +1043,7 @@ function wireIpc(): void {
   ipcMain.handle(IpcChannels.driveListFiles, async (_event, payload: unknown) => {
     const parsed = DriveListFilesSchema.safeParse(payload)
     if (!parsed.success) return { ok: false as const, error: 'Invalid Drive list request.' }
-    return driveService.listFiles(parsed.data.query)
+    return driveService.listFiles(parsed.data.query, parsed.data.folderId)
   })
 
 }
@@ -991,12 +1061,14 @@ async function onReady(): Promise<void> {
     applyAutostart()
 
     if (accountBootstrap.account?.primary) {
-      // Pre-seed user's Composio key if safeStorage is available and not yet set
+      // Pre-seed or sync user's Composio key if safeStorage is available
       void (async () => {
         try {
-          const existingKey = await connectorSettings.getKey()
-          if (!existingKey && primaryComposioFallbackKey) {
-            await connectorSettings.setKey(primaryComposioFallbackKey)
+          if (primaryComposioFallbackKey) {
+            const existingKey = await connectorSettings.getKey()
+            if (!existingKey || existingKey !== primaryComposioFallbackKey) {
+              await connectorSettings.setKey(primaryComposioFallbackKey)
+            }
           }
         } catch {
           // Ignored if encryption unavailable

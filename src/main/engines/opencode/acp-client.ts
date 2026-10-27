@@ -1,5 +1,7 @@
 import { spawn, type ChildProcess } from 'node:child_process'
 import { readFile } from 'node:fs/promises'
+import { basename } from 'node:path'
+import { pathToFileURL } from 'node:url'
 import type { AgentEvent } from '../../../shared/agent.js'
 import { resolveOpenCodeBinary } from '../../agent/agent-provider.js'
 
@@ -43,6 +45,8 @@ export interface AcpRunRequest {
   systemPrompt?: string
   runId: string
   cwd?: string
+  /** Files attached in the composer, sent as ACP resource links. */
+  attachments?: Array<{ path: string; name?: string }>
   /** ACP model id (e.g. 'opencode/big-pickle'); unset = agent default. */
   model?: string
   signal?: AbortSignal
@@ -139,6 +143,28 @@ export function foldAcpUpdate(update: unknown): EmitAction[] {
     default:
       return []
   }
+}
+
+/**
+ * Build the ACP prompt blocks: the text turn first, then one `resource_link`
+ * per attached local file so OpenCode receives it as an attachment (its
+ * session advertises `embeddedContext`), not just a path in prose.
+ */
+export function promptBlocks(
+  text: string,
+  attachments?: Array<{ path: string; name?: string }>
+): Array<Record<string, unknown>> {
+  const blocks: Array<Record<string, unknown>> = [{ type: 'text', text }]
+  for (const file of attachments ?? []) {
+    const path = file.path?.trim()
+    if (!path) continue
+    blocks.push({
+      type: 'resource_link',
+      uri: pathToFileURL(path).href,
+      name: file.name?.trim() || basename(path)
+    })
+  }
+  return blocks
 }
 
 export interface PermissionOption {
@@ -579,7 +605,7 @@ export async function runAcpPrompt(req: AcpRunRequest, deps: AcpRunDeps = {}): P
     promptId = nextId + 1
     const result = (await request('session/prompt', {
       sessionId,
-      prompt: [{ type: 'text', text: fullPrompt }]
+      prompt: promptBlocks(fullPrompt, req.attachments)
     })) as Record<string, unknown>
     if (req.signal?.aborted || str(result['stopReason']) === 'cancelled') {
       emit({ type: 'aborted', runId })

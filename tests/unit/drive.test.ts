@@ -50,7 +50,7 @@ function serviceWith(client: unknown): { service: DriveService; guard: BudgetGua
 }
 
 describe('DriveService.listFiles', () => {
-  it('returns normalized files without folders', async () => {
+  it('returns normalized files including folders', async () => {
     const { client, calls } = fakeClient({
       data: {
         files: [
@@ -64,7 +64,8 @@ describe('DriveService.listFiles', () => {
     const res = await service.listFiles('')
     expect(res.ok).toBe(true)
     expect(res.files).toEqual([
-      { id: 'f1', name: 'Spec.pdf', mimeType: 'application/pdf', size: '1024', modifiedTime: undefined, webViewLink: undefined }
+      { id: 'f1', name: 'Spec.pdf', mimeType: 'application/pdf', size: '1024', modifiedTime: undefined, webViewLink: undefined },
+      { id: 'f2', name: 'Projects', mimeType: 'application/vnd.google-apps.folder', folder: true, size: undefined, modifiedTime: undefined, webViewLink: undefined }
     ])
     expect(calls[0]!.slug).toBe(DRIVE_LIST_SLUG)
     expect(calls[0]!.args['pageSize']).toBe(25)

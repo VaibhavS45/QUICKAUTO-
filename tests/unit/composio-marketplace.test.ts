@@ -104,6 +104,12 @@ describe('ComposioMarketplace', () => {
     expect(authorize).toHaveBeenCalledWith('gmail')
   })
 
+  it('connects to notion and authorizes the hosted connect link', async () => {
+    const { marketplace, authorize } = setup()
+    await expect(marketplace.connect('notion')).resolves.toBe('https://connect.example/auth')
+    expect(authorize).toHaveBeenCalledWith('notion')
+  })
+
   it('rejects insecure auth links', async () => {
     const { marketplace } = setup({ redirectUrl: 'http://connect.example/auth' })
     await expect(marketplace.connect('gmail')).rejects.toThrow(/secure connection link/)

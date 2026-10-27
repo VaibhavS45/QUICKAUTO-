@@ -172,12 +172,16 @@ export default function ShellApp(): React.JSX.Element {
     }).catch((error: unknown) => console.error('Could not load account state.', error)).finally(() => {
       if (active) setAuthLoading(false)
     })
-    const off = window.app.onAuthChanged((state) => setAuth(state))
+    const off = window.app.onAuthChanged((state) => {
+      setAuth(state)
+      // Chats belong to the account that is signed in now.
+      void refreshThreads().catch((error: unknown) => setChatError(errorText(error)))
+    })
     return () => {
       active = false
       off()
     }
-  }, [])
+  }, [refreshThreads])
 
   useEffect(() => window.app.onNotificationsChanged(() => {
     void refreshNotifications().catch((error: unknown) => setDashboardError(errorText(error)))
@@ -366,7 +370,7 @@ export default function ShellApp(): React.JSX.Element {
   }), [navigate])
   const shownName = auth.signedIn && auth.name ? auth.name : displayName(profile, t('shell.defaultProfile'))
 
-  async function sendMessage(text: string): Promise<boolean> {
+  async function sendMessage(text: string, attachments?: Array<{ path: string; name?: string }>): Promise<boolean> {
     if (busyRef.current) return false
     busyRef.current = true
     setBusy(true)
@@ -387,7 +391,8 @@ export default function ShellApp(): React.JSX.Element {
         prompt: text,
         tools: parseMentionedTools(text),
         source: 'chat',
-        chatId: threadId
+        chatId: threadId,
+        ...(attachments?.length ? { attachments } : {})
       })
       if (!result.ok || !result.runId) throw new Error(result.error || 'Could not start the assistant.')
       runIdRef.current = result.runId

@@ -62,11 +62,20 @@ export const AgentEventSchema = z.discriminatedUnion('type', [
   z.object({ type: z.literal('aborted'), ...AgentEventBase }).strict()
 ])
 
+/** A file the user attached in the composer; sent to the engine as an ACP resource link. */
+export const RunAttachmentSchema = z.object({
+  /** Absolute local path, chosen by the user through the file dialog. */
+  path: z.string().min(1).max(4096),
+  name: z.string().min(1).max(512).optional()
+})
+export type RunAttachment = z.infer<typeof RunAttachmentSchema>
+
 export const AgentRunRequestSchema = z.object({
   prompt: z.string().min(1).max(20000),
   tools: z.array(z.string()).max(16),
   source: RunSourceSchema,
   chatId: z.string().min(1).max(128).optional(),
+  attachments: z.array(RunAttachmentSchema).max(16).optional(),
   history: z.array(ChatMessageSchema).max(20).optional(),
   systemPrompt: z.string().max(12000).optional()
 })

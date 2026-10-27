@@ -2,7 +2,7 @@ import { ToolLoopAgent, isStepCount, type ModelMessage, type ToolSet } from 'ai'
 import { createAnthropic } from '@ai-sdk/anthropic'
 import { createOpenAI } from '@ai-sdk/openai'
 import { createGoogleGenerativeAI } from '@ai-sdk/google'
-import type { AgentEvent, RunSource } from '../../shared/agent.js'
+import type { AgentEvent, RunAttachment, RunSource } from '../../shared/agent.js'
 import { MAX_HISTORY_MESSAGES, type ChatMessage } from '../../shared/chat.js'
 import type { ToolId } from '../../shared/types.js'
 import { buildInstructions, getToolsForMentions } from './registry.js'
@@ -58,6 +58,8 @@ export interface RunAgentOptions {
   deps?: RunnerDeps
   /** Folders shared with the task (@/path mentions from prompt/history). */
   sharedFolders?: string[]
+  /** Files attached in the composer; forwarded to the engine as attachments. */
+  attachments?: RunAttachment[]
 }
 
 export interface RunnerDeps {
@@ -70,7 +72,7 @@ export interface RunnerDeps {
   /** ACP model id for opencode runs; null = free default (DEFAULT_ACP_MODEL). */
   getAcpModel?: () => string | null
   /** Injected in tests to avoid spawning `opencode acp`. */
-  runAcp?: (req: { prompt: string; systemPrompt?: string; model?: string; runId: string; signal?: AbortSignal; emit: (e: AgentEvent) => void; onPermission?: (perm: { id: string; toolCallId: string; toolName: string; input: unknown; reason?: string }) => Promise<boolean> }) => Promise<{ text: string; steps: number }>
+  runAcp?: (req: { prompt: string; systemPrompt?: string; model?: string; attachments?: RunAttachment[]; runId: string; signal?: AbortSignal; emit: (e: AgentEvent) => void; onPermission?: (perm: { id: string; toolCallId: string; toolName: string; input: unknown; reason?: string }) => Promise<boolean> }) => Promise<{ text: string; steps: number }>
   /** Checks for OpenCode and installs it when missing; injected in tests. */
   ensureOpenCode?: () => Promise<EnsureOpencodeResult>
   /** Injected in tests to avoid network/model calls. */
@@ -168,6 +170,7 @@ interface HarnessRunArgs {
   decideApproval?: RunAgentOptions['decideApproval']
   deps: RunnerDeps
   sharedFolders?: string[]
+  attachments?: RunAttachment[]
 }
 
 /** Whole-run delegation to OpenCode ACP. Always emits done/error/aborted. */
@@ -200,6 +203,7 @@ async function runViaHarness(args: HarnessRunArgs): Promise<{ text: string; step
             .filter(Boolean)
             .join('\n\n'),
           model: deps.getAcpModel?.() ?? DEFAULT_ACP_MODEL,
+          ...(args.attachments?.length ? { attachments: args.attachments } : {}),
           runId,
           signal,
           emit,
@@ -279,7 +283,7 @@ export async function runAgent(opts: RunAgentOptions): Promise<{ text: string; s
         : opts.systemPrompt
     return withScheduledTimeout(
       source,
-      runViaHarness({ prompt, source, signal: runSignal, runId, emit, systemPrompt: engineSystemPrompt, decideApproval: opts.decideApproval, deps, sharedFolders: opts.sharedFolders }),
+      runViaHarness({ prompt, source, signal: runSignal, runId, emit, systemPrompt: engineSystemPrompt, decideApproval: opts.decideApproval, deps, sharedFolders: opts.sharedFolders, attachments: opts.attachments }),
       deps.scheduledTimeoutMs,
       () => scheduledController?.abort()
     )

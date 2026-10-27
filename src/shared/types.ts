@@ -21,16 +21,18 @@ export const TOOL_ALIASES: Record<string, ActiveToolId> = {
   sheet: 'sheets'
 }
 
-export const TOOL_META: Record<ActiveToolId, { label: string; hint: string }> = {
-  websearch: { label: '@websearch', hint: 'Search the web and optionally save a summary' },
-  composio: { label: '@composio', hint: 'Search and use connected Composio apps with approval' },
-  notion: { label: '@notion', hint: 'Notion via Composio (M3)' },
-  gmail: { label: '@gmail', hint: 'Gmail via Composio (read-only) — alias @email' },
-  sheets: { label: '@sheets', hint: 'Sheets via Composio (M3) — alias @sheet' },
-  opencode: { label: '@opencode', hint: 'Coding agent (M5)' },
-  github: { label: '@github', hint: 'PR reviews via local gh CLI (read-only)' },
-  files: { label: '@files', hint: 'Local files in granted folders (M2)' },
-  mcp: { label: '@mcp', hint: 'Tools from MCP servers started in Settings → MCP' }
+export type ToolKind = 'builtin' | 'skill' | 'composio'
+
+export const TOOL_META: Record<ActiveToolId, { label: string; hint: string; kind: ToolKind }> = {
+  websearch: { label: 'Web search', hint: 'Search the web and optionally save a summary', kind: 'builtin' },
+  composio: { label: 'Composio', hint: 'Search and use connected Composio apps with approval', kind: 'composio' },
+  notion: { label: 'Notion', hint: 'Notion via Composio (M3)', kind: 'composio' },
+  gmail: { label: 'Gmail', hint: 'Gmail via Composio (read-only) — alias @email', kind: 'composio' },
+  sheets: { label: 'Sheets', hint: 'Sheets via Composio (M3) — alias @sheet', kind: 'composio' },
+  opencode: { label: 'OpenCode', hint: 'Coding agent (M5)', kind: 'skill' },
+  github: { label: 'GitHub', hint: 'PR reviews via local gh CLI (read-only)', kind: 'builtin' },
+  files: { label: 'Files', hint: 'Local files in granted folders (M2)', kind: 'builtin' },
+  mcp: { label: 'MCP', hint: 'Tools from MCP servers started in Settings → MCP', kind: 'skill' }
 }
 
 /** Extract @mentions from free text, resolving aliases.
@@ -38,7 +40,7 @@ export const TOOL_META: Record<ActiveToolId, { label: string; hint: string }> = 
  * addresses (me@gmail.com) and handles (a@b) never count as mentions. */
 export function parseMentionedTools(text: string): ToolId[] {
   const found: ToolId[] = []
-  const re = /(?:^|\s)@([a-zA-Z]+)/g
+  const re = /(?:^|\s)@([a-zA-Z0-9_-]+)/g
   let m: RegExpExecArray | null
   while ((m = re.exec(text)) !== null) {
     const raw = m[1].toLowerCase()
@@ -55,7 +57,7 @@ export function parseMentionedTools(text: string): ToolId[] {
  * typing an email address never opens the @ autocomplete. */
 export function activeMention(value: string, caret: number): { start: number; typed: string } | null {
   const before = value.slice(0, caret)
-  const m = /@([a-zA-Z]*)$/.exec(before)
+  const m = /@([a-zA-Z0-9_-]*)$/.exec(before)
   if (!m) return null
   // Must be at start or preceded by whitespace.
   const at = before.length - m[0].length

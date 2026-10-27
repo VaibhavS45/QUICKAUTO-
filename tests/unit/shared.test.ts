@@ -5,6 +5,10 @@ describe('tool catalog', () => {
   it('does not expose the removed calendar view as a selectable tool', () => {
     expect(TOOL_IDS).not.toContain('calendar')
     expect(Object.keys(TOOL_META)).not.toContain('calendar')
+    expect(TOOL_META.websearch.kind).toBe('builtin')
+    expect(TOOL_META.files.kind).toBe('builtin')
+    expect(TOOL_META.opencode.kind).toBe('skill')
+    expect(TOOL_META.notion.kind).toBe('composio')
   })
 })
 

@@ -13,7 +13,8 @@ import type { ToolId } from '../../shared/types.js'
  * API verified Oct 2026 against docs.composio.dev/toolkits/googledrive
  * (toolkit slug `GOOGLEDRIVE`, version `20261001_00`, re-checked 2026-10-18):
  * - Search/list: GOOGLEDRIVE_FIND_FILE (the list endpoint GOOGLEDRIVE_LIST_FILES
- *   is deprecated upstream). No page pagination in the picker: pageSize ≤ 25.
+ *   is deprecated upstream). `folder_id` browses one folder ('root' = My Drive),
+ *   bare `q` searches everything. No page pagination in the picker: pageSize ≤ 25.
  * - Content: GOOGLEDRIVE_DOWNLOAD_FILE { fileId, mime_type? } →
  *   `downloaded_file_content` (native bytes for blobs, exported text/PDF for
  *   Google Workspace docs). Binary formats surface as untrusted data strings.
@@ -32,6 +33,9 @@ export const DRIVE_TOOLKIT_VERSION = '20261001_00'
 
 /** Files per picker page. Kept small — picker loads are metered. */
 export const DRIVE_MAX_RESULTS = 25
+
+/** Drive alias for the user's My Drive root folder. */
+export const DRIVE_ROOT_FOLDER = 'root'
 
 export const DRIVE_NOT_CONNECTED = 'DRIVE_NOT_CONNECTED'
 
@@ -63,6 +67,8 @@ export interface DriveFile {
   id: string
   name: string
   mimeType: string
+  /** True for folders — the picker opens these instead of attaching them. */
+  folder?: boolean
   size?: string
   modifiedTime?: string
   webViewLink?: string
@@ -92,11 +98,11 @@ function normalizeFile(m: unknown): DriveFile | null {
   const id = str(o['id'])
   if (!id) return null
   const mimeType = str(o['mimeType']) || 'application/octet-stream'
-  if (mimeType === 'application/vnd.google-apps.folder') return null
   return {
     id,
     name: str(o['name']) || '(untitled)',
     mimeType,
+    folder: mimeType === 'application/vnd.google-apps.folder' || undefined,
     size: str(o['size']) || undefined,
     modifiedTime: str(o['modifiedTime']) || undefined,
     webViewLink: str(o['webViewLink']) || undefined
@@ -141,28 +147,36 @@ export class DriveService {
   }
 
   /**
-   * List real Drive files for the picker. Costs zero on cache hits; one
-   * BudgetGuard meter hit per uncached call (source 'palette', picker run).
+   * List real Drive files for the picker. An empty query browses `folderId`
+   * (defaults to My Drive root); a query searches the whole drive. Costs zero
+   * on cache hits; one BudgetGuard meter hit per uncached call (source
+   * 'palette', picker run).
    */
-  async listFiles(query: string): Promise<{ ok: boolean; files?: DriveFile[]; notConnected?: boolean; error?: string }> {
+  async listFiles(
+    query: string,
+    folderId?: string
+  ): Promise<{ ok: boolean; files?: DriveFile[]; notConnected?: boolean; error?: string }> {
     const client = await this.client()
     if (!client) return { ok: false, error: 'Add your Composio API key first (Settings → Connections).' }
     if (!(await this.isConnected(client))) {
       return { ok: false, notConnected: true, error: 'Connect Google Drive first.' }
     }
     const search = query.trim().slice(0, 120)
+    const folder = folderId && /^[A-Za-z0-9_-]+$/.test(folderId) ? folderId : DRIVE_ROOT_FOLDER
     try {
       const { result } = await this.deps.getGuard().execute({
         source: 'palette',
         runId: 'drive-picker',
         label: 'drive_list',
-        cacheKey: `gdrive:list:${search}`,
-        dedupeKey: `gdrive:list:${search}`,
+        cacheKey: `gdrive:list:${folder}:${search}`,
+        dedupeKey: `gdrive:list:${folder}:${search}`,
         fn: () =>
           this.executeTool(client, DRIVE_LIST_SLUG, {
-            ...(search ? { q: search } : {}),
+            ...(search ? { q: search } : { folder_id: folder }),
             pageSize: DRIVE_MAX_RESULTS,
             fields: DRIVE_FIELDS,
+            // Drive rejects orderBy alongside fullText search; only browse is sorted.
+            ...(search ? {} : { orderBy: 'folder,modifiedTime desc' }),
             supportsAllDrives: true,
             includeItemsFromAllDrives: true
           })

@@ -2,6 +2,22 @@ import { app, ipcMain, session, Notification, safeStorage, shell, dialog } from 
 import Store from 'electron-store'
 import { randomUUID } from 'node:crypto'
 import os from 'node:os'
+import path from 'node:path'
+
+try {
+  if (typeof process.loadEnvFile === 'function') {
+    process.loadEnvFile()
+  }
+} catch {
+  try {
+    const envPath = path.join(app.getAppPath(), '.env')
+    if (typeof process.loadEnvFile === 'function') {
+      process.loadEnvFile(envPath)
+    }
+  } catch {
+    /* .env not present or unreadable */
+  }
+}
 import {
   IpcChannels,
   ApiKeySchema,
@@ -184,10 +200,18 @@ const connectorSettings = new ConnectorSettingsService(new ElectronConnectorStor
 })
 
 const COMPOSIO_FALLBACK_KEY = process.env['COMPOSIO_API_KEY']?.trim() || undefined
+let runtimeConnectorKey: string | null = null
 
-registerConnectorProvider(new ComposioProvider(() => connectorSettings.getKey(), () => getGuard()))
+const getComposioApiKey = async (): Promise<string | null> => {
+  if (runtimeConnectorKey) return runtimeConnectorKey
+  if (runtimeConnectorKey === '') return null
+  if (COMPOSIO_FALLBACK_KEY) return COMPOSIO_FALLBACK_KEY
+  return (await connectorSettings.getKey()) || null
+}
+
+registerConnectorProvider(new ComposioProvider(getComposioApiKey, () => getGuard()))
 const composioMarketplace = new ComposioMarketplace({
-  getApiKey: () => connectorSettings.getKey(),
+  getApiKey: getComposioApiKey,
   fallbackApiKey: COMPOSIO_FALLBACK_KEY
 })
 
@@ -224,7 +248,7 @@ registerConnectorProvider(githubResolveProvider)
 // dedupe keys), so the generic wrapper below skips them —
 // exactly one BudgetGuard hit per Composio call.
 const gmailProvider = new ComposioConnectorProvider({
-  getApiKey: () => connectorSettings.getKey(),
+  getApiKey: getComposioApiKey,
   fallbackApiKey: COMPOSIO_FALLBACK_KEY,
   getGuard: () => getGuard()
 })
@@ -234,12 +258,12 @@ registerConnectorProvider(settingsShellRuntime.mcpProvider)
 // Google Drive picker + gdrive_read agent tool (read-only, BudgetGuard-metered).
 // Connection itself goes through the existing composio:connect marketplace flow.
 const driveService = new DriveService({
-  getApiKey: () => connectorSettings.getKey(),
+  getApiKey: getComposioApiKey,
   fallbackApiKey: COMPOSIO_FALLBACK_KEY,
   getGuard: () => getGuard()
 })
 const driveProvider = new DriveConnectorProvider({
-  getApiKey: () => connectorSettings.getKey(),
+  getApiKey: getComposioApiKey,
   fallbackApiKey: COMPOSIO_FALLBACK_KEY,
   getGuard: () => getGuard()
 })
@@ -753,12 +777,13 @@ function wireIpc(): void {
 
   ipcMain.handle(IpcChannels.getConnector, async () => {
     const pub = await connectorSettings.getPublicState()
+    const configured = pub.configured || Boolean(COMPOSIO_FALLBACK_KEY) || Boolean(runtimeConnectorKey)
     // Gmail status is provided by its dedicated connection IPC; GitHub uses
     // the local CLI. Composio status applies only to its other services.
     const ids = ['notion', 'sheets', 'websearch'] as const
     const services: Array<{ id: string; connected: boolean; detail?: string }> = await Promise.all(
       ids.map(async (id) => {
-        const s = await new ComposioProvider(() => connectorSettings.getKey(), getGuard).status(id)
+        const s = await new ComposioProvider(getComposioApiKey, getGuard).status(id)
         return { id, ...s }
       })
     )
@@ -768,7 +793,7 @@ function wireIpc(): void {
       connected: gh.installed && gh.authenticated,
       detail: gh.detail
     })
-    return { ...pub, services }
+    return { ...pub, configured, services }
   })
 
   ipcMain.handle(IpcChannels.setConnectorKey, async (_event, payload: unknown) => {
@@ -777,6 +802,7 @@ function wireIpc(): void {
     try {
       await composioMarketplace.validateApiKey(parsed.data.key)
       await connectorSettings.setKey(parsed.data.key)
+      runtimeConnectorKey = parsed.data.key
       return { ok: true as const }
     } catch (err) {
       return { ok: false as const, error: err instanceof Error ? err.message : String(err) }
@@ -784,6 +810,7 @@ function wireIpc(): void {
   })
 
   ipcMain.handle(IpcChannels.clearConnectorKey, async () => {
+    runtimeConnectorKey = ''
     await connectorSettings.clearKey()
     return { ok: true as const }
   })
@@ -968,12 +995,14 @@ async function onReady(): Promise<void> {
   createTray()
   applyAutostart()
 
-  // Pre-seed user's Composio key if safeStorage is available and not yet set
+  // Pre-seed or sync user's Composio key if safeStorage is available
   void (async () => {
     try {
-      const existingKey = await connectorSettings.getKey()
-      if (!existingKey && COMPOSIO_FALLBACK_KEY) {
-        await connectorSettings.setKey(COMPOSIO_FALLBACK_KEY)
+      if (COMPOSIO_FALLBACK_KEY) {
+        const existingKey = await connectorSettings.getKey()
+        if (!existingKey || existingKey !== COMPOSIO_FALLBACK_KEY) {
+          await connectorSettings.setKey(COMPOSIO_FALLBACK_KEY)
+        }
       }
     } catch {
       // Ignored if encryption unavailable

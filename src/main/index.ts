@@ -45,6 +45,7 @@ import {
 } from './agent/nested-approval.js'
 import { BudgetGuard, type BudgetStore, type BudgetUsageState } from './engines/composio/budget-guard.js'
 import { ConnectorSettingsService, type ConnectorStore } from './settings/connector-settings.js'
+import { InstallIdentityService } from './settings/install-identity.js'
 import { ComposioProvider, isComposioBudgetGuardedTool } from './engines/composio/composio-tools.js'
 import { GitHubCliProvider, isZeroCostTool, validateRepoEntry } from './connectors/github-cli.js'
 import { ComposioConnectorProvider, isBudgetGuardedTool } from './engines/composio/composio.js'
@@ -60,11 +61,9 @@ import { shouldAutoOpenApp } from './shell/launch-policy.js'
 import { applyAppBehaviorPatch, resolveAppBehavior, type AppBehavior } from './shell/app-prefs.js'
 import { installStdioGuard } from './engines/opencode/stdio-guard.js'
 import { createAppTray, watchDockVisibility } from './shell/app-lifecycle.js'
-import { AuthService } from './auth/auth-service.js'
-import { AuthChannels, registerAuthIpc } from './auth/auth-ipc.js'
-import { OAuthClient, readOAuthConfig } from './auth/oidc-client.js'
-import { startLoopback } from './auth/loopback.js'
-import { SafeStorageMcpVault } from './shell/mcp-vault.js'
+import { registerAuthIpc } from './auth/auth-ipc.js'
+import { LocalAccountService } from './auth/local-accounts.js'
+import { bootstrapLocalAccountUserData } from './auth/user-data-bootstrap.js'
 import { getShellAppWindow, openShellAppWindow } from './shell/shell-app-window.js'
 import type { RunSource } from '../shared/agent.js'
 import type { RunLogRecord } from '../shared/contracts/schedule.js'
@@ -81,10 +80,24 @@ installStdioGuard()
 const gotLock = app.requestSingleInstanceLock()
 if (!gotLock) app.quit()
 
+const accountBootstrap = gotLock
+  ? bootstrapLocalAccountUserData()
+  : { baseDir: app.getPath('userData'), account: null, loginMode: true }
+const localAccounts = new LocalAccountService(accountBootstrap.baseDir, accountBootstrap.account?.id ?? null)
+
 const store = new Store<{ openAtLogin: boolean; keepBackground: boolean; shader: boolean; theme: string; hotkey?: string }>({
   defaults: { openAtLogin: false, keepBackground: true, shader: true, theme: 'system' }
 })
 store.delete('hotkey')
+
+const deviceStore = new Store<{ openAtLogin: boolean }>({
+  name: 'palette-device',
+  cwd: accountBootstrap.baseDir,
+  defaults: { openAtLogin: false }
+})
+if (!accountBootstrap.loginMode && !deviceStore.has('openAtLogin')) {
+  deviceStore.set('openAtLogin', store.get('openAtLogin', false))
+}
 
 function storedAppBehavior(): AppBehavior {
   return resolveAppBehavior({
@@ -145,21 +158,6 @@ class ElectronChatStore implements ChatStoreStorage {
 
 const chatStore = new ChatStore(new ElectronChatStore())
 
-const authFile = new Store<Record<string, unknown>>({ name: 'palette-auth', defaults: {} })
-const authKv = {
-  get: (key: string): unknown => (authFile as unknown as { get: (k: string) => unknown }).get(key),
-  set: (key: string, value: unknown): void => (authFile as unknown as { set: (k: string, v: unknown) => void }).set(key, value)
-}
-const authService = new AuthService({
-  config: readOAuthConfig(),
-  vault: new SafeStorageMcpVault(authKv, safeStorage),
-  identityStore: authKv,
-  canEncrypt: () => safeStorage.isAsyncEncryptionAvailable(),
-  openExternal: (url) => shell.openExternal(url),
-  createClient: (config) => new OAuthClient(config),
-  startLoopback: (state) => startLoopback(state)
-})
-
 const settingsShellRuntime = createSettingsShellRuntime(safeStorage)
 
 const connectorFile = new Store<Record<string, unknown>>({ name: 'palette-connectors', defaults: {} })
@@ -180,11 +178,27 @@ const connectorSettings = new ConnectorSettingsService(new ElectronConnectorStor
 })
 
 const COMPOSIO_FALLBACK_KEY = process.env['COMPOSIO_API_KEY']?.trim() || undefined
+const primaryComposioFallbackKey = accountBootstrap.account?.primary ? COMPOSIO_FALLBACK_KEY : undefined
 
-registerConnectorProvider(new ComposioProvider(() => connectorSettings.getKey(), () => getGuard()))
+const identityFile = new Store<Record<string, unknown>>({ name: 'palette-identity', defaults: {} })
+const installIdentity = new InstallIdentityService({
+  get: (key) => identityFile.get(key),
+  set: (key, value) => identityFile.set(key, value)
+})
+const composioUserId = (): string => installIdentity.getInstallId()
+
+registerConnectorProvider(
+  new ComposioProvider(
+    () => connectorSettings.getKey(),
+    () => getGuard(),
+    undefined,
+    composioUserId
+  )
+)
 const composioMarketplace = new ComposioMarketplace({
   getApiKey: () => connectorSettings.getKey(),
-  fallbackApiKey: COMPOSIO_FALLBACK_KEY
+  fallbackApiKey: primaryComposioFallbackKey,
+  getUserId: composioUserId
 })
 
 // Read-only @github via the local `gh` CLI + git (zero Composio cost).
@@ -221,8 +235,9 @@ registerConnectorProvider(githubResolveProvider)
 // exactly one BudgetGuard hit per Composio call.
 const gmailProvider = new ComposioConnectorProvider({
   getApiKey: () => connectorSettings.getKey(),
-  fallbackApiKey: COMPOSIO_FALLBACK_KEY,
-  getGuard: () => getGuard()
+  fallbackApiKey: primaryComposioFallbackKey,
+  getGuard: () => getGuard(),
+  getUserId: composioUserId
 })
 registerConnectorProvider(gmailProvider)
 registerConnectorProvider(settingsShellRuntime.mcpProvider)
@@ -231,13 +246,15 @@ registerConnectorProvider(settingsShellRuntime.mcpProvider)
 // Connection itself goes through the existing composio:connect marketplace flow.
 const driveService = new DriveService({
   getApiKey: () => connectorSettings.getKey(),
-  fallbackApiKey: COMPOSIO_FALLBACK_KEY,
-  getGuard: () => getGuard()
+  fallbackApiKey: primaryComposioFallbackKey,
+  getGuard: () => getGuard(),
+  getUserId: composioUserId
 })
 const driveProvider = new DriveConnectorProvider({
   getApiKey: () => connectorSettings.getKey(),
-  fallbackApiKey: COMPOSIO_FALLBACK_KEY,
-  getGuard: () => getGuard()
+  fallbackApiKey: primaryComposioFallbackKey,
+  getGuard: () => getGuard(),
+  getUserId: composioUserId
 })
 registerConnectorProvider(driveProvider)
 
@@ -334,7 +351,7 @@ setNestedApprovalHandler(
 app.on('second-instance', () => openShellAppWindow())
 
 function applyAutostart(): void {
-  const openAtLogin = store.get('openAtLogin', false)
+  const openAtLogin = deviceStore.get('openAtLogin', false)
   app.setLoginItemSettings({ openAtLogin })
 }
 
@@ -356,9 +373,9 @@ function showSettingsInShell(tab?: string): void {
 function createTray(): void {
   createAppTray(
     () => showSettingsInShell(),
-    () => store.get('openAtLogin', false),
+    () => deviceStore.get('openAtLogin', false),
     (enabled) => {
-      store.set('openAtLogin', enabled)
+      deviceStore.set('openAtLogin', enabled)
       applyAutostart()
     }
   )
@@ -377,6 +394,17 @@ function applyStrictCsp(): void {
       }
     })
   })
+}
+
+let accountRelaunchScheduled = false
+
+function scheduleAccountRelaunch(): void {
+  if (accountRelaunchScheduled) return
+  accountRelaunchScheduled = true
+  setTimeout(() => {
+    app.relaunch({ args: process.argv.slice(1).filter((arg) => arg !== '--background') })
+    app.quit()
+  }, 250)
 }
 
 function wireIpc(): void {
@@ -405,9 +433,23 @@ function wireIpc(): void {
   }
   registerChatIpc(ipcMain, chatStore)
   settingsShellRuntime.registerIpc(ipcMain)
-  registerAuthIpc(ipcMain, authService)
-  authService.onChange((state) => {
-    getShellAppWindow()?.webContents.send(AuthChannels.changed, state)
+  registerAuthIpc(ipcMain, {
+    getState: () => localAccounts.getState(),
+    login: async (credentials) => {
+      const state = await localAccounts.login(credentials)
+      scheduleAccountRelaunch()
+      return state
+    },
+    register: async (credentials) => {
+      const state = await localAccounts.register(credentials)
+      scheduleAccountRelaunch()
+      return state
+    },
+    logout: async () => {
+      const state = await localAccounts.logout()
+      scheduleAccountRelaunch()
+      return state
+    }
   })
   fireRoutine = (routine) => {
     // Expired automations pause themselves and never fire.
@@ -943,48 +985,51 @@ async function onReady(): Promise<void> {
   watchDockVisibility()
   await settingsShellRuntime.loadPlugins(app.getPath('userData'))
   wireIpc()
-  void authService.restore()
-  scheduler.startAll()
-  createTray()
-  applyAutostart()
+  if (!accountBootstrap.loginMode) {
+    scheduler.startAll()
+    createTray()
+    applyAutostart()
 
-  // Pre-seed user's Composio key if safeStorage is available and not yet set
-  void (async () => {
-    try {
-      const existingKey = await connectorSettings.getKey()
-      if (!existingKey && COMPOSIO_FALLBACK_KEY) {
-        await connectorSettings.setKey(COMPOSIO_FALLBACK_KEY)
-      }
-    } catch {
-      // Ignored if encryption unavailable
-    }
-  })()
-
-  // OpenCode is the only engine: record it explicitly once the CLI is present
-  // so chat works immediately. Never overrides an explicit choice.
-  void (async () => {
-    try {
-      const harnesses = await detectHarnesses()
-      const pick = pickAutoEngine({ explicit: agentProviderService.hasExplicit(), harnesses })
-      if (pick) agentProviderService.set(pick)
-      // Default chat to big-pickle when it is actually available (needs
-      // `opencode auth login`); never overrides an explicit model choice.
-      if (agentProviderService.get() === 'opencode' && !acpModelService.get()) {
+    if (accountBootstrap.account?.primary) {
+      // Pre-seed user's Composio key if safeStorage is available and not yet set
+      void (async () => {
         try {
-          const models = await listAcpModels({ cwd: os.homedir() })
-          if (models.options.some((o) => o.value === DEFAULT_ACP_MODEL)) {
-            acpModelService.set(DEFAULT_ACP_MODEL)
+          const existingKey = await connectorSettings.getKey()
+          if (!existingKey && primaryComposioFallbackKey) {
+            await connectorSettings.setKey(primaryComposioFallbackKey)
           }
         } catch {
-          /* picker stays on the agent default; models IPC explains */
+          // Ignored if encryption unavailable
         }
-      }
-    } catch {
-      /* Settings explains setup */
+      })()
     }
-  })()
 
-  if (shouldAutoOpenApp(process.argv)) openShellAppWindow()
+    // OpenCode is the only engine: record it explicitly once the CLI is present
+    // so chat works immediately. Never overrides an explicit choice.
+    void (async () => {
+      try {
+        const harnesses = await detectHarnesses()
+        const pick = pickAutoEngine({ explicit: agentProviderService.hasExplicit(), harnesses })
+        if (pick) agentProviderService.set(pick)
+        // Default chat to big-pickle when it is actually available (needs
+        // `opencode auth login`); never overrides an explicit model choice.
+        if (agentProviderService.get() === 'opencode' && !acpModelService.get()) {
+          try {
+            const models = await listAcpModels({ cwd: os.homedir() })
+            if (models.options.some((o) => o.value === DEFAULT_ACP_MODEL)) {
+              acpModelService.set(DEFAULT_ACP_MODEL)
+            }
+          } catch {
+            /* picker stays on the agent default; models IPC explains */
+          }
+        }
+      } catch {
+        /* Settings explains setup */
+      }
+    })()
+  }
+
+  if (accountBootstrap.loginMode || shouldAutoOpenApp(process.argv)) openShellAppWindow()
   app.on('activate', () => openShellAppWindow())
 }
 
@@ -993,7 +1038,7 @@ app.whenReady().then(() => void onReady())
 // Tray keeps the app alive after windows close so schedules can fire —
 // unless the user turned off "keep in background" in Settings.
 app.on('window-all-closed', () => {
-  if (!storedAppBehavior().keepBackground) app.quit()
+  if (accountBootstrap.loginMode || !storedAppBehavior().keepBackground) app.quit()
   // Otherwise do not quit — tray keeps the app alive.
 })
 

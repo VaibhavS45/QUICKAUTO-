@@ -6,3 +6,7 @@ preload/
 dist/
 test-results/
 .env
+
+# Local-only app data (never commit)
+.palette-data/
+palette-*.json

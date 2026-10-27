@@ -92,26 +92,36 @@ usage page is the source of truth.
 - Secrets (model keys, Composio keys) must never live in the renderer,
   localStorage, or plain files.
 
-## Sign-in (optional)
+## Local accounts
 
-Palette works fully without an account. To enable **Log in**, register an OAuth app with your provider
-(redirect URI: `http://127.0.0.1` — loopback, any port) and set:
+Palette uses a local username/password account, created on first launch. There is
+no cloud sign-in and no OAuth environment setup; passwords are hashed with scrypt
+in the main process and never stored in plaintext or sent back to the renderer.
 
-| Variable | Meaning |
-|---|---|
-| `PALETTE_OAUTH_CLIENT_ID` | OAuth client id (required) |
-| `PALETTE_OAUTH_AUTH_URL` | Authorization endpoint (https) |
-| `PALETTE_OAUTH_TOKEN_URL` | Token endpoint (https) |
-| `PALETTE_OAUTH_USERINFO_URL` | Userinfo endpoint (https) |
-| `PALETTE_OAUTH_SCOPES` | Default `openid profile email` |
-| `PALETTE_OAUTH_CLIENT_SECRET` | Only if the provider requires one for desktop apps |
-| `PALETTE_OAUTH_AUTH_PARAMS` | Extra authorize params, e.g. `access_type=offline&prompt=consent` |
+Each account keeps its own private data directory:
 
-Google example: auth `https://accounts.google.com/o/oauth2/v2/auth`, token `https://oauth2.googleapis.com/token`,
-userinfo `https://openidconnect.googleapis.com/v1/userinfo`, params `access_type=offline&prompt=consent`.
-GitHub example: auth `https://github.com/login/oauth/authorize`, token `https://github.com/login/oauth/access_token`,
-userinfo `https://api.github.com/user`, scopes `read:user user:email`.
-Verify endpoints against the provider's current docs. Tokens are encrypted with Electron safeStorage; sign-in is disabled if it is unavailable.
+```
+<Electron userData>/
+  accounts.json        # usernames + salted password hashes (0600)
+  session.json         # one-time handoff to the post-login restart
+  users/<account-id>/  # chats, routines, connectors, plugins, artifacts, cookies
+  users/_login/        # empty shell used while signed out
+```
+
+When the first account is created, existing Palette data is copied into that
+account's directory without deleting the originals. Create that first account
+yourself before handing the computer to anyone else; whoever creates it inherits
+the existing data. Later accounts start empty.
+Signing in or out restarts Palette so every store and session is opened against
+the correct account directory. The session marker is consumed by that restart,
+so a fresh launch always asks for the account password again.
+
+Connector data is scoped to that account's local install id, so two accounts
+never share Composio connections. Connections made under the old shared
+`palette-local-user` id may need to be reconnected once after upgrading.
+
+Accounts separate data at the application level; they are not disk encryption.
+Anyone who can read your OS account's files can read the account directories.
 
 ## Repo notes / deviations from the spec
 

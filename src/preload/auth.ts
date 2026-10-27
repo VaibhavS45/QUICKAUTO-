@@ -1,11 +1,20 @@
 import { ipcRenderer } from 'electron'
-import { AuthStateSchema, type AuthResult, type AuthState } from '../shared/contracts/auth.js'
+import {
+  AuthStateSchema,
+  type AuthCredentials,
+  type AuthResult,
+  type AuthState
+} from '../shared/contracts/auth.js'
 
-/** Account API. The renderer only ever sees name/email/avatar, never tokens. */
+/** Account API. The renderer only ever sees name/email/avatar, never tokens or password hashes. */
 export const authApi = {
   authGetState: (): Promise<AuthResult> => ipcRenderer.invoke('auth:get-state'),
   authSignIn: (): Promise<AuthResult> => ipcRenderer.invoke('auth:sign-in'),
   authSignOut: (): Promise<AuthResult> => ipcRenderer.invoke('auth:sign-out'),
+  authLogin: (credentials: AuthCredentials): Promise<AuthResult> =>
+    ipcRenderer.invoke('auth:login', credentials),
+  authRegister: (credentials: AuthCredentials): Promise<AuthResult> =>
+    ipcRenderer.invoke('auth:register', credentials),
   onAuthChanged: (cb: (state: AuthState) => void) => {
     const fn = (_event: unknown, payload: unknown): void => {
       const parsed = AuthStateSchema.safeParse(payload)

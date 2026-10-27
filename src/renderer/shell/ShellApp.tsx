@@ -12,6 +12,7 @@ import { parseMentionedTools } from '../../shared/types.js'
 import { ChatView } from './ChatView.js'
 import { HomeView } from './HomeView.js'
 import { ProfileMenu } from './ProfileMenu.js'
+import { LoginScreen } from './LoginScreen.js'
 import { BreadcrumbBar, BreadcrumbProvider } from '../components/layout/Breadcrumbs.js'
 import { createChatRunState, reduceChatRun, resolveChatApproval, type ChatRunState } from './chat-state.js'
 import { getFeatureRegistry } from './registry.js'
@@ -98,8 +99,9 @@ export default function ShellApp(): React.JSX.Element {
   const [route, setRoute] = useState(router.current)
   const [profile, setProfile] = useState<LocalProfile>({ name: '', email: '' })
   const [profileMenuOpen, setProfileMenuOpen] = useState(false)
-  const [auth, setAuth] = useState<AuthState>({ signedIn: false, configured: false })
+  const [auth, setAuth] = useState<AuthState>({ signedIn: false, configured: true, method: 'local' })
   const [authBusy, setAuthBusy] = useState(false)
+  const [authLoading, setAuthLoading] = useState(true)
   const [settings, setSettings] = useState<{ tab?: string } | null>(null)
   const avatarRef = useRef<HTMLButtonElement>(null)
   const [notificationsOpen, setNotificationsOpen] = useState(false)
@@ -167,7 +169,9 @@ export default function ShellApp(): React.JSX.Element {
     let active = true
     void window.app.authGetState().then((res) => {
       if (active && res.ok) setAuth(res.state)
-    }).catch((error: unknown) => console.error('Could not load account state.', error))
+    }).catch((error: unknown) => console.error('Could not load account state.', error)).finally(() => {
+      if (active) setAuthLoading(false)
+    })
     const off = window.app.onAuthChanged((state) => setAuth(state))
     return () => {
       active = false
@@ -504,9 +508,11 @@ export default function ShellApp(): React.JSX.Element {
     )
   }
 
+  const accountLocked = authLoading || !auth.signedIn
+
   return (
     <BreadcrumbProvider>
-      <main className="shell-frame" style={TITLEBAR_VARS}>
+      <main className="shell-frame" style={TITLEBAR_VARS} inert={accountLocked}>
         <header className="shell-drag-strip" aria-label={t('shell.windowBar')}>
           <BreadcrumbBar />
           <nav className="shell-topnav" aria-label={t('shell.mainNav')}>
@@ -627,6 +633,17 @@ export default function ShellApp(): React.JSX.Element {
           </div>
         )}
       </main>
+      {accountLocked && (
+        <div className="shell-auth-overlay">
+          {authLoading ? (
+            <div className="shell-auth-gate" aria-busy="true">
+              <p className="shell-auth-loading">{t('shell.loadingAccount')}</p>
+            </div>
+          ) : (
+            <LoginScreen hasAccounts={auth.hasAccounts ?? false} onAuthenticated={setAuth} />
+          )}
+        </div>
+      )}
     </BreadcrumbProvider>
   )
 }

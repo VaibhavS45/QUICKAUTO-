@@ -46,9 +46,11 @@ const replies: Record<string, unknown> = {
   notificationDismiss: async () => ({ ok: true }),
   routineList: async () => ({ ok: true, routines: [] }),
   scheduleToday: async () => ({ ok: true, schedule: { date: '', entries: [] } }),
-  authGetState: async () => ({ ok: true, state: { signedIn: false, configured: true } }),
-  authSignIn: async () => ({ ok: true, state: { signedIn: true, configured: true, name: 'Browser Preview', email: 'preview@local' } }),
-  authSignOut: async () => ({ ok: true, state: { signedIn: false, configured: true } }),
+  authGetState: async () => ({ ok: true, state: { signedIn: true, configured: true, hasAccounts: true, method: 'local', name: 'Browser Preview', email: 'preview@local' } }),
+  authSignIn: async () => ({ ok: true, state: { signedIn: true, configured: true, hasAccounts: true, method: 'local', name: 'Browser Preview', email: 'preview@local' } }),
+  authLogin: async () => ({ ok: true, state: { signedIn: true, configured: true, hasAccounts: true, method: 'local', name: 'Browser Preview', email: 'preview@local' } }),
+  authRegister: async () => ({ ok: true, state: { signedIn: true, configured: true, hasAccounts: true, method: 'local', name: 'Browser Preview', email: 'preview@local' } }),
+  authSignOut: async () => ({ ok: true, state: { signedIn: false, configured: true, hasAccounts: true, method: 'local' } }),
   automationsList: async () => ({
     ok: true,
     automations: [

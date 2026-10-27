@@ -1,7 +1,5 @@
 import { useEffect, useState } from 'react'
 import { Button } from '../../components/ui/button.js'
-import { Card, CardSub, CardTitle, Hint } from '../../components/ui/card.js'
-import { Input } from '../../components/ui/input.js'
 import { getConnectorLogo } from '../connectorLogos.js'
 import type { ComposioToolkit } from '../../../main/engines/composio/composio-marketplace.js'
 
@@ -9,14 +7,7 @@ interface ConnectorState {
   configured: boolean
   encryptionAvailable: boolean
   services: Array<{ id: string; connected: boolean; detail?: string }>
-}
-
-interface GhStatus {
-  ok: boolean
-  installed?: boolean
-  authenticated?: boolean
-  detail?: string
-  error?: string
+  connectedSlugs?: string[]
 }
 
 interface BuiltinItem {
@@ -77,13 +68,6 @@ function ConnectorBrandIcon({ item }: { item: BuiltinItem }): React.JSX.Element 
 
 export default function ConnectorsTab(): React.JSX.Element {
   const [state, setState] = useState<ConnectorState | null>(null)
-  const [key, setKey] = useState('')
-  const [msg, setMsg] = useState<string | null>(null)
-  const [gh, setGh] = useState<GhStatus | null>(null)
-  const [repos, setRepos] = useState<Array<{ path: string; repo: string; testCommand?: string }>>([])
-  const [newPath, setNewPath] = useState('')
-  const [newRepo, setNewRepo] = useState('')
-  const [repoMsg, setRepoMsg] = useState<string | null>(null)
   const [toolkits, setToolkits] = useState<ComposioToolkit[]>([])
   const [query, setQuery] = useState('')
   const [selectedCategory, setSelectedCategory] = useState<string>('All')
@@ -92,13 +76,7 @@ export default function ConnectorsTab(): React.JSX.Element {
   const [catalogLoading, setCatalogLoading] = useState(false)
   const [connecting, setConnecting] = useState<string | null>(null)
   const [connectMessage, setConnectMessage] = useState<string | null>(null)
-  const [confirmClearKey, setConfirmClearKey] = useState(false)
-  // Key input stays collapsed once a key is stored; the status row is enough.
-  const [showKeyForm, setShowKeyForm] = useState(false)
-  const [showRepoForm, setShowRepoForm] = useState(false)
-  const [browserConnected, setBrowserConnected] = useState(true)
   const [gmailConnected, setGmailConnected] = useState(false)
-  const [videoConnected, setVideoConnected] = useState(true)
 
   async function refresh(): Promise<void> {
     try {
@@ -113,56 +91,16 @@ export default function ConnectorsTab(): React.JSX.Element {
       const gm = (await window.app.connectionStatus('gmail')) as { ok: boolean; connected?: boolean }
       if (gm.ok) setGmailConnected(!!gm.connected)
     } catch { /* ignore */ }
-    try {
-      setGh((await window.app.githubStatus()) as GhStatus)
-    } catch {
-      setGh({ ok: false, error: 'Could not check gh status.' })
-    }
-    try {
-      const m = (await window.app.getModelSettings()) as { githubRepos?: Array<{ path: string; repo: string; testCommand?: string }> }
-      setRepos(m.githubRepos ?? [])
-    } catch { /* keep current */ }
   }
 
   useEffect(() => {
     void refresh()
+    const onFocus = (): void => {
+      void refresh()
+    }
+    window.addEventListener('focus', onFocus)
+    return () => window.removeEventListener('focus', onFocus)
   }, [])
-
-  async function saveKey(): Promise<void> {
-    setMsg(null)
-    let res: { ok: boolean; error?: string }
-    try {
-      res = (await window.app.setConnectorKey(key.trim())) as { ok: boolean; error?: string }
-    } catch {
-      setMsg('Could not save the Composio key.')
-      return
-    }
-    if (!res.ok) {
-      setMsg(res.error ?? 'Save failed.')
-      return
-    }
-    setKey('')
-    setShowKeyForm(false)
-    setMsg('Key verified and saved securely.')
-    await refresh()
-  }
-
-  async function clearKey(): Promise<void> {
-    setMsg(null)
-    try {
-      const result = (await window.app.clearConnectorKey()) as { ok: boolean; error?: string }
-      if (!result.ok) {
-        setMsg(result.error ?? 'Could not remove the saved key.')
-        return
-      }
-      setConfirmClearKey(false)
-      setToolkits([])
-      setMsg('Saved key removed from this app. Revoke it in the Composio dashboard too if it is still active.')
-      await refresh()
-    } catch (error) {
-      setMsg(error instanceof Error ? error.message : 'Could not remove the saved key.')
-    }
-  }
 
   async function searchToolkits(search: string): Promise<void> {
     setCatalogLoading(true)
@@ -189,19 +127,16 @@ export default function ConnectorsTab(): React.JSX.Element {
       if (slug === 'gmail') {
         const res = (await window.app.connectionConnect('gmail')) as { ok: boolean; url?: string; error?: string }
         if (res.ok) {
-          setConnectMessage('Opened Gmail connection in browser.')
-          setGmailConnected(true)
-        } else {
-          setConnectMessage(res.error ?? 'Could not connect Gmail.')
+          setConnectMessage('Opened Gmail connection in browser. Complete authorization, then click Check again.')
+          return
         }
-        return
       }
       const result = await window.app.composioConnect(slug)
       if (!result.ok) {
         setConnectMessage(result.error ?? `Could not connect ${name}.`)
         return
       }
-      setConnectMessage(`Finish connecting ${name} in your browser, then refresh the app list.`)
+      setConnectMessage(`Opened ${name} connection in your browser. Complete authorization, then click Check again.`)
     } catch (error) {
       setConnectMessage(error instanceof Error ? error.message : `Could not connect ${name}.`)
     } finally {
@@ -209,71 +144,20 @@ export default function ConnectorsTab(): React.JSX.Element {
     }
   }
 
-  async function saveRepos(next: Array<{ path: string; repo: string; testCommand?: string }>): Promise<void> {
-    setRepoMsg(null)
-    try {
-      const m = (await window.app.getModelSettings()) as {
-        provider: string; model: string; baseUrl?: string; resetDay?: number; autoApprove?: string[]
-      }
-      const res = (await window.app.setModelSettings({
-        provider: m.provider,
-        model: m.model,
-        baseUrl: m.baseUrl,
-        resetDay: m.resetDay,
-        githubRepos: next,
-        autoApprove: m.autoApprove
-      })) as { ok: boolean; error?: string }
-      if (!res.ok) {
-        setRepoMsg(res.error ?? 'Save failed.')
-        return
-      }
-      setRepos(next)
-      setRepoMsg('Saved.')
-    } catch {
-      setRepoMsg('Save failed.')
-    }
+  const isSvcConnected = (id: string, composioSlug?: string): boolean => {
+    if (state?.services?.some((s) => s.id === id && s.connected)) return true
+    if (composioSlug && state?.connectedSlugs?.includes(composioSlug)) return true
+    return false
   }
 
   const builtinCards: BuiltinItem[] = [
-    {
-      id: 'video-editor',
-      name: 'Video Editor',
-      description: 'Create and refine videos in an editable timeline.',
-      category: 'Creativity',
-      iconType: 'video',
-      connected: videoConnected
-    },
-    {
-      id: 'phone',
-      name: 'Phone',
-      description: 'Equip your AI with a phone number so it can reach people, receive messages, and...',
-      category: 'Productivity',
-      iconType: 'phone',
-      connected: false
-    },
-    {
-      id: 'email',
-      name: 'Email',
-      description: 'Give your agent a dedicated email address to send and receive messages for tasks a...',
-      category: 'Productivity',
-      iconType: 'email',
-      connected: false
-    },
-    {
-      id: 'browser',
-      name: 'My Browser',
-      description: 'Access the web on your own browser',
-      category: 'Productivity',
-      iconType: 'browser',
-      connected: browserConnected
-    },
     {
       id: 'gmail',
       name: 'Gmail',
       description: 'Draft replies, search your inbox, and summarize email threads instantly',
       category: 'Productivity',
       logoSrc: getConnectorLogo('gmail'),
-      connected: gmailConnected
+      connected: gmailConnected || isSvcConnected('gmail', 'gmail')
     },
     {
       id: 'calendar',
@@ -281,7 +165,7 @@ export default function ConnectorsTab(): React.JSX.Element {
       description: 'Understand your schedule, manage events, and optimize your time effectively',
       category: 'Productivity',
       logoSrc: getConnectorLogo('calendar'),
-      connected: false
+      connected: isSvcConnected('calendar', 'googlecalendar')
     },
     {
       id: 'instagram',
@@ -289,7 +173,7 @@ export default function ConnectorsTab(): React.JSX.Element {
       description: 'Generate and publish Posts, Stories, or Reels to Instagram',
       category: 'Creativity',
       logoSrc: getConnectorLogo('instagram'),
-      connected: false
+      connected: isSvcConnected('instagram', 'instagram')
     },
     {
       id: 'notion',
@@ -297,7 +181,7 @@ export default function ConnectorsTab(): React.JSX.Element {
       description: 'Search workspace content, update notes, and automate workflows in Notion',
       category: 'Productivity',
       logoSrc: getConnectorLogo('notion'),
-      connected: !!state?.services?.find((s) => s.id === 'notion')?.connected
+      connected: isSvcConnected('notion', 'notion')
     },
     {
       id: 'outlook',
@@ -305,7 +189,7 @@ export default function ConnectorsTab(): React.JSX.Element {
       description: 'Write, search, and manage your Outlook emails seamlessly within Palette',
       category: 'Productivity',
       logoSrc: getConnectorLogo('outlook'),
-      connected: false
+      connected: isSvcConnected('outlook', 'outlook')
     },
     {
       id: 'google-workspace',
@@ -313,7 +197,7 @@ export default function ConnectorsTab(): React.JSX.Element {
       description: 'Access your files, search instantly, and let Palette help you manage documents...',
       category: 'Business',
       logoSrc: getConnectorLogo('google-workspace'),
-      connected: false
+      connected: isSvcConnected('google-workspace', 'googledrive')
     },
     {
       id: 'slack',
@@ -321,7 +205,7 @@ export default function ConnectorsTab(): React.JSX.Element {
       description: 'Search, read, and act across your Slack workspace',
       category: 'Business',
       logoSrc: getConnectorLogo('slack'),
-      connected: false
+      connected: isSvcConnected('slack', 'slack')
     },
     {
       id: 'meta-ads',
@@ -329,7 +213,7 @@ export default function ConnectorsTab(): React.JSX.Element {
       description: 'Automate ads insights and optimization to save hours and maximize profits',
       category: 'Business',
       logoSrc: getConnectorLogo('meta-ads'),
-      connected: false
+      connected: isSvcConnected('meta-ads', 'facebook')
     }
   ]
 
@@ -361,12 +245,17 @@ export default function ConnectorsTab(): React.JSX.Element {
         <button
           type="button"
           className="conn-create-menu-btn"
+          style={{ background: 'transparent', border: '1px solid var(--border)' }}
+          onClick={() => void refresh()}
+          title="Refresh connection status"
+        >
+          <span>Refresh</span>
+        </button>
+        <button
+          type="button"
+          className="conn-create-menu-btn"
           onClick={() => {
-            if (state && !state.configured) {
-              setMsg('Enter your Composio project key below to add custom integrations.')
-            } else {
-              void searchToolkits(query.trim())
-            }
+            void searchToolkits(query.trim())
           }}
         >
           <span>Create</span>
@@ -420,13 +309,7 @@ export default function ConnectorsTab(): React.JSX.Element {
                   aria-label={`Connect ${item.name}`}
                   disabled={connecting === item.id}
                   onClick={() => {
-                    if (item.id === 'browser') {
-                      setBrowserConnected(true)
-                    } else if (item.id === 'video-editor') {
-                      setVideoConnected(true)
-                    } else {
-                      void connectToolkit(item.id, item.name)
-                    }
+                    void connectToolkit(item.id, item.name)
                   }}
                 >
                   <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -441,49 +324,13 @@ export default function ConnectorsTab(): React.JSX.Element {
         })}
       </div>
 
-      {connectMessage && <p className="set-msg" role="status">{connectMessage}</p>}
+      {connectMessage && (
+        <div className="set-msg" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: 12 }}>
+          <span>{connectMessage}</span>
+          <Button variant="secondary" size="sm" onClick={() => void refresh()}>Check again</Button>
+        </div>
+      )}
       {catalogError && <p className="set-msg" role="alert">{catalogError}</p>}
-
-      {/* Composio Project Key configuration card */}
-      <div className="conn-key-section">
-        {state && (
-          <Card>
-            <CardTitle>{state.configured ? 'Composio project key' : 'Connect Composio'}</CardTitle>
-            <CardSub>
-              {state.configured
-                ? 'A key is stored securely on this device. Enter a new key to replace it; the saved key is never shown here.'
-                : 'Add a Composio project key to browse and connect additional integrations with secure permissions.'}
-              {!state.encryptionAvailable && ' Secure credential storage is currently unavailable, so a key cannot be saved.'}
-            </CardSub>
-            <div className="set-row">
-              {(!state.configured || showKeyForm) && (
-                <>
-                  <div className="set-grow">
-                    <Input monospace type="password" value={key} onChange={(e) => setKey(e.target.value)} placeholder="Paste a new ak_ project key" aria-label="Composio project key" autoComplete="new-password" />
-                  </div>
-                  <Button onClick={() => void saveKey()} disabled={!key.trim() || !state.encryptionAvailable}>{state.configured ? 'Replace key' : 'Save key'}</Button>
-                </>
-              )}
-              {state.configured && (
-                <Button variant="secondary" onClick={() => { setShowKeyForm((open) => !open); setKey('') }}>
-                  {showKeyForm ? 'Cancel' : 'Change key'}
-                </Button>
-              )}
-              {state.configured && <Button variant="destructive" onClick={() => setConfirmClearKey(true)}>Remove key</Button>}
-            </div>
-            {msg && <p className="set-msg">{msg}</p>}
-            {confirmClearKey && (
-              <div className="composio-key-confirm" role="alertdialog" aria-label="Confirm saved key removal">
-                <p>Remove the key stored in this app? This does not revoke it in Composio; revoke the old key from the Composio dashboard separately.</p>
-                <div className="set-row">
-                  <Button variant="secondary" size="sm" onClick={() => setConfirmClearKey(false)}>Keep key</Button>
-                  <Button variant="destructive" size="sm" onClick={() => void clearKey()}>Remove saved key</Button>
-                </div>
-              </div>
-            )}
-          </Card>
-        )}
-      </div>
 
       {/* Composio dynamically loaded toolkits */}
       {state?.configured && toolkits.length > 0 && (
@@ -538,62 +385,6 @@ export default function ConnectorsTab(): React.JSX.Element {
           </div>
         </section>
       )}
-      <Card style={{ marginTop: 24 }}>
-        <div className="flex items-center justify-between gap-3">
-          <CardTitle>GitHub repos</CardTitle>
-          <Button variant="secondary" size="sm" onClick={() => { setShowRepoForm((open) => !open); setRepoMsg(null) }}>
-            {showRepoForm ? 'Cancel' : 'Add repo'}
-          </Button>
-        </div>
-        <CardSub>
-          {gh?.authenticated
-            ? 'GitHub CLI is authenticated. Limit @github access to these local repositories.'
-            : 'Limit @github access to these local repositories. Run `gh auth login` in a terminal if GitHub is not connected.'}
-        </CardSub>
-        <div className="set-list">
-          {repos.length === 0 && <p className="set-list-empty">No repos yet.</p>}
-          {repos.map((r) => (
-            <div key={r.repo.toLowerCase()} className="set-list-item">
-              <span className="mono">{r.repo}</span>
-              <span className="dim" title={r.path}>{r.path}</span>
-              <span className="spacer" />
-              <button onClick={() => void saveRepos(repos.filter((x) => x.repo.toLowerCase() !== r.repo.toLowerCase()))} className="set-link-danger">
-                Remove
-              </button>
-            </div>
-          ))}
-        </div>
-        {showRepoForm && (
-          <div className="set-row">
-            <div className="set-grow">
-              <Input monospace value={newPath} onChange={(e) => setNewPath(e.target.value)} placeholder="/home/you/code/repo" aria-label="Local path" />
-            </div>
-            <Input monospace value={newRepo} onChange={(e) => setNewRepo(e.target.value)} placeholder="owner/name" aria-label="owner/name" />
-            <Button
-              onClick={() => {
-                const path = newPath.trim()
-                const repo = newRepo.trim()
-                if (!path || !repo) {
-                  setRepoMsg('Enter both a local path and owner/name.')
-                  return
-                }
-                if (repos.some((r) => r.repo.toLowerCase() === repo.toLowerCase())) {
-                  setRepoMsg(`"${repo}" is already in the list.`)
-                  return
-                }
-                setNewPath('')
-                setNewRepo('')
-                setShowRepoForm(false)
-                void saveRepos([...repos, { path, repo }])
-              }}
-            >
-              Add
-            </Button>
-          </div>
-        )}
-        {repoMsg && <p className="set-msg">{repoMsg}</p>}
-        <Hint>Each path must exist and be a git repo whose origin matches owner/name.</Hint>
-      </Card>
     </div>
   )
 }

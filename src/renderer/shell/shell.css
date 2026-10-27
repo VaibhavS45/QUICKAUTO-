@@ -1182,6 +1182,127 @@
   gap: 5px;
 }
 
+.chat-composer-pills-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  padding: 2px 0 10px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  margin-bottom: 8px;
+}
+
+.chat-tool-pill-modern {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 8px 3px 5px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.08);
+  color: #f3f4f6;
+  font-size: 13px;
+  font-weight: 500;
+  line-height: 1.25;
+  user-select: none;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
+  transition: all 0.15s ease;
+}
+
+.chat-tool-pill-modern:hover {
+  background: rgba(255, 255, 255, 0.12);
+  border-color: rgba(255, 255, 255, 0.2);
+}
+
+.chat-tool-pill-icon {
+  width: 20px;
+  height: 20px;
+  border-radius: 5px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  flex-shrink: 0;
+}
+
+.chat-tool-pill-icon.has-logo {
+  background: rgba(255, 255, 255, 0.06);
+}
+
+.chat-tool-pill-icon img {
+  width: 15px;
+  height: 15px;
+  object-fit: contain;
+}
+
+.chat-tool-pill-icon.is-web {
+  background: #1a73e8;
+  color: #fff;
+}
+
+.chat-tool-pill-icon.is-calendar {
+  background: #2b2d31;
+  color: #fff;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+}
+
+.chat-tool-pill-icon.is-sheets {
+  background: #0f9d58;
+  color: #fff;
+}
+
+.chat-tool-pill-icon.is-files {
+  background: #d97706;
+  color: #fff;
+}
+
+.chat-tool-pill-icon.is-github {
+  background: #24292e;
+  color: #fff;
+}
+
+.chat-tool-pill-icon.is-opencode {
+  background: #7c3aed;
+  color: #fff;
+}
+
+.chat-tool-pill-icon.is-mcp {
+  background: #6366f1;
+  color: #fff;
+}
+
+.chat-tool-pill-icon.is-composio {
+  background: #ea580c;
+  color: #fff;
+}
+
+.chat-tool-pill-label {
+  white-space: nowrap;
+}
+
+.chat-tool-pill-remove {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 15px;
+  height: 15px;
+  margin-left: 2px;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: transparent;
+  color: rgba(255, 255, 255, 0.45);
+  font-size: 13px;
+  line-height: 1;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.chat-tool-pill-remove:hover {
+  background: rgba(255, 255, 255, 0.16);
+  color: #fff;
+}
+
 .chat-tool-pill {
   display: inline-flex;
   align-items: center;
@@ -1673,39 +1794,113 @@
 
 .chat-mention-menu {
   position: absolute;
-  z-index: 5;
+  z-index: 50;
   right: 16px;
-  bottom: 58px;
+  bottom: calc(100% - 2px);
   left: 16px;
-  display: grid;
-  max-height: 230px;
-  overflow: auto;
-  padding: 5px;
-  border: 1px solid var(--border-strong);
-  border-radius: 8px;
-  background: var(--surface);
-  box-shadow: inset 0 1px 0 var(--border), 0 16px 48px var(--overlay);
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  max-height: 280px;
+  overflow-y: auto;
+  padding: 6px;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-radius: 12px;
+  background: #1c1d21;
+  box-shadow: 0 16px 40px rgba(0, 0, 0, 0.5), 0 2px 8px rgba(0, 0, 0, 0.3);
+  backdrop-filter: blur(16px);
 }
 
-.chat-mention-menu button {
-  display: grid;
-  gap: 3px;
-  padding: 8px;
+.chat-mention-menu button,
+.chat-mention-option {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 7px 10px;
   border: 0;
-  border-radius: 6px;
-  color: var(--text);
+  border-radius: 8px;
   background: transparent;
+  color: var(--text, #f3f4f6);
   text-align: left;
   cursor: pointer;
+  transition: background 0.12s ease;
 }
 
-.chat-mention-menu button:hover {
-  background: var(--surface-2);
+.chat-mention-menu button:hover,
+.chat-mention-option:hover,
+.chat-mention-option.is-selected {
+  background: rgba(255, 255, 255, 0.08);
 }
 
+.chat-mention-option-info {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  flex: 1;
+}
+
+.chat-mention-option-header {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+}
+
+.chat-mention-option-name {
+  font-size: 13px;
+  font-weight: 600;
+  color: #fff;
+}
+
+.chat-mention-option-id {
+  font-size: 11px;
+  color: rgba(255, 255, 255, 0.4);
+  font-family: var(--font-mono, monospace);
+}
+
+.chat-mention-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 1px 6px;
+  border-radius: 999px;
+  font-size: 10px;
+  font-weight: 600;
+  line-height: 1.2;
+}
+
+.chat-mention-badge.is-builtin {
+  background: rgba(74, 169, 255, 0.18);
+  color: #8dceff;
+  border: 1px solid rgba(74, 169, 255, 0.3);
+}
+
+.chat-mention-badge.is-skill {
+  background: rgba(180, 135, 255, 0.18);
+  color: #d0b3ff;
+  border: 1px solid rgba(180, 135, 255, 0.3);
+}
+
+.chat-mention-badge.is-composio {
+  background: rgba(16, 185, 129, 0.18);
+  color: #6ee7b7;
+  border: 1px solid rgba(16, 185, 129, 0.3);
+}
+
+.chat-mention-option-hint,
 .chat-mention-menu small {
-  color: var(--text-muted);
-  font-size: var(--font-2xs);
+  font-size: 11px;
+  color: rgba(255, 255, 255, 0.5);
+  margin-top: 1px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.chat-mention-empty {
+  padding: 14px;
+  text-align: center;
+  color: rgba(255, 255, 255, 0.45);
+  font-size: 12px;
 }
 
 .chat-inline-error,
@@ -2187,6 +2382,58 @@
   border-color: rgb(112 67 179 / 25%);
   color: #7043b3;
   background: #f3edff;
+}
+
+.light .chat-composer-pills-row {
+  border-bottom-color: rgba(0, 0, 0, 0.08);
+}
+
+.light .chat-tool-pill-modern {
+  background: rgba(0, 0, 0, 0.05);
+  border-color: rgba(0, 0, 0, 0.12);
+  color: #1f2937;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
+}
+
+.light .chat-tool-pill-modern:hover {
+  background: rgba(0, 0, 0, 0.08);
+  border-color: rgba(0, 0, 0, 0.18);
+}
+
+.light .chat-tool-pill-remove {
+  color: rgba(0, 0, 0, 0.4);
+}
+
+.light .chat-tool-pill-remove:hover {
+  background: rgba(0, 0, 0, 0.1);
+  color: #111;
+}
+
+.light .chat-mention-menu {
+  background: #ffffff;
+  border-color: rgba(0, 0, 0, 0.12);
+  box-shadow: 0 16px 40px rgba(0, 0, 0, 0.15), 0 2px 8px rgba(0, 0, 0, 0.08);
+}
+
+.light .chat-mention-option {
+  color: #1f2937;
+}
+
+.light .chat-mention-option:hover,
+.light .chat-mention-option.is-selected {
+  background: rgba(0, 0, 0, 0.05);
+}
+
+.light .chat-mention-option-name {
+  color: #111827;
+}
+
+.light .chat-mention-option-id {
+  color: rgba(0, 0, 0, 0.45);
+}
+
+.light .chat-mention-option-hint {
+  color: rgba(0, 0, 0, 0.55);
 }
 
 .light .chat-tool-pill.is-composio {

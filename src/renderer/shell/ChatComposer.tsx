@@ -1,7 +1,14 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { AutomationTemplateCards } from './AutomationTemplateCards.js'
 import type { AutomationTemplate } from '../../shared/contracts/automation-templates.js'
-import { activeMention, parseMentionedTools, TOOL_META } from '../../shared/types.js'
+import { activeMention } from '../../shared/types.js'
+import {
+  getAvailableMentionTools,
+  filterMentionTools,
+  parsePromptMentionedTools,
+  ToolPillIcon,
+  type ConnectorStatusContext
+} from './mentionTools.js'
 import { attachmentPromptText, fileExtension, useAttachments } from '../lib/attachments.js'
 import { useI18n } from '../i18n/LanguageContext.js'
 
@@ -35,14 +42,60 @@ export function ChatComposer({
   const textarea = useRef<HTMLTextAreaElement>(null)
   const submitting = useRef(false)
   const attachments = useAttachments()
-  const mention = activeMention(value, caret)
+  const [connectorState, setConnectorState] = useState<ConnectorStatusContext | null>(null)
+  const [gmailConnected, setGmailConnected] = useState(false)
+  const [selectedIndex, setSelectedIndex] = useState(0)
+  const [mentionDismissed, setMentionDismissed] = useState(false)
+
+  useEffect(() => {
+    let active = true
+    async function loadStatus(): Promise<void> {
+      try {
+        const [conn, gm] = await Promise.all([
+          window.app.getConnector().catch(() => null),
+          window.app.connectionStatus('gmail').catch(() => null)
+        ])
+        if (!active) return
+        if (conn) setConnectorState(conn as ConnectorStatusContext)
+        if (gm && gm.ok) setGmailConnected(Boolean(gm.connected))
+      } catch {
+        /* ignore */
+      }
+    }
+    void loadStatus()
+    const onFocus = (): void => {
+      void loadStatus()
+    }
+    window.addEventListener('focus', onFocus)
+    return () => {
+      active = false
+      window.removeEventListener('focus', onFocus)
+    }
+  }, [])
+
+  const availableTools = useMemo(() => {
+    return getAvailableMentionTools({
+      configured: connectorState?.configured,
+      services: connectorState?.services,
+      connectedSlugs: connectorState?.connectedSlugs,
+      gmailConnected
+    })
+  }, [connectorState, gmailConnected])
+
+  const mention = mentionDismissed ? null : activeMention(value, caret)
   const suggestions = useMemo(
-    () => mention
-      ? Object.entries(TOOL_META).filter(([id]) => id.startsWith(mention.typed.toLowerCase())).slice(0, 6)
-      : [],
-    [mention?.start, mention?.typed]
+    () => (mention ? filterMentionTools(availableTools, mention.typed) : []),
+    [mention?.start, mention?.typed, availableTools]
   )
-  const selectedTools = parseMentionedTools(value)
+
+  useEffect(() => {
+    setSelectedIndex(0)
+  }, [suggestions.length, mention?.typed])
+
+  const activePromptTools = useMemo(
+    () => parsePromptMentionedTools(value, availableTools),
+    [value, availableTools]
+  )
 
   useEffect(() => {
     // OpenCode is the only engine; no provider/model/API-key setup needed here.
@@ -106,6 +159,14 @@ export function ChatComposer({
     }
   }
 
+  function removeMention(id: string): void {
+    const re = new RegExp(`@${id}\\b\\s*`, 'gi')
+    const next = value.replace(re, '')
+    setValue(next)
+    setCaret(Math.min(caret, next.length))
+    textarea.current?.focus()
+  }
+
   function insertMention(id: string): void {
     if (!mention) return
     const replacement = `@${id} `
@@ -113,6 +174,7 @@ export function ChatComposer({
     const nextCaret = mention.start + replacement.length
     setValue(next)
     setCaret(nextCaret)
+    setMentionDismissed(false)
     requestAnimationFrame(() => {
       textarea.current?.focus()
       textarea.current?.setSelectionRange(nextCaret, nextCaret)
@@ -129,6 +191,24 @@ export function ChatComposer({
         </div>
       )}
       <div className="chat-composer-card">
+        {activePromptTools.length > 0 && (
+          <div className="chat-composer-pills-row" aria-label="Mentioned tools">
+            {activePromptTools.map((tool) => (
+              <span key={tool.id} className="chat-tool-pill-modern" title={tool.hint}>
+                <ToolPillIcon tool={tool} />
+                <span className="chat-tool-pill-label">{tool.label}</span>
+                <button
+                  type="button"
+                  className="chat-tool-pill-remove"
+                  aria-label={`Remove ${tool.label}`}
+                  onClick={() => removeMention(tool.id)}
+                >
+                  ×
+                </button>
+              </span>
+            ))}
+          </div>
+        )}
         <textarea
           ref={textarea}
           aria-label={t('composer.label')}
@@ -139,32 +219,75 @@ export function ChatComposer({
           onChange={(event) => {
             setValue(event.currentTarget.value)
             setCaret(event.currentTarget.selectionStart)
+            setMentionDismissed(false)
           }}
-          onClick={(event) => setCaret(event.currentTarget.selectionStart)}
-          onKeyUp={(event) => setCaret(event.currentTarget.selectionStart)}
+          onClick={(event) => {
+            setCaret(event.currentTarget.selectionStart)
+            setMentionDismissed(false)
+          }}
+          onKeyUp={(event) => {
+            setCaret(event.currentTarget.selectionStart)
+          }}
           onKeyDown={(event) => {
-            if (event.key === 'Enter' && !event.shiftKey) {
-              if (suggestions.length > 0) {
+            if (mention && suggestions.length > 0) {
+              if (event.key === 'ArrowDown') {
                 event.preventDefault()
-                insertMention(suggestions[0]![0])
+                setSelectedIndex((prev) => (prev + 1) % suggestions.length)
                 return
               }
+              if (event.key === 'ArrowUp') {
+                event.preventDefault()
+                setSelectedIndex((prev) => (prev - 1 + suggestions.length) % suggestions.length)
+                return
+              }
+              if (event.key === 'Enter' && !event.shiftKey) {
+                event.preventDefault()
+                const target = suggestions[selectedIndex] ?? suggestions[0]
+                if (target) insertMention(target.id)
+                return
+              }
+              if (event.key === 'Escape') {
+                event.preventDefault()
+                setMentionDismissed(true)
+                return
+              }
+            }
+            if (event.key === 'Enter' && !event.shiftKey) {
               event.preventDefault()
               void send()
             }
           }}
         />
-        {suggestions.length > 0 && (
+        {mention && (
           <div className="chat-mention-menu" role="listbox" aria-label="Available tools">
-            {suggestions.map(([id, meta]) => (
-              <button key={id} type="button" role="option" onMouseDown={(event) => event.preventDefault()} onClick={() => insertMention(id)}>
-                <span className={`chat-mention-option-label is-${meta.kind}`}>
-                  <span className="chat-tool-pill-mark" aria-hidden="true" />
-                  {meta.label}
-                </span>
-                <small>{meta.hint}</small>
+            {suggestions.map((tool, index) => (
+              <button
+                key={tool.id}
+                type="button"
+                role="option"
+                aria-selected={index === selectedIndex}
+                className={`chat-mention-option ${index === selectedIndex ? 'is-selected' : ''}`}
+                onMouseDown={(event) => event.preventDefault()}
+                onClick={() => insertMention(tool.id)}
+              >
+                <ToolPillIcon tool={tool} />
+                <div className="chat-mention-option-info">
+                  <div className="chat-mention-option-header">
+                    <span className="chat-mention-option-name">{tool.label}</span>
+                    <span className="chat-mention-option-id">@{tool.id}</span>
+                    <span className={`chat-mention-badge is-${tool.kind}`}>
+                      {tool.kind === 'builtin' ? 'In-built' : tool.kind === 'skill' ? 'Skill' : 'Connected'}
+                    </span>
+                  </div>
+                  <span className="chat-mention-option-hint">{tool.hint}</span>
+                </div>
               </button>
             ))}
+            {suggestions.length === 0 && (
+              <div className="chat-mention-empty">
+                No connected tools match &quot;{mention.typed}&quot;
+              </div>
+            )}
           </div>
         )}
         {attachments.error && (
@@ -247,15 +370,12 @@ export function ChatComposer({
               )}
             </div>
           <span className="chat-tool-selection" aria-label="Selected tools">
-            {selectedTools.filter((id) => id !== 'calendar').map((id) => {
-              const meta = TOOL_META[id]
-              return (
-                <span key={id} className={`chat-tool-pill is-${meta.kind}`} title={meta.hint}>
-                  <span className="chat-tool-pill-mark" aria-hidden="true" />
-                  {meta.label}
-                </span>
-              )
-            })}
+            {activePromptTools.map((tool) => (
+              <span key={tool.id} className="chat-tool-pill-modern" title={tool.hint}>
+                <ToolPillIcon tool={tool} />
+                <span className="chat-tool-pill-label">{tool.label}</span>
+              </span>
+            ))}
           </span>
           <button type="button" className="chat-send-button" disabled={busy || (!value.trim() && attachments.files.length === 0)} onClick={() => void send()}>
             {busy ? t('composer.working') : t('composer.send')}

@@ -127,18 +127,19 @@ export class ComposioMarketplace {
     if (!parsed.success) throw new Error('Composio returned an invalid app catalog response.')
 
     const items = parsed.data.items
-    let connectionState: Awaited<ReturnType<ComposioSessionLike['toolkits']>>
+    let connected = new Set<string>()
     try {
       const session = await (this.deps.createClient ?? createClient)(key)
-        .sessions.create(COMPOSIO_USER_ID, { toolkits: items.map((item) => item.slug), manageConnections: false })
-      connectionState = await session.toolkits({
-        toolkits: items.map((item) => item.slug),
-        limit: 50
-      })
+        .sessions.create(COMPOSIO_USER_ID, { manageConnections: false })
+      const connectionState = await session.toolkits({ isConnected: true })
+      connected = new Set(
+        (connectionState?.items ?? [])
+          .filter((item) => item.connection?.isActive ?? true)
+          .map((item) => item.slug)
+      )
     } catch (error) {
-      throw new Error(describeComposioError(error))
+      console.warn('Could not fetch active connection states from Composio session:', error)
     }
-    const connected = new Set(connectionState.items.filter((item) => item.connection?.isActive).map((item) => item.slug))
 
     return items.map((item) => ({
       slug: item.slug,
@@ -154,14 +155,37 @@ export class ComposioMarketplace {
     }))
   }
 
+  async getConnectedToolkits(): Promise<Set<string>> {
+    const key = (await this.deps.getApiKey()) || this.deps.fallbackApiKey || null
+    if (!key) return new Set()
+    try {
+      const session = await (this.deps.createClient ?? createClient)(key)
+        .sessions.create(COMPOSIO_USER_ID, { manageConnections: false })
+      const connectionState = await session.toolkits({ isConnected: true })
+      return new Set(
+        (connectionState?.items ?? [])
+          .filter((item) => item.connection?.isActive ?? true)
+          .map((item) => item.slug.toLowerCase())
+      )
+    } catch {
+      return new Set()
+    }
+  }
+
   async connect(toolkit: string): Promise<string> {
+    const slugMap: Record<string, string> = {
+      calendar: 'googlecalendar',
+      'google-workspace': 'googledrive',
+      'meta-ads': 'facebook',
+      sheets: 'googlesheets'
+    }
+    const slug = slugMap[toolkit.toLowerCase()] || toolkit
     let request: { redirectUrl?: string }
     try {
       const session = await (await this.client()).sessions.create(COMPOSIO_USER_ID, {
-        toolkits: [toolkit],
         manageConnections: false
       })
-      request = await session.authorize(toolkit)
+      request = await session.authorize(slug)
     } catch (error) {
       throw new Error(describeComposioError(error))
     }

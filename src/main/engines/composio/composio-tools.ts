@@ -105,11 +105,13 @@ export class ComposioProvider implements ConnectorProvider {
     let connectedResult: Awaited<ReturnType<RouterSession['toolkits']>>
     try {
       session = await client.sessions.create(COMPOSIO_USER_ID, { manageConnections: false })
-      connectedResult = await session.toolkits({ limit: 50 })
+      connectedResult = await session.toolkits({ isConnected: true })
     } catch (error) {
       throw new Error(describeComposioError(error))
     }
-    const connected = (connectedResult?.items ?? []).map((item) => item.slug)
+    const connected = (connectedResult?.items ?? [])
+      .filter((item) => item.connection?.isActive ?? true)
+      .map((item) => item.slug)
     const scoped = new Set<string>()
     if (toolIds.includes('composio')) connected.forEach((slug) => scoped.add(slug))
     if (toolIds.includes('notion') && connected.includes('notion')) scoped.add('notion')

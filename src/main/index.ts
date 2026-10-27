@@ -778,22 +778,62 @@ function wireIpc(): void {
   ipcMain.handle(IpcChannels.getConnector, async () => {
     const pub = await connectorSettings.getPublicState()
     const configured = pub.configured || Boolean(COMPOSIO_FALLBACK_KEY) || Boolean(runtimeConnectorKey)
-    // Gmail status is provided by its dedicated connection IPC; GitHub uses
-    // the local CLI. Composio status applies only to its other services.
-    const ids = ['notion', 'sheets', 'websearch'] as const
-    const services: Array<{ id: string; connected: boolean; detail?: string }> = await Promise.all(
-      ids.map(async (id) => {
-        const s = await new ComposioProvider(getComposioApiKey, getGuard).status(id)
-        return { id, ...s }
-      })
-    )
+    const connectedSlugs = configured ? await composioMarketplace.getConnectedToolkits() : new Set<string>()
+
+    const services: Array<{ id: string; connected: boolean; detail?: string }> = [
+      {
+        id: 'notion',
+        connected: connectedSlugs.has('notion'),
+        detail: connectedSlugs.has('notion') ? 'Notion connected via Composio.' : 'No active Notion connection.'
+      },
+      {
+        id: 'calendar',
+        connected: connectedSlugs.has('googlecalendar') || connectedSlugs.has('calendar'),
+        detail: connectedSlugs.has('googlecalendar') ? 'Google Calendar connected via Composio.' : 'No active Google Calendar connection.'
+      },
+      {
+        id: 'instagram',
+        connected: connectedSlugs.has('instagram'),
+        detail: connectedSlugs.has('instagram') ? 'Instagram connected via Composio.' : 'No active Instagram connection.'
+      },
+      {
+        id: 'outlook',
+        connected: connectedSlugs.has('outlook'),
+        detail: connectedSlugs.has('outlook') ? 'Outlook Mail connected via Composio.' : 'No active Outlook connection.'
+      },
+      {
+        id: 'google-workspace',
+        connected: connectedSlugs.has('googledrive') || connectedSlugs.has('googleworkspace'),
+        detail: connectedSlugs.has('googledrive') ? 'Google Workspace connected via Composio.' : 'No active Google Workspace connection.'
+      },
+      {
+        id: 'slack',
+        connected: connectedSlugs.has('slack'),
+        detail: connectedSlugs.has('slack') ? 'Slack connected via Composio.' : 'No active Slack connection.'
+      },
+      {
+        id: 'meta-ads',
+        connected: connectedSlugs.has('facebook') || connectedSlugs.has('metaads') || connectedSlugs.has('meta-ads'),
+        detail: connectedSlugs.has('facebook') ? 'Meta Ads connected via Composio.' : 'No active Meta Ads connection.'
+      },
+      {
+        id: 'sheets',
+        connected: connectedSlugs.has('googlesheets') || connectedSlugs.has('sheets'),
+        detail: connectedSlugs.has('googlesheets') || connectedSlugs.has('sheets') ? 'Google Sheets connected via Composio.' : 'No active Google Sheets connection.'
+      },
+      {
+        id: 'websearch',
+        connected: true,
+        detail: 'Web search available via public fallback or configured provider keys.'
+      }
+    ]
     const gh = await githubProvider.checkGh()
     services.push({
       id: 'github',
       connected: gh.installed && gh.authenticated,
       detail: gh.detail
     })
-    return { ...pub, configured, services }
+    return { ...pub, configured, services, connectedSlugs: Array.from(connectedSlugs) }
   })
 
   ipcMain.handle(IpcChannels.setConnectorKey, async (_event, payload: unknown) => {

@@ -18,7 +18,9 @@ export type ToolId = ActiveToolId | LegacyScheduleDirective
 
 export const TOOL_ALIASES: Record<string, ActiveToolId> = {
   email: 'gmail',
-  sheet: 'sheets'
+  sheet: 'sheets',
+  web: 'websearch',
+  browser: 'websearch'
 }
 
 export type ToolKind = 'builtin' | 'skill' | 'composio'

@@ -35,7 +35,7 @@ export type AutomationSchedule = z.infer<typeof AutomationScheduleSchema>
 /** One node of a canvas-built automation, stored so reopening is lossless. */
 export const CanvasStepSchema = z.object({
   id: z.string().min(1).max(64),
-  kind: z.enum(['trigger', 'action', 'gmail', 'filter', 'delay']),
+  kind: z.enum(['trigger', 'action', 'gmail', 'filter', 'delay', 'opencode']),
   title: z.string().max(120),
   subtitle: z.string().max(2000),
   filled: z.boolean().optional(),

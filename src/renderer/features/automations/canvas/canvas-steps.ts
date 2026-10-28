@@ -1,7 +1,8 @@
 import type { Automation, AutomationCreate, AutomationSchedule, CanvasStepRecord } from '../../../../shared/contracts/automations.js'
 import { formatTime } from '../../../lib/format.js'
+import { TRIGGER_APPS, triggerMention } from '../trigger/trigger-events.js'
 
-export type CanvasKind = 'trigger' | 'action' | 'gmail' | 'filter' | 'delay'
+export type CanvasKind = 'trigger' | 'action' | 'gmail' | 'filter' | 'delay' | 'opencode'
 
 export interface CanvasStep {
   id: string
@@ -15,6 +16,14 @@ export interface CanvasStep {
   from?: string
   /** Label on the incoming edge, e.g. a condition's "Yes" / "No" branch. */
   branch?: string
+  /** Selected trigger event phrase (e.g. 'a new email is received') */
+  event?: string
+  /** Parameter key-value pairs for trigger filters or action parameters */
+  config?: Record<string, string>
+  /** Detailed custom prompt instruction for this step */
+  actionPrompt?: string
+  /** Structured schedule object */
+  schedule?: AutomationSchedule
 }
 
 /** The side of a node a new step branches out to. */
@@ -58,11 +67,22 @@ export function parseClock(text: string): string | null {
 
 export type Repeat = 'daily' | 'weekly' | 'monthly' | 'once'
 
-/** "weekly · 9:00 AM" → repeat + "HH:MM", the shape the trigger node stores. */
+/** "weekly · 9:00 AM" or "When an email is received · daily · 09:00" → repeat + "HH:MM", the shape the trigger node stores. */
 export function parseRepeatTime(text: string): { repeat: Repeat; time: string } {
-  const [rawRepeat, rawTime] = text.split('·').map((part) => part.trim())
-  const repeat = (['daily', 'weekly', 'monthly', 'once'] as const).find((value) => value === rawRepeat) ?? 'daily'
-  return { repeat, time: parseClock(rawTime ?? '') ?? '09:00' }
+  const parts = text.split('·').map((part) => part.trim())
+  const validRepeats: Repeat[] = ['daily', 'weekly', 'monthly', 'once']
+  const foundRepeat = parts.map((p) => p.toLowerCase()).find((p) => validRepeats.includes(p as Repeat))
+  const repeat = (foundRepeat as Repeat) ?? 'daily'
+
+  let time = '09:00'
+  for (const part of parts) {
+    const clock = parseClock(part)
+    if (clock) {
+      time = clock
+      break
+    }
+  }
+  return { repeat, time }
 }
 
 /**
@@ -70,12 +90,25 @@ export function parseRepeatTime(text: string): { repeat: Repeat; time: string } 
  * "<type> · <time>", so an edited node can carry a new time or frequency.
  */
 export function parseScheduleSummary(text: string, automation: Automation): AutomationSchedule | null {
-  const [type, time] = text.split('·').map((part) => part.trim())
-  const clock = parseClock(time ?? '')
+  const parts = text.split('·').map((part) => part.trim())
+  let clock: string | null = null
+  let type: string | undefined
+
+  for (const part of parts) {
+    const lower = part.toLowerCase()
+    if (['daily', 'weekly', 'monthly', 'once'].includes(lower)) {
+      type = lower
+    }
+    const parsedClock = parseClock(part)
+    if (parsedClock) {
+      clock = parsedClock
+    }
+  }
+
   if (!clock) return null
   const current = automation.schedule
   const next = automation.nextRunAt ? new Date(automation.nextRunAt) : new Date()
-  switch (type) {
+  switch (type ?? current?.type ?? 'daily') {
     case 'once':
       return { type: 'once', time: clock, date: current?.type === 'once' && current.date ? current.date : localDate(next) }
     case 'weekly':
@@ -91,9 +124,8 @@ export function parseScheduleSummary(text: string, automation: Automation): Auto
         dayOfMonth: current?.type === 'monthly' && current.dayOfMonth ? current.dayOfMonth : next.getDate()
       }
     case 'daily':
-      return { type: 'daily', time: clock }
     default:
-      return null
+      return { type: 'daily', time: clock }
   }
 }
 
@@ -105,7 +137,11 @@ function localDate(date: Date): string {
 
 /** The schedule a new automation starts with: the trigger node, anchored today. */
 export function scheduleFromSteps(steps: CanvasStep[], now = new Date()): AutomationSchedule {
-  const { repeat, time } = parseRepeatTime(steps.find((step) => step.kind === 'trigger')?.subtitle ?? '')
+  const trigger = steps.find((step) => step.kind === 'trigger')
+  if (trigger?.schedule) {
+    return trigger.schedule
+  }
+  const { repeat, time } = parseRepeatTime(trigger?.subtitle ?? '')
   switch (repeat) {
     case 'once':
       return { type: 'once', time, date: localDate(now) }
@@ -157,11 +193,14 @@ function toolOfStep(step: CanvasStep): string {
   if (/sheet/.test(title)) return 'sheets'
   if (/github/.test(title)) return 'github'
   if (/search/.test(title)) return 'websearch'
+  if (/notion/.test(title)) return 'notion'
+  if (/file/.test(title)) return 'files'
+  if (/code/.test(title)) return 'opencode'
+  if (/mcp/.test(title)) return 'mcp'
+  const app = TRIGGER_APPS.find((a) => a.id === title || a.label.toLowerCase() === title)
+  if (app) return triggerMention(app.id)
   // Known labels map onto real tool mentions; a bare sentence is never a
   // connector — an oversized one would invalidate the whole save patch.
-  if (/file/.test(title)) return 'files'
-  if (/notion/.test(title)) return 'notion'
-  if (/code/.test(title)) return 'opencode'
   const fallback = step.subtitle.trim()
   if (!fallback || /^select /i.test(fallback)) return ''
   return fallback.length <= 64 ? fallback : fallback.slice(0, 64)
@@ -181,21 +220,41 @@ export interface CanvasPatch {
 }
 
 /**
- * The edited nodes back onto the automation: the first action is the task, the
- * rest are the connectors, the trigger carries the schedule.
+ * The edited nodes back onto the automation.
  */
 export function canvasToPatch(steps: CanvasStep[], automation: Automation): CanvasPatch {
   const patch: CanvasPatch = {}
   const trigger = steps.find((step) => step.kind === 'trigger')
+  const { text, tools } = canvasToPrompt(steps)
+  const currentPrompt = automation.prompt?.trim() ?? ''
   const actions = steps.filter((step) => step.kind !== 'trigger')
   // Logic steps shape the flow; the task is the first real action.
   const promptStep = actions.find((step) => step.kind !== 'filter' && step.kind !== 'delay') ?? actions[0]
-  const prompt = promptStep?.subtitle.trim() ?? ''
-  const title = titleOf(prompt)
+
+  const title = titleOf(promptStep?.subtitle.trim() ?? '')
   if (title && title !== automation.title) patch.title = title
-  if (prompt && prompt !== (automation.prompt ?? '')) patch.prompt = prompt
-  const connectors = actions.filter((step) => step !== promptStep).map(toolOfStep).filter(Boolean)
-  if (connectors.join('|') !== automation.connectors.join('|')) patch.connectors = connectors
+
+  if (text && text !== currentPrompt) {
+    const singleActionPrompt = promptStep?.subtitle.trim() ?? ''
+    // If the canvas steps are simply the auto-derived 2-step routine that matches currentPrompt, skip patching prompt
+    if (singleActionPrompt === currentPrompt && actions.length <= (automation.connectors?.length ? automation.connectors.length + 1 : 1)) {
+      // Unmodified derived routine prompt
+    } else {
+      patch.prompt = text
+    }
+  }
+
+  const currentConnectors = (automation.connectors ?? []).join('|')
+  const newConnectors = tools.join('|')
+  if (newConnectors && newConnectors !== currentConnectors) {
+    const actionTools = actions.map(toolOfStep).filter(Boolean)
+    if (actionTools.join('|') === currentConnectors) {
+      // Unmodified derived connector list
+    } else {
+      patch.connectors = tools
+    }
+  }
+
   if (trigger) {
     const schedule = parseScheduleSummary(trigger.subtitle, automation)
     if (schedule) patch.schedule = schedule
@@ -433,28 +492,71 @@ export function moveCanvasStep(steps: CanvasStep[], id: string, delta: -1 | 1): 
   return next
 }
 
-export function updateCanvasStep(steps: CanvasStep[], id: string, patch: Partial<Pick<CanvasStep, 'kind' | 'title' | 'subtitle' | 'filled'>>): CanvasStep[] {
+export function updateCanvasStep(steps: CanvasStep[], id: string, patch: Partial<CanvasStep>): CanvasStep[] {
   return steps.map((s) => (s.id === id ? { ...s, ...patch, filled: true } : s))
 }
 
 /** Compose a routine prompt from canvas steps. Keeps @tool mentions so the scheduler picks up tools. */
 export function canvasToPrompt(steps: CanvasStep[]): { text: string; tools: string[] } {
+  const trigger = steps.find((s) => s.kind === 'trigger')
   const actions = steps.filter((s) => s.kind !== 'trigger')
-  const toolTags = actions
+  const toolTags: string[] = []
+
+  // 1. Process trigger
+  let triggerPrompt = ''
+  if (trigger) {
+    const rawTitle = trigger.title.trim().toLowerCase()
+    const isSchedule = (/schedule|timer/i.test(rawTitle) || rawTitle === 'trigger') && !trigger.event
+    if (!isSchedule) {
+      const app = TRIGGER_APPS.find((a) => a.id === rawTitle || a.label.toLowerCase() === rawTitle)
+      if (app) {
+        const mention = triggerMention(app.id)
+        toolTags.push(`@${mention}`)
+
+        const eventPhrase = trigger.event || (trigger.subtitle.split('·')[0]?.trim() || '').replace(/^When /i, '') || 'an event occurs'
+        const configEntries = Object.entries(trigger.config ?? {}).filter(([, v]) => v && v.trim())
+        const configStr = configEntries.length > 0
+          ? ` with config ${configEntries.map(([k, v]) => `${k}="${v.trim().replaceAll('"', '\\"')}"`).join(', ')}`
+          : ''
+        triggerPrompt = `check @${mention} for ${eventPhrase}${configStr}`
+      }
+    }
+  }
+
+  // 2. Process actions
+  const actionPrompts = actions
     .map((s) => {
       const t = s.title.toLowerCase()
-      if (s.kind === 'gmail' || /gmail|email/.test(t)) return '@gmail'
-      if (/sheet/.test(t)) return '@sheets'
-      if (/github/.test(t)) return '@github'
-      if (/search/.test(t)) return '@websearch'
-      if (/file|notion|code/.test(t)) return `@${/file/.test(t) ? 'files' : /notion/.test(t) ? 'notion' : 'opencode'}`
-      return null
+      let mention: string | null = null
+      if (s.kind === 'gmail' || /gmail|email/.test(t)) mention = '@gmail'
+      else if (/sheet/.test(t)) mention = '@sheets'
+      else if (/github/.test(t)) mention = '@github'
+      else if (/search/.test(t)) mention = '@websearch'
+      else if (/file/.test(t)) mention = '@files'
+      else if (/notion/.test(t)) mention = '@notion'
+      else if (/code/.test(t)) mention = '@opencode'
+      else if (/mcp/.test(t)) mention = '@mcp'
+      else if (s.kind !== 'filter' && s.kind !== 'delay') {
+        const app = TRIGGER_APPS.find((a) => a.id === t || a.label.toLowerCase() === t)
+        if (app) mention = `@${triggerMention(app.id)}`
+      }
+
+      if (mention) toolTags.push(mention)
+
+      const promptText = s.actionPrompt?.trim() || s.subtitle.trim()
+      if (!promptText || /^select /i.test(promptText)) return null
+      if (s.kind === 'filter') return `Only continue if: ${promptText}`
+      if (s.kind === 'delay') return `Delay: ${promptText}`
+      return promptText
     })
     .filter((x): x is string => x !== null)
-  const tools = [...new Set(toolTags)]
-  const events = actions.map((s) => s.subtitle).filter((s) => s && !/^select /i.test(s))
-  const text = [events.join('. ') || 'Run my automation', ...tools].join(' ').trim()
-  return { text, tools: tools.map((t) => t.slice(1)) }
+
+  const tools = [...new Set(toolTags.map((t) => t.slice(1)))]
+  const promptParts = [triggerPrompt, ...actionPrompts].filter(Boolean)
+  const baseText = promptParts.join('. ') || 'Run my automation'
+  const text = [baseText, ...new Set(toolTags)].filter(Boolean).join(' ').trim()
+
+  return { text, tools }
 }
 
 /** Compiles canvas steps into a scheduler-compatible routine prompt string with schedule phrase and @tool mentions. */

@@ -211,7 +211,10 @@ describe('canvas steps', () => {
     // that is exactly the edit which used to invalidate the whole save.
     expect(patch.schedule).toEqual({ type: 'daily', time: '06:29' })
     expect(patch.title).toBe('search for todays indian news')
-    expect(patch.prompt).toBe('search for todays indian news')
+    // The prompt keeps every action's text (the run prompt), the title is the
+    // first action's first sentence.
+    expect(patch.prompt).toContain('search for todays indian news')
+    expect(patch.prompt).toContain('put that information in the files folder')
     expect(patch.connectors?.every((tool) => tool.length <= 64)).toBe(true)
     expect(patch.canvasSteps?.length).toBe(steps.length)
     // The saved graph reopens as drawn.
@@ -239,5 +242,61 @@ describe('canvas steps', () => {
     )
     expect(monthly).toEqual({ type: 'monthly', time: '09:00', dayOfMonth: 25 })
     expect(canvasToCreate(steps, '  ').title).toBe('New automation')
+  })
+
+  it('compiles multi-step workflows with event triggers, conditions and tools', () => {
+    const steps = [
+      {
+        id: 't1',
+        kind: 'trigger' as const,
+        title: 'Gmail',
+        subtitle: 'When a new email is received (contains=\'invoice\') · daily · 09:00 AM',
+        filled: true,
+        pos: { x: 0, y: 0 },
+        event: 'a new email is received',
+        config: { contains: 'invoice', labelIds: 'INBOX' }
+      },
+      {
+        id: 'f1',
+        kind: 'filter' as const,
+        title: 'Filter',
+        subtitle: 'email amount is over $100',
+        filled: true,
+        pos: { x: 272, y: 0 }
+      },
+      {
+        id: 'a1',
+        kind: 'action' as const,
+        title: 'Slack',
+        subtitle: 'Post alert to #finance channel',
+        filled: true,
+        pos: { x: 544, y: 0 }
+      },
+      {
+        id: 'a2',
+        kind: 'action' as const,
+        title: 'Sheets',
+        subtitle: 'Append row to Invoices tab',
+        filled: true,
+        pos: { x: 816, y: 0 }
+      }
+    ]
+
+    const { text, tools } = canvasToPrompt(steps)
+    expect(text).toContain('check @gmail for a new email is received with config contains="invoice", labelIds="INBOX"')
+    expect(text).toContain('Only continue if: email amount is over $100')
+    expect(text).toContain('Post alert to #finance channel')
+    expect(text).toContain('Append row to Invoices tab')
+    expect(tools).toContain('gmail')
+    expect(tools).toContain('composio')
+    expect(tools).toContain('sheets')
+
+    const createPayload = canvasToCreate(steps, 'Invoice Processor')
+    expect(createPayload.kind).toBe('advanced')
+    expect(createPayload.connectors).toContain('gmail')
+    expect(createPayload.connectors).toContain('composio')
+    expect(createPayload.connectors).toContain('sheets')
+    expect(createPayload.schedule?.type).toBe('daily')
+    expect(createPayload.schedule?.time).toBe('09:00')
   })
 })

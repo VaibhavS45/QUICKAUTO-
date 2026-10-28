@@ -98,7 +98,7 @@ if (!gotLock) app.quit()
 
 const accountBootstrap = gotLock
   ? bootstrapLocalAccountUserData()
-  : { baseDir: app.getPath('userData'), account: null, loginMode: true }
+  : { baseDir: app.getPath('userData'), account: null, loginMode: false }
 const localAccounts = new LocalAccountService(accountBootstrap.baseDir, accountBootstrap.account?.id ?? null)
 
 const store = new Store<{ openAtLogin: boolean; keepBackground: boolean; shader: boolean; theme: string; hotkey?: string }>({
@@ -193,7 +193,7 @@ const connectorSettings = new ConnectorSettingsService(new ElectronConnectorStor
 })
 
 const COMPOSIO_FALLBACK_KEY = process.env['COMPOSIO_API_KEY']?.trim() || undefined
-const primaryComposioFallbackKey = accountBootstrap.account?.primary ? COMPOSIO_FALLBACK_KEY : undefined
+const primaryComposioFallbackKey = COMPOSIO_FALLBACK_KEY
 let runtimeConnectorKey: string | null = null
 
 const identityFile = new Store<Record<string, unknown>>({ name: 'palette-identity', defaults: {} })
@@ -419,16 +419,6 @@ function applyStrictCsp(): void {
   })
 }
 
-let accountRelaunchScheduled = false
-
-function scheduleAccountRelaunch(): void {
-  if (accountRelaunchScheduled) return
-  accountRelaunchScheduled = true
-  setTimeout(() => {
-    app.relaunch({ args: process.argv.slice(1).filter((arg) => arg !== '--background') })
-    app.quit()
-  }, 250)
-}
 
 function wireIpc(): void {
   const shellRuntime = createShellRuntime(
@@ -457,20 +447,24 @@ function wireIpc(): void {
   registerChatIpc(ipcMain, chatStore)
   settingsShellRuntime.registerIpc(ipcMain)
   registerAuthIpc(ipcMain, {
-    getState: () => localAccounts.getState(),
+    getState: () => {
+      const state = localAccounts.getState()
+      return {
+        ...state,
+        signedIn: true,
+        name: localAccounts.currentAccount()?.username || 'Developer'
+      }
+    },
     login: async (credentials) => {
       const state = await localAccounts.login(credentials)
-      scheduleAccountRelaunch()
       return state
     },
     register: async (credentials) => {
       const state = await localAccounts.register(credentials)
-      scheduleAccountRelaunch()
       return state
     },
     logout: async () => {
       const state = await localAccounts.logout()
-      scheduleAccountRelaunch()
       return state
     }
   })

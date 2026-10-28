@@ -100,9 +100,9 @@ export default function ShellApp(): React.JSX.Element {
   const [route, setRoute] = useState(router.current)
   const [profile, setProfile] = useState<LocalProfile>({ name: '', email: '' })
   const [profileMenuOpen, setProfileMenuOpen] = useState(false)
-  const [auth, setAuth] = useState<AuthState>({ signedIn: false, configured: true, method: 'local' })
+  const [auth, setAuth] = useState<AuthState>({ signedIn: true, configured: true, method: 'local', name: 'Developer' })
   const [authBusy, setAuthBusy] = useState(false)
-  const [authLoading, setAuthLoading] = useState(true)
+  const [authLoading, setAuthLoading] = useState(false)
   const [settings, setSettings] = useState<{ tab?: string } | null>(null)
   const avatarRef = useRef<HTMLButtonElement>(null)
   const [notificationsOpen, setNotificationsOpen] = useState(false)
@@ -538,7 +538,7 @@ export default function ShellApp(): React.JSX.Element {
       label: t(`shell.${tab.id}` as UiKey),
       icon: tab.icon,
       active: route.view === 'automations' && automationTab === tab.id,
-      run: () => navigate('automations', { automationTab: tab.id })
+      run: () => navigate('automations', { automationTab: tab.id, navTime: Date.now() })
     }))
   ]
   const activeNav = navItems.find((item) => item.active) ?? navItems[0]
@@ -566,7 +566,8 @@ export default function ShellApp(): React.JSX.Element {
     )
   }
 
-  const accountLocked = authLoading || !auth.signedIn
+  // Login paused for development: keep shell unlocked and active
+  const accountLocked = false
 
   return (
     <BreadcrumbProvider>

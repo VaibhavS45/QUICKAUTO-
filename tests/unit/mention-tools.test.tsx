@@ -96,6 +96,9 @@ describe('filterMentionTools', () => {
 
     const openMatches = filterMentionTools(tools, 'open')
     expect(openMatches.map((t) => t.id)).toEqual(['opencode'])
+
+    const browMatches = filterMentionTools(tools, 'brow')
+    expect(browMatches.map((t) => t.id)).toContain('websearch')
   })
 
   it('returns empty array when no tools match query', () => {
@@ -115,10 +118,11 @@ describe('parsePromptMentionedTools', () => {
     expect(found.map((t) => t.id)).toEqual(['websearch', 'gmail'])
   })
 
-  it('resolves aliases like @email and @sheet', () => {
-    const prompt = 'Draft an @email and update @sheet'
+  it('resolves aliases like @email, @sheet, @browser and @web', () => {
+    const prompt = 'Draft an @email, search via @browser and check @web'
     const found = parsePromptMentionedTools(prompt, tools)
-    expect(found.map((t) => t.id)).toEqual(['gmail', 'sheets'])
+    expect(found.map((t) => t.id)).toContain('gmail')
+    expect(found.map((t) => t.id)).toContain('websearch')
   })
 
   it('deduplicates repeatedly mentioned tools', () => {
@@ -134,9 +138,21 @@ describe('ToolPillIcon', () => {
     expect(webHtml).toContain('is-web')
     expect(webHtml).toContain('<svg')
 
+    const browserHtml = renderToStaticMarkup(createElement(ToolPillIcon, { tool: { id: 'browser', label: 'Browser', hint: '', kind: 'builtin' } }))
+    expect(browserHtml).toContain('is-browser')
+    expect(browserHtml).toContain('<svg')
+
     const opencodeHtml = renderToStaticMarkup(createElement(ToolPillIcon, { tool: SYSTEM_SKILLS[0]! }))
     expect(opencodeHtml).toContain('is-opencode')
     expect(opencodeHtml).toContain('<svg')
+  })
+
+  it('renders calendar mini badge for calendar tool', () => {
+    const calHtml = renderToStaticMarkup(createElement(ToolPillIcon, { tool: { id: 'calendar', label: 'Calendar', hint: '', kind: 'composio' } }))
+    expect(calHtml).toContain('is-calendar')
+    expect(calHtml).toContain('chat-tool-calendar-mini')
+    expect(calHtml).toContain('chat-tool-calendar-month')
+    expect(calHtml).toContain('chat-tool-calendar-day')
   })
 
   it('renders brand logo image when logoSrc is provided', () => {

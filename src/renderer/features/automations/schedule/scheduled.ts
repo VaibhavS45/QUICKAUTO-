@@ -47,20 +47,37 @@ export function weekdayText(days?: number[]): string {
   return days.map((day) => WEEKDAY_LABELS[day] ?? '').join(', ')
 }
 
+/** Splits a combined prompt into clean task instructions and event trigger check phrase. */
+export function splitTriggerPrompt(prompt: string = ''): { task: string; triggerPhrase: string; app: string; event: string } {
+  const trimmed = (prompt ?? '').trim()
+  const match = /(?:^|\.\s*)check\s+@([a-zA-Z0-9_-]+)\s+for\s+([^.]+?)(?:\s+with\s+config\s+([^.]+))?$/i.exec(trimmed)
+  if (!match) return { task: trimmed, triggerPhrase: '', app: '', event: '' }
+  const fullCheck = match[0].replace(/^\.\s*/, '').trim()
+  const task = trimmed.slice(0, trimmed.length - match[0].length).trim()
+  return {
+    task,
+    triggerPhrase: fullCheck,
+    app: match[1] ?? '',
+    event: match[2]?.trim() ?? ''
+  }
+}
+
 /** The muted line under the card title. */
 export function automationMeta(automation: Automation): string {
   if (automation.kind === 'advanced') return 'Advanced automation'
+  const isTrigger = manageFilterOf(automation) === 'trigger'
+  const prefix = isTrigger ? 'Trigger' : 'Schedule'
   const schedule = automation.schedule
-  if (!schedule) return 'Schedule'
+  if (!schedule) return prefix
   switch (schedule.type) {
     case 'once':
-      return `Schedule · ${formatDate(schedule.date)} at ${schedule.time}`
+      return `${prefix} · ${formatDate(schedule.date)} at ${schedule.time}`
     case 'daily':
-      return `Schedule · Repeat daily at ${schedule.time}`
+      return `${prefix} · Repeat daily at ${schedule.time}`
     case 'weekly':
-      return `Schedule · Repeat weekly on ${weekdayText(schedule.weekdays)} at ${schedule.time}`
+      return `${prefix} · Repeat weekly on ${weekdayText(schedule.weekdays)} at ${schedule.time}`
     case 'monthly':
-      return `Schedule · Repeat monthly on day ${schedule.dayOfMonth ?? 1} at ${schedule.time}`
+      return `${prefix} · Repeat monthly on day ${schedule.dayOfMonth ?? 1} at ${schedule.time}`
   }
 }
 
@@ -81,7 +98,7 @@ export const MANAGE_FILTERS: Array<{ id: ManageFilter; label: string }> = [
  */
 export function manageFilterOf(automation: Automation): Exclude<ManageFilter, 'all'> {
   if (automation.kind === 'advanced') return 'canvas'
-  if (/check\s+@[a-z-]+/i.test(automation.prompt ?? '')) return 'trigger'
+  if (/check\s+@[a-zA-Z0-9_-]+/i.test(automation.prompt ?? '')) return 'trigger'
   return 'schedule'
 }
 

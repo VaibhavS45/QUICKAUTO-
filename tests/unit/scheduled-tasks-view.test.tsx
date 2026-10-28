@@ -112,25 +112,25 @@ describe('Scheduled Task detail page', () => {
     expect(html).not.toContain('value="Say hellosay hello to the team"')
   })
 
-  it('shows the schedule row, the approvals card and the advanced settings', () => {
+  it('shows the schedule row, the details tab and the advanced settings', () => {
     const html = render(createElement(AutomationDetail, {
       automation: automation(),
       onSaved: () => {},
       onToast: () => {},
       onOpenRun: () => {},
-      onDirtyChange: () => {}
+      onDirtyChange: () => {},
+      onBack: () => {}
     }))
     expect(html).toContain('Schedule')
     expect(html).toContain('aria-label="Frequency"')
     expect(html).toContain('aria-label="Time"')
-    expect(html).toContain('Confirmations')
-    expect(html).toContain('Scheduled runs are read-only')
     expect(html).toContain('Advanced settings')
     expect(html).toContain('Details')
     expect(html).toContain('History')
+    expect(html).toContain('Back to automations')
   })
 
-  it('disables the rows the app cannot offer yet', () => {
+  it('keeps clean real settings and omits unneeded placeholder rows', () => {
     const html = render(createElement(AutomationDetail, {
       automation: automation(),
       onSaved: () => {},
@@ -138,8 +138,28 @@ describe('Scheduled Task detail page', () => {
       onOpenRun: () => {},
       onDirtyChange: () => {}
     }))
-    expect(html).toContain('aria-label="Project"')
-    expect(html).toContain('aria-label="Local folder"')
-    expect(html).toContain('aria-label="Cloud computer"')
+    expect(html).toContain('aria-label="Run options"')
+    expect(html).toContain('aria-label="Agent"')
+    expect(html).toContain('aria-label="Expiration date"')
+    expect(html).not.toContain('aria-label="Project"')
+    expect(html).not.toContain('aria-label="Local folder"')
+    expect(html).not.toContain('aria-label="Cloud computer"')
+  })
+
+  it('renders trigger banner and zap indicator for event trigger automations', () => {
+    const triggerAuto = automation({
+      title: 'Gmail alert',
+      prompt: 'Summarize the unread message. check @gmail for a new email arrives in INBOX with config query="is:unread label:INBOX"'
+    })
+    const html = render(createElement(AutomationDetail, {
+      automation: triggerAuto,
+      onSaved: () => {},
+      onToast: () => {},
+      onOpenRun: () => {},
+      onDirtyChange: () => {}
+    }))
+    expect(html).toContain('Trigger')
+    expect(html).toContain('st-trigger-banner')
+    expect(html).toContain('Monitored via @gmail')
   })
 })

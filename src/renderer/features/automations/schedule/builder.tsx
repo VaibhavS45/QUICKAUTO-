@@ -1,6 +1,14 @@
 import { Fragment, useEffect, useMemo, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
-import { TOOL_IDS, TOOL_META, type ActiveToolId } from '../../../../shared/types.js'
+import { ChevronDown, Filter, X } from 'lucide-react'
+import { activeMention, type ActiveToolId } from '../../../../shared/types.js'
+import {
+  getAvailableMentionTools,
+  filterMentionTools,
+  parsePromptMentionedTools,
+  ToolPillIcon,
+  type ConnectorStatusContext
+} from '../../../shell/mentionTools.js'
 import { TIMER_TRIGGER, TRIGGER_APPS, triggerApp, triggerEvent, triggerMention } from '../trigger/trigger-events.js'
 import { TriggerAppIcon } from '../trigger/trigger-icons.js'
 import { blankTrigger, draftToAutomation, makeTriggerId, type BuilderDraft, type BuilderRepeat, type BuilderTrigger } from './builder-compile.js'
@@ -367,6 +375,14 @@ export default function Builder(props: BuilderProps): React.JSX.Element {
   const [triggers, setTriggers] = useState(props.initial.triggers)
   const [task, setTask] = useState(props.initial.task)
   const [tools, setTools] = useState<string[]>(props.initial.tools)
+  const [taskCaret, setTaskCaret] = useState(0)
+  const [mentionDismissed, setMentionDismissed] = useState(false)
+  const [selectedMentionIndex, setSelectedMentionIndex] = useState(0)
+  const [mentionBox, setMentionBox] = useState<{ top: number; left: number; width: number } | null>(null)
+  const taskTextareaRef = useRef<HTMLTextAreaElement>(null)
+  const mentionMenuRef = useRef<HTMLDivElement>(null)
+  const [connectorState, setConnectorState] = useState<ConnectorStatusContext | null>(null)
+  const [gmailConnected, setGmailConnected] = useState(Boolean(props.gmailConnected))
   const [agent, setAgent] = useState(props.initial.agent)
   const [expiresAt, setExpiresAt] = useState('')
   const [agents, setAgents] = useState<AgentProfile[]>([])
@@ -374,6 +390,7 @@ export default function Builder(props: BuilderProps): React.JSX.Element {
   const [pickerOpen, setPickerOpen] = useState(false)
   const [pickerApp, setPickerApp] = useState<string | null>(null)
   const [configEditingId, setConfigEditingId] = useState<string | null>(null)
+  const [collapsedTriggers, setCollapsedTriggers] = useState<Set<string>>(() => new Set())
   const [pickerBox, setPickerBox] = useState<{ top: number; left: number; width: number } | null>(null)
   const triggerAnchorRef = useRef<HTMLDivElement>(null)
   const pickerRef = useRef<HTMLDivElement>(null)
@@ -404,14 +421,120 @@ export default function Builder(props: BuilderProps): React.JSX.Element {
     void window.app.agentsList()
       .then((res) => { if (live && res.ok && res.agents) setAgents(res.agents) })
       .catch(() => {})
-    void window.app.getConnector()
-      .then((res) => {
+
+    async function loadConnectors(): Promise<void> {
+      try {
+        const [conn, gm] = await Promise.all([
+          window.app.getConnector().catch(() => null),
+          window.app.connectionStatus('gmail').catch(() => null)
+        ])
         if (!live) return
-        setConnectorOptions((res.services ?? []).filter((service) => service.connected).map((service) => service.id))
-      })
-      .catch(() => {})
+        if (conn) {
+          setConnectorState(conn as ConnectorStatusContext)
+          setConnectorOptions((conn.services ?? []).filter((service) => service.connected).map((service) => service.id))
+        }
+        if (gm && gm.ok) setGmailConnected(Boolean(gm.connected))
+      } catch {
+        /* ignore */
+      }
+    }
+    void loadConnectors()
     return () => { live = false }
   }, [])
+
+  const availableTools = useMemo(() => {
+    return getAvailableMentionTools({
+      configured: connectorState?.configured,
+      services: connectorState?.services,
+      connectedSlugs: connectorState?.connectedSlugs,
+      gmailConnected
+    })
+  }, [connectorState, gmailConnected])
+
+  const taskMention = mentionDismissed ? null : activeMention(task, taskCaret)
+  const suggestions = useMemo(
+    () => (taskMention ? filterMentionTools(availableTools, taskMention.typed) : []),
+    [taskMention?.start, taskMention?.typed, availableTools]
+  )
+
+  useEffect(() => {
+    setSelectedMentionIndex(0)
+  }, [suggestions.length, taskMention?.typed])
+
+  useEffect(() => {
+    if (!taskMention) {
+      setMentionBox(null)
+      return
+    }
+    const updatePosition = (): void => {
+      const rect = taskTextareaRef.current?.getBoundingClientRect()
+      if (!rect) return
+      const spaceBelow = window.innerHeight - rect.bottom
+      const top = spaceBelow > 240 ? rect.bottom + 6 : Math.max(10, rect.top - 240)
+      setMentionBox({ top, left: rect.left, width: rect.width })
+    }
+    updatePosition()
+    window.addEventListener('resize', updatePosition)
+    window.addEventListener('scroll', updatePosition, true)
+    return () => {
+      window.removeEventListener('resize', updatePosition)
+      window.removeEventListener('scroll', updatePosition, true)
+    }
+  }, [taskMention])
+
+  function insertMention(id: string): void {
+    if (!taskMention) return
+    const replacement = `@${id} `
+    const next = `${task.slice(0, taskMention.start)}${replacement}${task.slice(taskCaret)}`
+    const nextCaret = taskMention.start + replacement.length
+    setTask(next)
+    setTaskCaret(nextCaret)
+    setMentionDismissed(false)
+    requestAnimationFrame(() => {
+      taskTextareaRef.current?.focus()
+      taskTextareaRef.current?.setSelectionRange(nextCaret, nextCaret)
+    })
+  }
+
+  function removeMention(id: string): void {
+    const re = new RegExp(`@${id}\\b\\s*`, 'gi')
+    const next = task.replace(re, '')
+    setTask(next)
+    setTools((prev) => prev.filter((t) => t.toLowerCase() !== id.toLowerCase()))
+    setTaskCaret(Math.min(taskCaret, next.length))
+    taskTextareaRef.current?.focus()
+  }
+
+  function handleTaskKeyDown(event: React.KeyboardEvent<HTMLTextAreaElement>): void {
+    if (taskMention && suggestions.length > 0) {
+      if (event.key === 'ArrowDown') {
+        event.preventDefault()
+        setSelectedMentionIndex((prev) => (prev + 1) % suggestions.length)
+        return
+      }
+      if (event.key === 'ArrowUp') {
+        event.preventDefault()
+        setSelectedMentionIndex((prev) => (prev - 1 + suggestions.length) % suggestions.length)
+        return
+      }
+      if ((event.key === 'Enter' || event.key === 'Tab') && !event.shiftKey) {
+        event.preventDefault()
+        const target = suggestions[selectedMentionIndex] ?? suggestions[0]
+        if (target) insertMention(target.id)
+        return
+      }
+      if (event.key === 'Escape') {
+        event.preventDefault()
+        setMentionDismissed(true)
+        return
+      }
+    }
+  }
+
+  const activePromptTools = useMemo(
+    () => parsePromptMentionedTools(task, availableTools),
+    [task, availableTools]
+  )
 
   // The sheet's backdrop-filter clips in-flow popovers and the builder overlay
   // scrolls, so the picker is portalled and anchored to the trigger button.
@@ -452,8 +575,15 @@ export default function Builder(props: BuilderProps): React.JSX.Element {
   }, [pickerOpen])
 
   const compiled = useMemo(
-    () => draftToAutomation({ title: props.initial.title, triggers, task, tools, agent }),
-    [props.initial.title, triggers, task, tools, agent]
+    () =>
+      draftToAutomation({
+        title: props.initial.title,
+        triggers,
+        task,
+        tools: [...new Set([...tools, ...activePromptTools.map((t) => t.id)])],
+        agent
+      }),
+    [props.initial.title, triggers, task, tools, activePromptTools, agent]
   )
 
   async function submit(event: React.FormEvent): Promise<void> {
@@ -992,8 +1122,11 @@ export default function Builder(props: BuilderProps): React.JSX.Element {
                     const connection = triggerConnection(trigger.app)
                     const status = connection === undefined ? 'Via Composio' : connection ? 'Connected' : 'Not connected'
                     const tone = connection === undefined ? 'is-muted' : connection ? 'is-on' : 'is-off'
-                    const filled = Object.values(trigger.config ?? {}).some((value) => value.trim())
-                    const configOpen = configEditingId === trigger.id || filled
+                    const filledEntries = Object.entries(trigger.config ?? {}).filter(([, value]) => value && value.trim())
+                    const filledCount = filledEntries.length
+                    const isManuallyCollapsed = collapsedTriggers.has(trigger.id)
+                    const isEditing = configEditingId === trigger.id
+                    const configOpen = (isEditing || filledCount > 0) && !isManuallyCollapsed
                     const firstInput = fields.findIndex((field) => !field.options)
                     return (
                       <div key={trigger.id} className="builder-trig">
@@ -1019,57 +1152,171 @@ export default function Builder(props: BuilderProps): React.JSX.Element {
                         {fields.length > 0 && (
                           <div className="builder-trig-line indent">
                             {configOpen ? (
-                              <div className="builder-cfg">
-                                <span className="builder-sched-note">Only when</span>
-                                <div className="builder-cfg-fields">
-                                  {fields.map((field, index) => (
-                                    <label key={field.key} className="builder-cfg-field">
-                                      <span>{field.label}</span>
-                                      {field.options ? (
-                                        <select
-                                          value={trigger.config?.[field.key] ?? ''}
-                                          onChange={(event) => patchTrigger(setTriggers, trigger.id, {
-                                            config: { ...trigger.config, [field.key]: event.currentTarget.value }
-                                          })}
-                                        >
-                                          <option value="">{field.placeholder}</option>
-                                          {field.options.map((option) => <option key={option} value={option}>{option}</option>)}
-                                        </select>
-                                      ) : (
-                                        <input
-                                          autoFocus={configEditingId === trigger.id && index === firstInput}
-                                          className="builder-pill-input"
-                                          aria-label={field.label}
-                                          placeholder={field.placeholder}
-                                          value={trigger.config?.[field.key] ?? ''}
-                                          onChange={(event) => patchTrigger(setTriggers, trigger.id, {
-                                            config: { ...trigger.config, [field.key]: event.currentTarget.value }
-                                          })}
-                                        />
-                                      )}
-                                    </label>
-                                  ))}
+                              <div className="builder-cfg-panel">
+                                <div className="builder-cfg-header">
+                                  <div className="builder-cfg-header-left">
+                                    <span className="builder-cfg-badge-icon" aria-hidden="true">
+                                      <Filter size={12} />
+                                    </span>
+                                    <span className="builder-cfg-title">Filter conditions</span>
+                                    <span className="builder-cfg-subtitle">Only run when event matches</span>
+                                    {filledCount > 0 && (
+                                      <span className="builder-cfg-active-count">{filledCount} active</span>
+                                    )}
+                                  </div>
+                                  <div className="builder-cfg-header-actions">
+                                    {filledCount > 0 && (
+                                      <button
+                                        type="button"
+                                        className="builder-cfg-btn-clear"
+                                        onClick={() => patchTrigger(setTriggers, trigger.id, { config: {} })}
+                                        title="Clear all filter values"
+                                      >
+                                        Clear filters
+                                      </button>
+                                    )}
+                                    <button
+                                      type="button"
+                                      className="builder-cfg-btn-close"
+                                      aria-label="Close filter conditions"
+                                      title="Close conditions"
+                                      onClick={() => {
+                                        if (filledCount > 0) {
+                                          setCollapsedTriggers((cur) => new Set(cur).add(trigger.id))
+                                        }
+                                        setConfigEditingId(null)
+                                      }}
+                                    >
+                                      <X size={13} />
+                                    </button>
+                                  </div>
                                 </div>
-                                <button
-                                  type="button"
-                                  className="builder-cond-remove"
-                                  aria-label="Clear conditions"
-                                  onClick={() => {
-                                    patchTrigger(setTriggers, trigger.id, { config: {} })
-                                    setConfigEditingId(null)
-                                  }}
-                                >
-                                  ×
-                                </button>
+                                <div className="builder-cfg-grid">
+                                  {fields.map((field, index) => {
+                                    const val = trigger.config?.[field.key] ?? ''
+                                    const isSet = Boolean(val.trim())
+                                    return (
+                                      <div key={field.key} className={`builder-cfg-item${isSet ? ' is-filled' : ''}`}>
+                                        <div className="builder-cfg-item-top">
+                                          <label className="builder-cfg-item-label" htmlFor={`cfg-${trigger.id}-${field.key}`}>
+                                            {field.label}
+                                          </label>
+                                          {isSet && <span className="builder-cfg-item-dot" title="Filter active" aria-hidden="true" />}
+                                        </div>
+                                        <div className="builder-cfg-item-control">
+                                          {field.options ? (
+                                            <div className="builder-cfg-select-box">
+                                              <select
+                                                id={`cfg-${trigger.id}-${field.key}`}
+                                                className="builder-cfg-select"
+                                                value={val}
+                                                onChange={(event) => patchTrigger(setTriggers, trigger.id, {
+                                                  config: { ...trigger.config, [field.key]: event.currentTarget.value }
+                                                })}
+                                              >
+                                                <option value="">{field.placeholder || 'Any'}</option>
+                                                {field.options.map((option) => (
+                                                  <option key={option} value={option}>{option}</option>
+                                                ))}
+                                              </select>
+                                              <ChevronDown size={13} className="builder-cfg-select-chevron" aria-hidden="true" />
+                                            </div>
+                                          ) : (
+                                            <div className="builder-cfg-input-box">
+                                              <input
+                                                id={`cfg-${trigger.id}-${field.key}`}
+                                                autoFocus={configEditingId === trigger.id && index === firstInput}
+                                                className="builder-cfg-input"
+                                                aria-label={field.label}
+                                                placeholder={field.placeholder}
+                                                value={val}
+                                                onChange={(event) => patchTrigger(setTriggers, trigger.id, {
+                                                  config: { ...trigger.config, [field.key]: event.currentTarget.value }
+                                                })}
+                                              />
+                                              {isSet && (
+                                                <button
+                                                  type="button"
+                                                  className="builder-cfg-field-clear"
+                                                  aria-label={`Clear ${field.label}`}
+                                                  title={`Clear ${field.label}`}
+                                                  onClick={() => patchTrigger(setTriggers, trigger.id, {
+                                                    config: { ...trigger.config, [field.key]: '' }
+                                                  })}
+                                                >
+                                                  <X size={11} />
+                                                </button>
+                                              )}
+                                            </div>
+                                          )}
+                                        </div>
+                                      </div>
+                                    )
+                                  })}
+                                </div>
+                              </div>
+                            ) : filledCount > 0 ? (
+                              <div className="builder-cfg-collapsed">
+                                <div className="builder-cfg-collapsed-left">
+                                  <span className="builder-cfg-active-chip">
+                                    <Filter size={12} aria-hidden="true" />
+                                    <span>{filledCount} filter{filledCount === 1 ? '' : 's'}</span>
+                                  </span>
+                                  <div className="builder-cfg-active-pills">
+                                    {filledEntries.map(([key, val]) => {
+                                      const f = fields.find((item) => item.key === key)
+                                      return (
+                                        <span key={key} className="builder-cfg-pill" title={`${f?.label ?? key}: ${val}`}>
+                                          <span className="builder-cfg-pill-k">{f?.label ?? key}:</span>
+                                          <span className="builder-cfg-pill-v">{val}</span>
+                                        </span>
+                                      )
+                                    })}
+                                  </div>
+                                </div>
+                                <div className="builder-cfg-collapsed-actions">
+                                  <button
+                                    type="button"
+                                    className="builder-cfg-btn-edit"
+                                    onClick={() => {
+                                      setCollapsedTriggers((cur) => {
+                                        const next = new Set(cur)
+                                        next.delete(trigger.id)
+                                        return next
+                                      })
+                                      setConfigEditingId(trigger.id)
+                                    }}
+                                  >
+                                    Edit
+                                  </button>
+                                  <button
+                                    type="button"
+                                    className="builder-cfg-btn-clear-sm"
+                                    title="Remove all filters"
+                                    aria-label="Remove all filters"
+                                    onClick={() => patchTrigger(setTriggers, trigger.id, { config: {} })}
+                                  >
+                                    <X size={12} />
+                                  </button>
+                                </div>
                               </div>
                             ) : (
                               <button
                                 type="button"
-                                className="builder-cond"
-                                title="Optional filters from the Composio trigger config."
-                                onClick={() => setConfigEditingId(trigger.id)}
+                                className="builder-cond-btn"
+                                title="Optional filters to trigger only on matching events (e.g. sender, keywords)"
+                                onClick={() => {
+                                  setCollapsedTriggers((cur) => {
+                                    const next = new Set(cur)
+                                    next.delete(trigger.id)
+                                    return next
+                                  })
+                                  setConfigEditingId(trigger.id)
+                                }}
                               >
-                                + Add conditions <span className="builder-q" aria-hidden="true">?</span>
+                                <Filter size={12} className="builder-cond-icon" aria-hidden="true" />
+                                <span>Add filter conditions</span>
+                                <span className="builder-cond-badge">Optional</span>
                               </button>
                             )}
                           </div>
@@ -1092,13 +1339,89 @@ export default function Builder(props: BuilderProps): React.JSX.Element {
                     <div className="builder-willlabel">
                       Palette will
                     </div>
+                    {activePromptTools.length > 0 && (
+                      <div className="chat-composer-pills-row builder-taskbox-pills-row" aria-label="Mentioned tools">
+                        {activePromptTools.map((tool) => (
+                          <span key={tool.id} className="chat-tool-pill-modern" title={tool.hint}>
+                            <ToolPillIcon tool={tool} />
+                            <span className="chat-tool-pill-label">{tool.label}</span>
+                            <button
+                              type="button"
+                              className="chat-tool-pill-remove"
+                              aria-label={`Remove ${tool.label}`}
+                              onClick={() => removeMention(tool.id)}
+                            >
+                              ×
+                            </button>
+                          </span>
+                        ))}
+                      </div>
+                    )}
                     <textarea
+                      ref={taskTextareaRef}
                       className="builder-taskbox"
                       rows={3}
                       value={task}
-                      onChange={(e) => setTask(e.currentTarget.value)}
+                      onChange={(e) => {
+                        setTask(e.currentTarget.value)
+                        setTaskCaret(e.currentTarget.selectionStart)
+                        setMentionDismissed(false)
+                      }}
+                      onClick={(e) => {
+                        setTaskCaret(e.currentTarget.selectionStart)
+                        setMentionDismissed(false)
+                      }}
+                      onKeyUp={(e) => {
+                        setTaskCaret(e.currentTarget.selectionStart)
+                      }}
+                      onKeyDown={handleTaskKeyDown}
                       placeholder="Describe what Palette should do, e.g. summarize the latest AI news and send me the highlights"
                     />
+                    {taskMention && mentionBox && createPortal(
+                      <div
+                        ref={mentionMenuRef}
+                        className="chat-mention-menu builder-portalled-mention-menu"
+                        role="listbox"
+                        aria-label="Available tools"
+                        style={{
+                          position: 'fixed',
+                          top: `${mentionBox.top}px`,
+                          left: `${mentionBox.left}px`,
+                          width: `${mentionBox.width}px`,
+                          zIndex: 10000
+                        }}
+                      >
+                        {suggestions.map((tool, index) => (
+                          <button
+                            key={tool.id}
+                            type="button"
+                            role="option"
+                            aria-selected={index === selectedMentionIndex}
+                            className={`chat-mention-option ${index === selectedMentionIndex ? 'is-selected' : ''}`}
+                            onMouseDown={(e) => e.preventDefault()}
+                            onClick={() => insertMention(tool.id)}
+                          >
+                            <ToolPillIcon tool={tool} />
+                            <div className="chat-mention-option-info">
+                              <div className="chat-mention-option-header">
+                                <span className="chat-mention-option-name">{tool.label}</span>
+                                <span className="chat-mention-option-id">@{tool.id}</span>
+                                <span className={`chat-mention-badge is-${tool.kind}`}>
+                                  {tool.kind === 'builtin' ? 'In-built' : tool.kind === 'skill' ? 'Skill' : 'Connected'}
+                                </span>
+                              </div>
+                              <span className="chat-mention-option-hint">{tool.hint}</span>
+                            </div>
+                          </button>
+                        ))}
+                        {suggestions.length === 0 && (
+                          <div className="chat-mention-empty">
+                            No connected tools match &quot;{taskMention.typed}&quot;
+                          </div>
+                        )}
+                      </div>,
+                      document.body
+                    )}
                     {attachments.files.length > 0 && (
                       <div className="builder-attached-files">
                         {attachments.files.map((file) => (
@@ -1236,18 +1559,18 @@ export default function Builder(props: BuilderProps): React.JSX.Element {
                         {/* Skills submenu */}
                         {skillsSubmenuOpen && (
                           <div className="plus-submenu">
-                            {TOOL_IDS.map((id: ActiveToolId) => (
+                            {availableTools.map((t) => (
                               <button
-                                key={id}
+                                key={t.id}
                                 type="button"
                                 className="plus-submenu-item"
                                 onClick={() => {
-                                  toggleTool(id)
+                                  toggleTool(t.id as ActiveToolId)
                                   setAddMenuOpen(false)
                                   setSkillsSubmenuOpen(false)
                                 }}
                               >
-                                {tools.includes(id) ? '✓ ' : ''}{TOOL_META[id].label}
+                                {tools.includes(t.id) || activePromptTools.some((pt) => pt.id === t.id) ? '✓ ' : ''}{t.label}
                               </button>
                             ))}
                           </div>

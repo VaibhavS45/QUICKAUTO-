@@ -30,6 +30,7 @@ export interface FeatureProps {
   focusRunId?: string
   initialStartKind?: string
   initialAutomationTab?: string
+  navTime?: number
 }
 
 export interface FeatureModule {

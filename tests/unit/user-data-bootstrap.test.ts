@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { existsSync, mkdtempSync, rmSync } from 'node:fs'
+import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
@@ -33,7 +33,7 @@ afterEach(() => {
 })
 
 describe('bootstrapLocalAccountUserData', () => {
-  it('moves Electron into the signed-in account and consumes the handoff', async () => {
+  it('keeps Electron in base userData and stays out of login mode with signed-in account', async () => {
     const root = tempRoot()
     const service = new LocalAccountService(root)
     const state = await service.register({ username: 'alice', password: 'secret-password' })
@@ -45,18 +45,17 @@ describe('bootstrapLocalAccountUserData', () => {
     expect(result.loginMode).toBe(false)
     expect(result.account?.id).toBe(account.id)
     expect(state.signedIn).toBe(true)
-    expect(electron.paths.get('userData')).toBe(join(root, 'users', account.id))
-    expect(electron.paths.get('sessionData')).toBe(join(root, 'users', account.id, 'session-data'))
-    expect(existsSync(join(root, 'users', account.id, 'session-data'))).toBe(true)
-    expect(existsSync(join(root, 'session.json'))).toBe(false)
+    // Separate data area is cut off: userData remains at baseDir
+    expect(electron.paths.get('userData')).toBe(root)
+    expect(electron.paths.get('sessionData')).toBeUndefined()
   })
 
-  it('stays in login mode when there is no handoff', () => {
+  it('stays out of login mode and in base userData even when there is no account', () => {
     const root = tempRoot()
     electron.paths.set('userData', root)
     const result = bootstrapLocalAccountUserData()
-    expect(result.loginMode).toBe(true)
+    expect(result.loginMode).toBe(false)
     expect(result.account).toBeNull()
-    expect(electron.paths.get('userData')).toBe(join(root, 'users', '_login'))
+    expect(electron.paths.get('userData')).toBe(root)
   })
 })

@@ -8,7 +8,7 @@ import { activeMention } from '../../../../shared/types.js'
 import {
   getAvailableMentionTools,
   filterMentionTools,
-  parsePromptMentionedTools,
+  MentionMirror,
   ToolPillIcon,
   type ConnectorStatusContext
 } from '../../../shell/mentionTools.js'
@@ -81,7 +81,7 @@ export function AutomationDetail({ automation, focusSchedule = 0, onSaved, onToa
   const [promptCaret, setPromptCaret] = useState(0)
   const [mentionDismissed, setMentionDismissed] = useState(false)
   const [selectedMentionIndex, setSelectedMentionIndex] = useState(0)
-  const [mentionBox, setMentionBox] = useState<{ top: number; left: number; width: number } | null>(null)
+  const [mentionBox, setMentionBox] = useState<{ bottom: number; left: number; width: number; maxHeight: number } | null>(null)
   const promptTextareaRef = useRef<HTMLTextAreaElement>(null)
   const [connectorState, setConnectorState] = useState<ConnectorStatusContext | null>(null)
   const [gmailConnected, setGmailConnected] = useState(false)
@@ -139,9 +139,12 @@ export function AutomationDetail({ automation, focusSchedule = 0, onSaved, onToa
     const updatePosition = (): void => {
       const rect = promptTextareaRef.current?.getBoundingClientRect()
       if (!rect) return
-      const spaceBelow = window.innerHeight - rect.bottom
-      const top = spaceBelow > 220 ? rect.bottom + 6 : Math.max(10, rect.top - 230)
-      setMentionBox({ top, left: rect.left, width: rect.width })
+      setMentionBox({
+        bottom: window.innerHeight - rect.top + 6,
+        left: rect.left,
+        width: rect.width,
+        maxHeight: Math.min(280, Math.max(120, rect.top - 16))
+      })
     }
     updatePosition()
     window.addEventListener('resize', updatePosition)
@@ -164,14 +167,6 @@ export function AutomationDetail({ automation, focusSchedule = 0, onSaved, onToa
       promptTextareaRef.current?.focus()
       promptTextareaRef.current?.setSelectionRange(nextCaret, nextCaret)
     })
-  }
-
-  function removeMention(id: string): void {
-    const re = new RegExp(`@${id}\\b\\s*`, 'gi')
-    const next = draft.prompt.replace(re, '')
-    patch({ prompt: next })
-    setPromptCaret(Math.min(promptCaret, next.length))
-    promptTextareaRef.current?.focus()
   }
 
   function handlePromptKeyDown(event: React.KeyboardEvent<HTMLTextAreaElement>): void {
@@ -199,11 +194,6 @@ export function AutomationDetail({ automation, focusSchedule = 0, onSaved, onToa
       }
     }
   }
-
-  const activePromptTools = useMemo(
-    () => parsePromptMentionedTools(draft.prompt, availableTools),
-    [draft.prompt, availableTools]
-  )
 
   useEffect(() => {
     let live = true
@@ -398,44 +388,29 @@ export function AutomationDetail({ automation, focusSchedule = 0, onSaved, onToa
 
           <div className="st-field">
             <label htmlFor="st-prompt">Task description</label>
-            {activePromptTools.length > 0 && (
-              <div className="chat-composer-pills-row" aria-label="Mentioned tools">
-                {activePromptTools.map((tool) => (
-                  <span key={tool.id} className="chat-tool-pill-modern" title={tool.hint}>
-                    <ToolPillIcon tool={tool} />
-                    <span className="chat-tool-pill-label">{tool.label}</span>
-                    <button
-                      type="button"
-                      className="chat-tool-pill-remove"
-                      aria-label={`Remove ${tool.label}`}
-                      onClick={() => removeMention(tool.id)}
-                    >
-                      ×
-                    </button>
-                  </span>
-                ))}
-              </div>
-            )}
-            <textarea
-              id="st-prompt"
-              ref={promptTextareaRef}
-              className="st-textarea"
-              value={draft.prompt}
-              onChange={(event) => {
-                patch({ prompt: event.target.value })
-                setPromptCaret(event.target.selectionStart)
-                setMentionDismissed(false)
-              }}
-              onClick={(event) => {
-                setPromptCaret(event.currentTarget.selectionStart)
-                setMentionDismissed(false)
-              }}
-              onKeyUp={(event) => {
-                setPromptCaret(event.currentTarget.selectionStart)
-              }}
-              onKeyDown={handlePromptKeyDown}
-              placeholder="Describe what Palette should do, e.g. summarize messages or search the web"
-            />
+            <div className="mention-field">
+              <MentionMirror value={draft.prompt} tools={availableTools} className="st-textarea" textareaRef={promptTextareaRef} />
+              <textarea
+                id="st-prompt"
+                ref={promptTextareaRef}
+                className="st-textarea"
+                value={draft.prompt}
+                onChange={(event) => {
+                  patch({ prompt: event.target.value })
+                  setPromptCaret(event.target.selectionStart)
+                  setMentionDismissed(false)
+                }}
+                onClick={(event) => {
+                  setPromptCaret(event.currentTarget.selectionStart)
+                  setMentionDismissed(false)
+                }}
+                onKeyUp={(event) => {
+                  setPromptCaret(event.currentTarget.selectionStart)
+                }}
+                onKeyDown={handlePromptKeyDown}
+                placeholder="Describe what Palette should do, e.g. summarize messages or search the web"
+              />
+            </div>
             {promptMention && mentionBox && createPortal(
               <div
                 className="chat-mention-menu"
@@ -443,9 +418,10 @@ export function AutomationDetail({ automation, focusSchedule = 0, onSaved, onToa
                 aria-label="Available tools"
                 style={{
                   position: 'fixed',
-                  top: `${mentionBox.top}px`,
+                  bottom: `${mentionBox.bottom}px`,
                   left: `${mentionBox.left}px`,
                   width: `${mentionBox.width}px`,
+                  maxHeight: `${mentionBox.maxHeight}px`,
                   zIndex: 10000
                 }}
               >

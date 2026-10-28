@@ -193,6 +193,17 @@ export function filterMentionTools(tools: MentionToolItem[], typedQuery: string)
   )
 }
 
+export function resolveMentionTool(raw: string, availableTools: MentionToolItem[]): MentionToolItem | undefined {
+  const id = raw.toLowerCase()
+  const aliased = (id in TOOL_ALIASES ? TOOL_ALIASES[id] : id) ?? id
+  return (
+    availableTools.find((t) => t.id.toLowerCase() === id) ??
+    availableTools.find((t) => t.id.toLowerCase() === aliased) ??
+    ALL_CATALOG_MAP[id] ??
+    ALL_CATALOG_MAP[aliased]
+  )
+}
+
 export function parsePromptMentionedTools(text: string, availableTools: MentionToolItem[]): MentionToolItem[] {
   const re = /(?:^|\s)@([a-zA-Z0-9_-]+)/g
   const result: MentionToolItem[] = []
@@ -200,13 +211,7 @@ export function parsePromptMentionedTools(text: string, availableTools: MentionT
   let m: RegExpExecArray | null
 
   while ((m = re.exec(text)) !== null) {
-    const raw = m[1].toLowerCase()
-    const aliased = (raw in TOOL_ALIASES ? TOOL_ALIASES[raw] : raw) ?? raw
-    const matched =
-      availableTools.find((t) => t.id.toLowerCase() === raw) ??
-      availableTools.find((t) => t.id.toLowerCase() === aliased) ??
-      ALL_CATALOG_MAP[raw] ??
-      ALL_CATALOG_MAP[aliased]
+    const matched = resolveMentionTool(m[1], availableTools)
 
     if (matched && !seen.has(matched.id)) {
       seen.add(matched.id)
@@ -237,8 +242,80 @@ const ALL_CATALOG_MAP: Record<string, MentionToolItem> = {
   composio: { id: 'composio', label: 'Composio', hint: 'Connected Composio integrations', kind: 'composio' }
 }
 
-export function ToolPillIcon({ tool }: { tool: MentionToolItem }): React.JSX.Element {
-  if (tool.logoSrc) {
+export interface MentionSegment {
+  text: string
+  tool?: MentionToolItem
+}
+
+/** Splits prompt text into plain runs and resolved `@id` mentions. */
+export function splitMentionSegments(text: string, availableTools: MentionToolItem[]): MentionSegment[] {
+  const re = /(?:^|\s)@([a-zA-Z0-9_-]+)/g
+  const segments: MentionSegment[] = []
+  let last = 0
+  let m: RegExpExecArray | null
+
+  while ((m = re.exec(text)) !== null) {
+    const start = m.index + (m[0].length - m[1].length - 1)
+    const tool = resolveMentionTool(m[1], availableTools)
+    if (!tool) continue
+    if (start > last) segments.push({ text: text.slice(last, start) })
+    segments.push({ text: text.slice(start, m.index + m[0].length), tool })
+    last = m.index + m[0].length
+  }
+
+  if (last < text.length) segments.push({ text: text.slice(last) })
+  return segments
+}
+
+/**
+ * Mirrors the composer textarea so `@id` mentions show as inline pills.
+ * Sits on top of the textarea, so it must be pointer-transparent and lay out
+ * identically (same class/metrics as the textarea it mirrors).
+ */
+export function MentionMirror({
+  value,
+  tools,
+  className,
+  textareaRef
+}: {
+  value: string
+  tools: MentionToolItem[]
+  className?: string
+  textareaRef?: React.RefObject<HTMLTextAreaElement | null>
+}): React.JSX.Element {
+  const mirrorRef = React.useRef<HTMLDivElement>(null)
+
+  React.useEffect(() => {
+    const el = textareaRef?.current
+    if (!el) return
+    const sync = (): void => {
+      const mirror = mirrorRef.current
+      if (mirror) mirror.scrollTop = el.scrollTop
+    }
+    el.addEventListener('scroll', sync)
+    return () => el.removeEventListener('scroll', sync)
+  }, [textareaRef])
+
+  return (
+    <div
+      ref={mirrorRef}
+      className={`mention-mirror${className ? ` ${className}` : ''}`}
+      aria-hidden="true"
+    >
+      {splitMentionSegments(value, tools).map((segment, index) =>
+        segment.tool ? (
+          <span key={index} className="mention-token" title={`@${segment.tool.id} · ${segment.tool.label}`}>
+            {segment.text}
+          </span>
+        ) : (
+          <React.Fragment key={index}>{segment.text}</React.Fragment>
+        )
+      )}
+    </div>
+  )
+}
+
+export function ToolPillIcon({ tool }: { tool: MentionToolItem }): React.JSX.Element {  if (tool.logoSrc) {
     return (
       <span className="chat-tool-pill-icon has-logo" aria-hidden="true">
         <img src={tool.logoSrc} alt="" />

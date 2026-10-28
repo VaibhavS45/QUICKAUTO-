@@ -1,7 +1,7 @@
-import { Clock, Workflow } from 'lucide-react'
+import { Clock, Workflow, Zap } from 'lucide-react'
 import type { Automation } from '../../../../shared/contracts/automations.js'
 import { AutomationActionsMenu } from './AutomationActionsMenu.js'
-import { automationMeta } from './scheduled.js'
+import { automationMeta, manageFilterOf, splitTriggerPrompt } from './scheduled.js'
 
 /** One Scheduled Task card. The whole card opens the detail page. */
 export function AutomationCard({ automation, onOpen }: {
@@ -9,9 +9,14 @@ export function AutomationCard({ automation, onOpen }: {
   onOpen(): void
 }): React.JSX.Element {
   const paused = automation.status === 'paused'
+  const isTrigger = manageFilterOf(automation) === 'trigger'
+  const isAdvanced = automation.kind === 'advanced'
+  const split = isTrigger ? splitTriggerPrompt(automation.prompt) : null
+  const displayPrompt = split?.task || automation.prompt
+
   return (
     <article
-      className={`st-card${paused ? ' is-paused' : ''}`}
+      className={`st-card${paused ? ' is-paused' : ''}${isTrigger ? ' is-trigger' : ''}`}
       role="button"
       tabIndex={0}
       aria-label={`Open ${automation.title}`}
@@ -24,7 +29,7 @@ export function AutomationCard({ automation, onOpen }: {
     >
       <div className="st-card-top">
         <span className="st-icon-tile" aria-hidden="true">
-          {automation.kind === 'advanced' ? <Workflow size={26} /> : <Clock size={26} />}
+          {isAdvanced ? <Workflow size={24} /> : isTrigger ? <Zap size={24} /> : <Clock size={24} />}
         </span>
         <div className="st-card-status">
           <span className={`st-status is-${automation.status}`}>
@@ -36,8 +41,8 @@ export function AutomationCard({ automation, onOpen }: {
       </div>
       <p className="st-meta">{automationMeta(automation)}</p>
       <h3 className="st-title">{automation.title}</h3>
-      {automation.prompt && (
-        <p className="st-preview">{automation.prompt}</p>
+      {displayPrompt && (
+        <p className="st-preview">{displayPrompt}</p>
       )}
     </article>
   )

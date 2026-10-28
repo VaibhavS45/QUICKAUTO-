@@ -17,6 +17,8 @@ import {
   edgeSourceIndex,
   insertCanvasStep,
   insertFromDirection,
+  layoutPos,
+  makeStepId,
   moveCanvasStep,
   moveStepTo,
   removeCanvasStep,
@@ -30,6 +32,7 @@ import { useBreadcrumbs, type BreadcrumbItem } from '../../../components/layout/
 import ScheduledTasks from '../schedule/ScheduledTasks.js'
 import { MANAGE_FILTERS, automationMeta, type ManageFilter } from '../schedule/scheduled.js'
 import { ConfirmDialog } from './ConfirmDialog.js'
+import { CANVAS_DEMO_TEMPLATES, type CanvasDemoTemplate } from '../canvas/canvas-templates.js'
 import { CanvasNodeIcon, CanvasStepEditor, CanvasStepPicker, type CanvasPick, type CanvasPickTarget } from '../canvas/canvas-picker.js'
 import { readCanvasMemory, writeCanvasMemory, readCanvasSteps, writeCanvasSteps, type CanvasMemory } from '../canvas/canvas-memory.js'
 import { UpdatesGlyph } from '../../../components/ui/primitives.js'
@@ -92,12 +95,20 @@ function FilterIcon(): React.JSX.Element {
 }
 
 /** Canvas tab opener: create a new graph, or jump back into a previous one. */
-export function CanvasLanding({ automations, resume = false, onResumeChange, onNew, onEdit }: {
+export function CanvasLanding({
+  automations,
+  resume = false,
+  onResumeChange,
+  onNew,
+  onEdit,
+  onLoadTemplate
+}: {
   automations: Automation[]
   resume?: boolean
   onResumeChange?(next: boolean): void
   onNew(): void
   onEdit(id: string): void
+  onLoadTemplate?(template: CanvasDemoTemplate): void
 }): React.JSX.Element {
   return (
     <div className="automations-canvas is-canvas-landing">
@@ -114,39 +125,66 @@ export function CanvasLanding({ automations, resume = false, onResumeChange, onN
           <h2>Build an automation</h2>
           <p>Wire triggers, conditions and actions in any direction. Canvas automations show up in Manage.</p>
           <button type="button" className="canvas-landing-new" onClick={onNew}>
-            <span aria-hidden="true">+</span> Create
+            <span aria-hidden="true">+</span> Create Blank Canvas
           </button>
         </div>
         <div className="canvas-landing-recent">
-          <h3>Edit previous</h3>
-          {automations.length === 0 ? (
-            <p className="canvas-landing-empty">No canvases yet. Create one and it will show up here.</p>
-          ) : (
-            <div className="canvas-landing-list">
-              {automations.map((automation) => (
-                <button
-                  key={automation.id}
-                  type="button"
-                  aria-label={`Edit ${automation.title}`}
-                  onClick={() => onEdit(automation.id)}
-                >
-                  <span className="canvas-landing-icon" aria-hidden="true">
-                    <svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
-                      <rect x="3" y="3" width="6" height="6" rx="1.5" />
-                      <rect x="15" y="15" width="6" height="6" rx="1.5" />
-                      <path d="M9 6h5a3 3 0 0 1 3 3v6" />
-                      <path d="m14.5 12.5 2.5 2.5 2.5-2.5" />
-                    </svg>
-                  </span>
-                  <span className="canvas-landing-copy">
+          <div className="canvas-landing-recent-head">
+            <h3>Previous &amp; Ready-Made Canvases</h3>
+            <span className="canvas-templates-count">
+              {automations.length > 0 ? `${automations.length} saved · ` : ''}{CANVAS_DEMO_TEMPLATES.length} ready-made
+            </span>
+          </div>
+          <div className="canvas-landing-list">
+            {automations.map((automation) => (
+              <button
+                key={automation.id}
+                type="button"
+                className="canvas-landing-row is-saved"
+                aria-label={`Edit ${automation.title}`}
+                onClick={() => onEdit(automation.id)}
+              >
+                <span className="canvas-landing-icon" aria-hidden="true">
+                  <svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
+                    <rect x="3" y="3" width="6" height="6" rx="1.5" />
+                    <rect x="15" y="15" width="6" height="6" rx="1.5" />
+                    <path d="M9 6h5a3 3 0 0 1 3 3v6" />
+                    <path d="m14.5 12.5 2.5 2.5 2.5-2.5" />
+                  </svg>
+                </span>
+                <span className="canvas-landing-copy">
+                  <span className="canvas-landing-copy-top">
                     <strong>{automation.title}</strong>
-                    <small>{automationMeta(automation)}</small>
+                    <span className="canvas-saved-chip">Saved</span>
                   </span>
-                  <span className="canvas-landing-go" aria-hidden="true">→</span>
-                </button>
-              ))}
-            </div>
-          )}
+                  <small>{automationMeta(automation)}</small>
+                </span>
+                <span className="canvas-landing-go" aria-hidden="true">→</span>
+              </button>
+            ))}
+
+            {CANVAS_DEMO_TEMPLATES.map((tmpl) => (
+              <button
+                key={`recent-${tmpl.id}`}
+                type="button"
+                className="canvas-landing-row is-ready-made"
+                aria-label={`Open ready-made workflow ${tmpl.title}`}
+                onClick={() => onLoadTemplate?.(tmpl)}
+              >
+                <span className="canvas-landing-icon is-tmpl" aria-hidden="true">
+                  <span style={{ color: '#ff9f1c', fontSize: 13, fontWeight: 700 }}>⚡</span>
+                </span>
+                <span className="canvas-landing-copy">
+                  <span className="canvas-landing-copy-top">
+                    <strong>{tmpl.title}</strong>
+                    <span className="canvas-template-badge">{tmpl.badge}</span>
+                  </span>
+                  <small>{tmpl.tagline}</small>
+                </span>
+                <span className="canvas-landing-go" aria-hidden="true">Open →</span>
+              </button>
+            ))}
+          </div>
           <label className="canvas-landing-resume">
             <input
               type="checkbox"
@@ -161,13 +199,43 @@ export function CanvasLanding({ automations, resume = false, onResumeChange, onN
           </label>
         </div>
       </div>
+
+      <div className="canvas-landing-templates">
+        <div className="canvas-landing-templates-head">
+          <div>
+            <h3>Ready-to-use Demo Workflows</h3>
+            <p>Pre-configured multi-step automations ready to inspect, customize, and run</p>
+          </div>
+          <span className="canvas-templates-count">4 Featured</span>
+        </div>
+        <div className="canvas-landing-templates-grid">
+          {CANVAS_DEMO_TEMPLATES.map((tmpl) => (
+            <div key={tmpl.id} className="canvas-landing-template-card">
+              <div className="canvas-template-card-header">
+                <span className="canvas-template-badge">{tmpl.badge}</span>
+                <span className="canvas-template-steps-tag">{tmpl.buildSteps().length} steps</span>
+              </div>
+              <h4>{tmpl.title}</h4>
+              <p className="canvas-template-tagline">{tmpl.tagline}</p>
+              <p className="canvas-template-desc">{tmpl.description}</p>
+              <button
+                type="button"
+                className="canvas-template-open-btn"
+                onClick={() => onLoadTemplate?.(tmpl)}
+              >
+                Load into Canvas →
+              </button>
+            </div>
+          ))}
+        </div>
+      </div>
     </div>
   )
 }
 
 export function stepsForRoutine(routine: Routine | undefined): ZapStep[] {
   return canvasStepsForRoutine(routine).map((s) => ({
-    kind: s.kind === 'filter' || s.kind === 'delay' ? 'action' : s.kind,
+    kind: s.kind === 'trigger' ? 'trigger' : s.kind === 'gmail' ? 'gmail' : 'action',
     title: s.title,
     subtitle: s.subtitle,
     filled: s.filled
@@ -397,6 +465,11 @@ export default function AutomationsView(props: FeatureProps): React.JSX.Element 
   const [pendingLeave, setPendingLeave] = useState(false)
   const [canvasBusy, setCanvasBusy] = useState(false)
   const [canvasSaving, setCanvasSaving] = useState(false)
+  const [customTitle, setCustomTitle] = useState('')
+  const [isEditingTitle, setIsEditingTitle] = useState(false)
+  const [titleDraft, setTitleDraft] = useState('')
+  const titleInputRef = useRef<HTMLInputElement>(null)
+  const [showTemplatesMenu, setShowTemplatesMenu] = useState(false)
   /** The Canvas tab opens on a chooser; this flips once a graph is opened. */
   const [canvasStarted, setCanvasStarted] = useState(false)
   const [canvasMemory, setCanvasMemory] = useState<CanvasMemory>(() => readCanvasMemory(canvasStorage()))
@@ -476,21 +549,20 @@ export default function AutomationsView(props: FeatureProps): React.JSX.Element 
     props.shell.navigate('automations', { automationTab: 'canvas' })
   }, [createKind, props.shell])
 
-  // Dropping the open automation from the route (a top-nav click on Canvas)
-  // returns to the chooser instead of showing a phantom blank graph.
-  const previousFocusId = useRef(props.focusId)
+  // Dropping the open automation from the route (or clicking Canvas in top-nav)
+  // returns to the landing page instead of showing an open graph.
   useEffect(() => {
-    const previous = previousFocusId.current
-    previousFocusId.current = props.focusId
-    if (tab !== 'canvas' || props.focusId || !previous) return
-    if (freshCanvasRef.current) {
-      freshCanvasRef.current = false
-      return
+    if (tab === 'canvas' && !props.focusId) {
+      if (freshCanvasRef.current) {
+        freshCanvasRef.current = false
+        return
+      }
+      setCanvasStarted(false)
+      setResumeSkipped(true)
+      setAddDir(null)
+      setAddAt(null)
     }
-    setCanvasStarted(false)
-    setAddDir(null)
-    setAddAt(null)
-  }, [tab, props.focusId])
+  }, [tab, props.focusId, props.navTime])
 
   // Leaving the tab forgets the open graph, so it reopens on the chooser (or
   // resumes the last one when that preference is on).
@@ -580,20 +652,63 @@ export default function AutomationsView(props: FeatureProps): React.JSX.Element 
     saveCanvasMemory({ lastId: canvasMemory.lastId, resume })
   }
 
-  /** A fresh graph: no starter nodes, just the centered Add step. */
-  function startNewCanvas(): void {
+  /** Load a pre-built demo workflow onto the canvas graph. */
+  function loadDemoTemplate(tmpl: CanvasDemoTemplate): void {
     fittedRef.current = false
     setCanvasStarted(true)
     setResumeSkipped(false)
-    setCanvasKey('blank')
-    setCanvasSteps([])
+    setCanvasKey(tmpl.id)
+    const steps = tmpl.buildSteps()
+    setCanvasSteps(steps)
     savedStepsRef.current = null
-    stepsOwnerRef.current = 'blank'
+    stepsOwnerRef.current = tmpl.id
     setVp({ x: 24, y: 0, z: 1 })
-    setSelectedStepId('')
+    setSelectedStepId(steps[0]?.id ?? '')
     setOpenStepMenuId('')
     setAddAt(null)
     setAddDir(null)
+    setShowTemplatesMenu(false)
+    if (props.focusId) {
+      freshCanvasRef.current = true
+      props.shell.navigate('automations', { automationTab: 'canvas' })
+    }
+  }
+
+  /** A fresh graph: starter trigger + action ready to configure. */
+  function startNewCanvas(): void {
+    fittedRef.current = false
+    setCanvasStarted(true)
+    setResumeSkipped(true)
+    setCanvasKey('blank')
+    const starterSteps: CanvasStep[] = [
+      {
+        id: makeStepId(),
+        kind: 'trigger',
+        title: 'Schedule',
+        subtitle: 'daily · 9:00 am',
+        filled: true,
+        schedule: { type: 'daily', time: '09:00' },
+        pos: layoutPos(0)
+      },
+      {
+        id: makeStepId(),
+        kind: 'action',
+        title: 'Action',
+        subtitle: 'Select the app and event',
+        filled: false,
+        pos: layoutPos(1)
+      }
+    ]
+    setCanvasSteps(starterSteps)
+    savedStepsRef.current = null
+    stepsOwnerRef.current = 'blank'
+    setVp({ x: 24, y: 0, z: 1 })
+    setSelectedStepId(starterSteps[0].id)
+    setOpenStepMenuId('')
+    setAddAt(null)
+    setAddDir(null)
+    setCustomTitle('')
+    setIsEditingTitle(false)
     if (props.focusId) {
       freshCanvasRef.current = true
       props.shell.navigate('automations', { automationTab: 'canvas' })
@@ -624,13 +739,38 @@ export default function AutomationsView(props: FeatureProps): React.JSX.Element 
    * The result shows up in Manage and reopens here when edited.
    */
   async function createCanvasAutomation(): Promise<void> {
-    if (canvasBusy || !hasCanvasWork) return
+    if (canvasBusy) return
     setCanvasBusy(true)
     setError('')
     try {
-      const firstAction = canvasSteps.find((step) => step.kind !== 'trigger')
-      const title = canvasHeadTitle(firstAction?.subtitle ?? '')
-      const input = canvasToCreate(canvasSteps, title)
+      let stepsToSave = canvasSteps
+      if (stepsToSave.length === 0) {
+        stepsToSave = [
+          {
+            id: makeStepId(),
+            kind: 'trigger',
+            title: 'Schedule',
+            subtitle: 'daily · 9:00 am',
+            filled: true,
+            schedule: { type: 'daily', time: '09:00' },
+            pos: layoutPos(0)
+          },
+          {
+            id: makeStepId(),
+            kind: 'action',
+            title: 'Action',
+            subtitle: 'New automation task',
+            filled: true,
+            pos: layoutPos(1)
+          }
+        ]
+        setCanvasSteps(stepsToSave)
+      }
+      const firstAction = stepsToSave.find((step) => step.kind !== 'trigger')
+      const templateMatch = CANVAS_DEMO_TEMPLATES.find((t) => t.id === canvasKey)
+      const rawTitle = customTitle.trim() || (templateMatch ? templateMatch.targetTitle : canvasHeadTitle(firstAction?.subtitle ?? firstAction?.title ?? 'New automation'))
+      const title = rawTitle && rawTitle !== 'Action' && !/^select/i.test(rawTitle) ? rawTitle : 'New automation'
+      const input = canvasToCreate(stepsToSave, title)
       const res = await window.app.automationsCreate(input)
       if (!res.ok || !res.automation) {
         setError(res.error || 'Could not create the automation.')
@@ -638,13 +778,14 @@ export default function AutomationsView(props: FeatureProps): React.JSX.Element 
       }
       await refresh()
       // The nodes on screen are what was just created: don't rebuild them.
-      writeCanvasSteps(res.automation.id, canvasSteps, canvasStorage())
+      writeCanvasSteps(res.automation.id, stepsToSave, canvasStorage())
       keepCanvasRef.current = res.automation.id
-      savedStepsRef.current = canvasSteps
+      savedStepsRef.current = stepsToSave
       stepsOwnerRef.current = res.automation.id
       setCanvasKey(res.automation.id)
       rememberCanvas(res.automation.id)
       props.shell.navigate('automations', { automationTab: 'canvas', focusId: res.automation.id })
+      props.shell.notify({ kind: 'info', title: 'Saved', body: `"${res.automation.title}" created and saved successfully` })
     } catch (reason) {
       setError(errorText(reason))
     } finally {
@@ -671,6 +812,12 @@ export default function AutomationsView(props: FeatureProps): React.JSX.Element 
   useEffect(() => {
     if (canvasRoutineKey === canvasKey) return
     setCanvasKey(canvasRoutineKey)
+    if (canvasAutomation) {
+      setCustomTitle(canvasAutomation.title)
+    } else {
+      setCustomTitle('')
+    }
+    setIsEditingTitle(false)
     if (keepCanvasRef.current === canvasRoutineKey) {
       keepCanvasRef.current = ''
       return
@@ -683,7 +830,50 @@ export default function AutomationsView(props: FeatureProps): React.JSX.Element 
     setSelectedStepId('')
     setOpenStepMenuId('')
     setAddAt(null)
-  }, [canvasRoutineKey, canvasKey, canvasRoutine])
+  }, [canvasRoutineKey, canvasKey, canvasRoutine, canvasAutomation])
+
+  const currentTitle = useMemo(() => {
+    if (customTitle.trim()) return customTitle.trim()
+    if (canvasAutomation) return canvasAutomation.title || 'New automation'
+    const templateMatch = CANVAS_DEMO_TEMPLATES.find((t) => t.id === canvasKey)
+    if (templateMatch) return templateMatch.targetTitle
+    return 'New automation'
+  }, [customTitle, canvasAutomation, canvasKey])
+
+  function startEditingTitle(): void {
+    setTitleDraft(currentTitle)
+    setIsEditingTitle(true)
+    requestAnimationFrame(() => {
+      titleInputRef.current?.focus()
+      titleInputRef.current?.select()
+    })
+  }
+
+  async function commitTitle(): Promise<void> {
+    setIsEditingTitle(false)
+    const trimmed = titleDraft.trim() || 'New automation'
+    setCustomTitle(trimmed)
+    if (canvasAutomation && canvasAutomation.title !== trimmed) {
+      try {
+        const res = await window.app.automationsUpdate(canvasAutomation.id, { title: trimmed })
+        if (res.ok && res.automation) {
+          setAutomations((list) => list.map((item) => (item.id === res.automation!.id ? res.automation! : item)))
+        }
+      } catch (err) {
+        setError(errorText(err))
+      }
+    }
+  }
+
+  function handleTitleKeyDown(e: React.KeyboardEvent<HTMLInputElement>): void {
+    if (e.key === 'Enter') {
+      e.preventDefault()
+      void commitTitle()
+    } else if (e.key === 'Escape') {
+      e.preventDefault()
+      setIsEditingTitle(false)
+    }
+  }
 
   const selectedStep = useMemo(
     () => canvasSteps.find((s) => s.id === selectedStepId) ?? null,
@@ -814,14 +1004,25 @@ export default function AutomationsView(props: FeatureProps): React.JSX.Element 
         // The trigger keeps its schedule; the pick only changes which app starts it.
         const schedule = trigger.subtitle.includes('·') ? trigger.subtitle : 'daily · 9:00 am'
         setCanvasSteps((steps) => updateCanvasStep(steps, trigger.id, { kind: 'trigger', title: pick.title, subtitle: schedule }))
+        setSelectedStepId(trigger.id)
       } else {
         // A new graph starts with the trigger, at the slot the picker was opened from.
-        setCanvasSteps((steps) => insertCanvasStep(steps, at, 'trigger', undefined, { title: pick.title, subtitle: 'daily · 9:00 am' }))
+        setCanvasSteps((steps) => {
+          const next = insertCanvasStep(steps, at, 'trigger', undefined, { title: pick.title, subtitle: 'daily · 9:00 am' })
+          const created = next.find((s) => s.kind === 'trigger')
+          if (created) setSelectedStepId(created.id)
+          return next
+        })
       }
       setAddAt(null)
       return
     }
-    setCanvasSteps((steps) => insertCanvasStep(steps, at, pick.kind, undefined, { title: pick.title, subtitle: pick.subtitle }))
+    setCanvasSteps((steps) => {
+      const next = insertCanvasStep(steps, at, pick.kind, undefined, { title: pick.title, subtitle: pick.subtitle })
+      const created = next[at] ?? next[next.length - 1]
+      if (created) setSelectedStepId(created.id)
+      return next
+    })
     setAddAt(null)
   }
 
@@ -834,8 +1035,27 @@ export default function AutomationsView(props: FeatureProps): React.JSX.Element 
       return
     }
     const subtitle = pick.kind === 'trigger' ? 'daily · 9:00 am' : pick.subtitle
-    setCanvasSteps((steps) => insertFromDirection(steps, parent.id, dir, pick.kind, { title: pick.title, subtitle }))
+    setCanvasSteps((steps) => {
+      const next = insertFromDirection(steps, parent.id, dir, pick.kind, { title: pick.title, subtitle })
+      const created = next[next.length - 1]
+      if (created) setSelectedStepId(created.id)
+      return next
+    })
     setAddDir(null)
+  }
+
+  function openTriggerConfig(): void {
+    const trigger = canvasSteps.find((step) => step.kind === 'trigger')
+    if (!trigger) {
+      setCanvasSteps((steps) => {
+        const next = insertCanvasStep(steps, 0, 'trigger', { x: 80, y: 120 }, { title: 'Schedule', subtitle: 'daily · 9:00 am' })
+        const created = next.find((s) => s.kind === 'trigger')
+        if (created) setSelectedStepId(created.id)
+        return next
+      })
+    } else {
+      setSelectedStepId(trigger.id)
+    }
   }
 
   /** Step inspector save: update the node; the autosave writes it back. */
@@ -1188,6 +1408,7 @@ export default function AutomationsView(props: FeatureProps): React.JSX.Element 
           onResumeChange={setResumeCanvas}
           onNew={startNewCanvas}
           onEdit={openCanvas}
+          onLoadTemplate={loadDemoTemplate}
         />
       )}
 
@@ -1195,9 +1416,35 @@ export default function AutomationsView(props: FeatureProps): React.JSX.Element 
         <div className="automations-canvas">
           <header className="canvas-head">
             <div className="canvas-head-text">
-              <strong title={canvasRoutine ? routineTitle(canvasRoutine.prompt) : 'New automation'}>
-                {canvasRoutine ? canvasHeadTitle(canvasRoutine.prompt) : 'New automation'}
-              </strong>
+              {isEditingTitle ? (
+                <input
+                  ref={titleInputRef}
+                  className="canvas-title-input"
+                  value={titleDraft}
+                  onChange={(e) => setTitleDraft(e.target.value)}
+                  onBlur={() => void commitTitle()}
+                  onKeyDown={handleTitleKeyDown}
+                  aria-label="Automation title"
+                  placeholder="Automation title"
+                  maxLength={200}
+                />
+              ) : (
+                <strong
+                  onDoubleClick={startEditingTitle}
+                  title="Double-click to rename automation"
+                  tabIndex={0}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' || e.key === ' ') {
+                      e.preventDefault()
+                      startEditingTitle()
+                    }
+                  }}
+                  role="button"
+                  aria-label={`Automation title: ${currentTitle}. Double-click to rename.`}
+                >
+                  {currentTitle}
+                </strong>
+              )}
               {canvasRoutine && <span className="canvas-head-meta">{canvasRoutine.repeat} · {timeLabel(canvasRoutine.runAt)}</span>}
             </div>
             <div className="canvas-head-actions">
@@ -1245,9 +1492,10 @@ export default function AutomationsView(props: FeatureProps): React.JSX.Element 
             className="n8n-viewport"
             ref={viewportRef}
             onPointerDown={(e) => {
-              if (!(e.target as HTMLElement).closest('.n8n-picker, .n8n-end, .n8n-empty, .n8n-dir')) {
+              if (!(e.target as HTMLElement).closest('.n8n-picker, .n8n-end, .n8n-empty, .n8n-dir, .n8n-toolbar-menu-anchor')) {
                 setAddAt(null)
                 setAddDir(null)
+                setShowTemplatesMenu(false)
               }
               beginPan(e)
             }}
@@ -1258,10 +1506,63 @@ export default function AutomationsView(props: FeatureProps): React.JSX.Element 
             aria-label={canvasRoutine ? `Canvas for ${routineTitle(canvasRoutine.prompt)}` : 'Canvas builder'}
           >
             <div className="n8n-toolbar" role="toolbar" aria-label="Canvas controls">
+              <div className="n8n-toolbar-menu-anchor">
+                <button
+                  type="button"
+                  className={`n8n-toolbar-action${showTemplatesMenu ? ' is-active' : ''}`}
+                  title="Load pre-configured demo workflows"
+                  onClick={() => setShowTemplatesMenu((v) => !v)}
+                  aria-expanded={showTemplatesMenu}
+                >
+                  ✨ Demo Workflows ▾
+                </button>
+                {showTemplatesMenu && (
+                  <div className="n8n-templates-dropdown" role="menu">
+                    <div className="n8n-templates-dropdown-head">
+                      <strong>Demo Workflows</strong>
+                      <small>Click to load into canvas</small>
+                    </div>
+                    {CANVAS_DEMO_TEMPLATES.map((tmpl) => (
+                      <button
+                        key={tmpl.id}
+                        type="button"
+                        role="menuitem"
+                        className="n8n-template-menu-item"
+                        onClick={() => loadDemoTemplate(tmpl)}
+                      >
+                        <span className="n8n-template-item-top">
+                          <strong>{tmpl.title}</strong>
+                          <span className="canvas-template-badge">{tmpl.badge}</span>
+                        </span>
+                        <small>{tmpl.tagline}</small>
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+              <button
+                type="button"
+                className="n8n-toolbar-action is-trigger"
+                title="Configure automation trigger and schedule"
+                onClick={openTriggerConfig}
+              >
+                ⚡ Trigger &amp; Schedule
+              </button>
+              <button
+                type="button"
+                className="n8n-toolbar-action"
+                title="Add a new action step to the canvas"
+                onClick={() => {
+                  setAddDir(null)
+                  setAddAt(canvasSteps.length)
+                }}
+              >
+                + Add Step
+              </button>
+              <span className="n8n-toolbar-divider" aria-hidden="true" />
               <button type="button" aria-label="Zoom out" onClick={() => zoomBy(0.87)}>−</button>
               <span aria-hidden="true">{Math.round(vp.z * 100)}%</span>
               <button type="button" aria-label="Zoom in" onClick={() => zoomBy(1.15)}>+</button>
-              <button type="button" aria-label="Fit to screen" onClick={fitCanvas}>Fit</button>
               <button type="button" aria-label="Tidy layout" title="Arrange nodes left to right" onClick={() => setCanvasSteps((s) => tidyCanvasSteps(s))}>Tidy</button>
             </div>
             <div
@@ -1310,6 +1611,7 @@ export default function AutomationsView(props: FeatureProps): React.JSX.Element 
                       <CanvasNodeIcon step={step} />
                     </span>
                     <span className="n8n-titles">
+                      {step.kind === 'trigger' && <span className="n8n-tag">TRIGGER / WHEN</span>}
                       <strong>{step.title}</strong>
                       <small>{step.subtitle || 'Select the app and event'}</small>
                     </span>

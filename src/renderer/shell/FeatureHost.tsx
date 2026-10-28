@@ -10,13 +10,15 @@ export function createFeatureProps(shell: ShellApi, params: Record<string, unkno
   const focusRunId = params['focusRunId']
   const startKind = params['startKind']
   const automationTab = params['automationTab']
+  const navTime = params['navTime']
   return {
     shell,
     ...(initialTemplate ? { initialTemplate } : {}),
     ...(typeof focusId === 'string' ? { focusId } : {}),
     ...(typeof focusRunId === 'string' ? { focusRunId } : {}),
     ...(typeof startKind === 'string' ? { initialStartKind: startKind } : {}),
-    ...(typeof automationTab === 'string' ? { initialAutomationTab: automationTab } : {})
+    ...(typeof automationTab === 'string' ? { initialAutomationTab: automationTab } : {}),
+    ...(typeof navTime === 'number' ? { navTime } : {})
   }
 }
 

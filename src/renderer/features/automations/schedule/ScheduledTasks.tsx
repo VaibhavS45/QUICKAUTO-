@@ -133,6 +133,7 @@ export default function ScheduledTasks({ onCreate, onOpenRun, onDirtyChange, onS
           onToast={(message) => push({ message })}
           onOpenRun={onOpenRun}
           onDirtyChange={setDirty}
+          onBack={() => onSelect('')}
         />
       )}
       {!loading && !error && !selected && (

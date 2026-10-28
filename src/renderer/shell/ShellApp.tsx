@@ -485,7 +485,7 @@ export default function ShellApp(): React.JSX.Element {
       label: t(`shell.${tab.id}` as UiKey),
       icon: tab.icon,
       active: route.view === 'automations' && automationTab === tab.id,
-      run: () => navigate('automations', { automationTab: tab.id })
+      run: () => navigate('automations', { automationTab: tab.id, navTime: Date.now() })
     }))
   ]
   const activeNav = navItems.find((item) => item.active) ?? navItems[0]

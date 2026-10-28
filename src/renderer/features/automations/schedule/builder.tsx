@@ -1,5 +1,6 @@
 import { Fragment, useEffect, useMemo, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
+import { ChevronDown, Filter, X } from 'lucide-react'
 import { activeMention, type ActiveToolId } from '../../../../shared/types.js'
 import {
   getAvailableMentionTools,
@@ -389,6 +390,7 @@ export default function Builder(props: BuilderProps): React.JSX.Element {
   const [pickerOpen, setPickerOpen] = useState(false)
   const [pickerApp, setPickerApp] = useState<string | null>(null)
   const [configEditingId, setConfigEditingId] = useState<string | null>(null)
+  const [collapsedTriggers, setCollapsedTriggers] = useState<Set<string>>(() => new Set())
   const [pickerBox, setPickerBox] = useState<{ top: number; left: number; width: number } | null>(null)
   const triggerAnchorRef = useRef<HTMLDivElement>(null)
   const pickerRef = useRef<HTMLDivElement>(null)
@@ -1120,8 +1122,11 @@ export default function Builder(props: BuilderProps): React.JSX.Element {
                     const connection = triggerConnection(trigger.app)
                     const status = connection === undefined ? 'Via Composio' : connection ? 'Connected' : 'Not connected'
                     const tone = connection === undefined ? 'is-muted' : connection ? 'is-on' : 'is-off'
-                    const filled = Object.values(trigger.config ?? {}).some((value) => value.trim())
-                    const configOpen = configEditingId === trigger.id || filled
+                    const filledEntries = Object.entries(trigger.config ?? {}).filter(([, value]) => value && value.trim())
+                    const filledCount = filledEntries.length
+                    const isManuallyCollapsed = collapsedTriggers.has(trigger.id)
+                    const isEditing = configEditingId === trigger.id
+                    const configOpen = (isEditing || filledCount > 0) && !isManuallyCollapsed
                     const firstInput = fields.findIndex((field) => !field.options)
                     return (
                       <div key={trigger.id} className="builder-trig">
@@ -1147,57 +1152,171 @@ export default function Builder(props: BuilderProps): React.JSX.Element {
                         {fields.length > 0 && (
                           <div className="builder-trig-line indent">
                             {configOpen ? (
-                              <div className="builder-cfg">
-                                <span className="builder-sched-note">Only when</span>
-                                <div className="builder-cfg-fields">
-                                  {fields.map((field, index) => (
-                                    <label key={field.key} className="builder-cfg-field">
-                                      <span>{field.label}</span>
-                                      {field.options ? (
-                                        <select
-                                          value={trigger.config?.[field.key] ?? ''}
-                                          onChange={(event) => patchTrigger(setTriggers, trigger.id, {
-                                            config: { ...trigger.config, [field.key]: event.currentTarget.value }
-                                          })}
-                                        >
-                                          <option value="">{field.placeholder}</option>
-                                          {field.options.map((option) => <option key={option} value={option}>{option}</option>)}
-                                        </select>
-                                      ) : (
-                                        <input
-                                          autoFocus={configEditingId === trigger.id && index === firstInput}
-                                          className="builder-pill-input"
-                                          aria-label={field.label}
-                                          placeholder={field.placeholder}
-                                          value={trigger.config?.[field.key] ?? ''}
-                                          onChange={(event) => patchTrigger(setTriggers, trigger.id, {
-                                            config: { ...trigger.config, [field.key]: event.currentTarget.value }
-                                          })}
-                                        />
-                                      )}
-                                    </label>
-                                  ))}
+                              <div className="builder-cfg-panel">
+                                <div className="builder-cfg-header">
+                                  <div className="builder-cfg-header-left">
+                                    <span className="builder-cfg-badge-icon" aria-hidden="true">
+                                      <Filter size={12} />
+                                    </span>
+                                    <span className="builder-cfg-title">Filter conditions</span>
+                                    <span className="builder-cfg-subtitle">Only run when event matches</span>
+                                    {filledCount > 0 && (
+                                      <span className="builder-cfg-active-count">{filledCount} active</span>
+                                    )}
+                                  </div>
+                                  <div className="builder-cfg-header-actions">
+                                    {filledCount > 0 && (
+                                      <button
+                                        type="button"
+                                        className="builder-cfg-btn-clear"
+                                        onClick={() => patchTrigger(setTriggers, trigger.id, { config: {} })}
+                                        title="Clear all filter values"
+                                      >
+                                        Clear filters
+                                      </button>
+                                    )}
+                                    <button
+                                      type="button"
+                                      className="builder-cfg-btn-close"
+                                      aria-label="Close filter conditions"
+                                      title="Close conditions"
+                                      onClick={() => {
+                                        if (filledCount > 0) {
+                                          setCollapsedTriggers((cur) => new Set(cur).add(trigger.id))
+                                        }
+                                        setConfigEditingId(null)
+                                      }}
+                                    >
+                                      <X size={13} />
+                                    </button>
+                                  </div>
                                 </div>
-                                <button
-                                  type="button"
-                                  className="builder-cond-remove"
-                                  aria-label="Clear conditions"
-                                  onClick={() => {
-                                    patchTrigger(setTriggers, trigger.id, { config: {} })
-                                    setConfigEditingId(null)
-                                  }}
-                                >
-                                  ×
-                                </button>
+                                <div className="builder-cfg-grid">
+                                  {fields.map((field, index) => {
+                                    const val = trigger.config?.[field.key] ?? ''
+                                    const isSet = Boolean(val.trim())
+                                    return (
+                                      <div key={field.key} className={`builder-cfg-item${isSet ? ' is-filled' : ''}`}>
+                                        <div className="builder-cfg-item-top">
+                                          <label className="builder-cfg-item-label" htmlFor={`cfg-${trigger.id}-${field.key}`}>
+                                            {field.label}
+                                          </label>
+                                          {isSet && <span className="builder-cfg-item-dot" title="Filter active" aria-hidden="true" />}
+                                        </div>
+                                        <div className="builder-cfg-item-control">
+                                          {field.options ? (
+                                            <div className="builder-cfg-select-box">
+                                              <select
+                                                id={`cfg-${trigger.id}-${field.key}`}
+                                                className="builder-cfg-select"
+                                                value={val}
+                                                onChange={(event) => patchTrigger(setTriggers, trigger.id, {
+                                                  config: { ...trigger.config, [field.key]: event.currentTarget.value }
+                                                })}
+                                              >
+                                                <option value="">{field.placeholder || 'Any'}</option>
+                                                {field.options.map((option) => (
+                                                  <option key={option} value={option}>{option}</option>
+                                                ))}
+                                              </select>
+                                              <ChevronDown size={13} className="builder-cfg-select-chevron" aria-hidden="true" />
+                                            </div>
+                                          ) : (
+                                            <div className="builder-cfg-input-box">
+                                              <input
+                                                id={`cfg-${trigger.id}-${field.key}`}
+                                                autoFocus={configEditingId === trigger.id && index === firstInput}
+                                                className="builder-cfg-input"
+                                                aria-label={field.label}
+                                                placeholder={field.placeholder}
+                                                value={val}
+                                                onChange={(event) => patchTrigger(setTriggers, trigger.id, {
+                                                  config: { ...trigger.config, [field.key]: event.currentTarget.value }
+                                                })}
+                                              />
+                                              {isSet && (
+                                                <button
+                                                  type="button"
+                                                  className="builder-cfg-field-clear"
+                                                  aria-label={`Clear ${field.label}`}
+                                                  title={`Clear ${field.label}`}
+                                                  onClick={() => patchTrigger(setTriggers, trigger.id, {
+                                                    config: { ...trigger.config, [field.key]: '' }
+                                                  })}
+                                                >
+                                                  <X size={11} />
+                                                </button>
+                                              )}
+                                            </div>
+                                          )}
+                                        </div>
+                                      </div>
+                                    )
+                                  })}
+                                </div>
+                              </div>
+                            ) : filledCount > 0 ? (
+                              <div className="builder-cfg-collapsed">
+                                <div className="builder-cfg-collapsed-left">
+                                  <span className="builder-cfg-active-chip">
+                                    <Filter size={12} aria-hidden="true" />
+                                    <span>{filledCount} filter{filledCount === 1 ? '' : 's'}</span>
+                                  </span>
+                                  <div className="builder-cfg-active-pills">
+                                    {filledEntries.map(([key, val]) => {
+                                      const f = fields.find((item) => item.key === key)
+                                      return (
+                                        <span key={key} className="builder-cfg-pill" title={`${f?.label ?? key}: ${val}`}>
+                                          <span className="builder-cfg-pill-k">{f?.label ?? key}:</span>
+                                          <span className="builder-cfg-pill-v">{val}</span>
+                                        </span>
+                                      )
+                                    })}
+                                  </div>
+                                </div>
+                                <div className="builder-cfg-collapsed-actions">
+                                  <button
+                                    type="button"
+                                    className="builder-cfg-btn-edit"
+                                    onClick={() => {
+                                      setCollapsedTriggers((cur) => {
+                                        const next = new Set(cur)
+                                        next.delete(trigger.id)
+                                        return next
+                                      })
+                                      setConfigEditingId(trigger.id)
+                                    }}
+                                  >
+                                    Edit
+                                  </button>
+                                  <button
+                                    type="button"
+                                    className="builder-cfg-btn-clear-sm"
+                                    title="Remove all filters"
+                                    aria-label="Remove all filters"
+                                    onClick={() => patchTrigger(setTriggers, trigger.id, { config: {} })}
+                                  >
+                                    <X size={12} />
+                                  </button>
+                                </div>
                               </div>
                             ) : (
                               <button
                                 type="button"
-                                className="builder-cond"
-                                title="Optional filters from the Composio trigger config."
-                                onClick={() => setConfigEditingId(trigger.id)}
+                                className="builder-cond-btn"
+                                title="Optional filters to trigger only on matching events (e.g. sender, keywords)"
+                                onClick={() => {
+                                  setCollapsedTriggers((cur) => {
+                                    const next = new Set(cur)
+                                    next.delete(trigger.id)
+                                    return next
+                                  })
+                                  setConfigEditingId(trigger.id)
+                                }}
                               >
-                                + Add conditions <span className="builder-q" aria-hidden="true">?</span>
+                                <Filter size={12} className="builder-cond-icon" aria-hidden="true" />
+                                <span>Add filter conditions</span>
+                                <span className="builder-cond-badge">Optional</span>
                               </button>
                             )}
                           </div>

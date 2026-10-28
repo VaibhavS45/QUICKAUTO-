@@ -2,7 +2,7 @@ import type { Automation, AutomationCreate, AutomationSchedule } from '../../../
 import { formatTime } from '../../../lib/format.js'
 import { TRIGGER_APPS, triggerMention } from '../trigger/trigger-events.js'
 
-export type CanvasKind = 'trigger' | 'action' | 'gmail' | 'filter' | 'delay'
+export type CanvasKind = 'trigger' | 'action' | 'gmail' | 'filter' | 'delay' | 'opencode'
 
 export interface CanvasStep {
   id: string
@@ -22,6 +22,8 @@ export interface CanvasStep {
   config?: Record<string, string>
   /** Detailed custom prompt instruction for this step */
   actionPrompt?: string
+  /** Structured schedule object */
+  schedule?: AutomationSchedule
 }
 
 /** The side of a node a new step branches out to. */
@@ -133,7 +135,11 @@ function localDate(date: Date): string {
 
 /** The schedule a new automation starts with: the trigger node, anchored today. */
 export function scheduleFromSteps(steps: CanvasStep[], now = new Date()): AutomationSchedule {
-  const { repeat, time } = parseRepeatTime(steps.find((step) => step.kind === 'trigger')?.subtitle ?? '')
+  const trigger = steps.find((step) => step.kind === 'trigger')
+  if (trigger?.schedule) {
+    return trigger.schedule
+  }
+  const { repeat, time } = parseRepeatTime(trigger?.subtitle ?? '')
   switch (repeat) {
     case 'once':
       return { type: 'once', time, date: localDate(now) }
@@ -490,11 +496,11 @@ export function canvasToPrompt(steps: CanvasStep[]): { text: string; tools: stri
 
       if (mention) toolTags.push(mention)
 
-      const sub = s.subtitle.trim()
-      if (!sub || /^select /i.test(sub)) return null
-      if (s.kind === 'filter') return `Only continue if: ${sub}`
-      if (s.kind === 'delay') return `Delay: ${sub}`
-      return sub
+      const promptText = s.actionPrompt?.trim() || s.subtitle.trim()
+      if (!promptText || /^select /i.test(promptText)) return null
+      if (s.kind === 'filter') return `Only continue if: ${promptText}`
+      if (s.kind === 'delay') return `Delay: ${promptText}`
+      return promptText
     })
     .filter((x): x is string => x !== null)
 

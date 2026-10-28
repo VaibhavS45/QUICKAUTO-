@@ -254,15 +254,19 @@ export const APP_ACTION_PRESETS: Record<string, string[]> = {
     'List schedule and upcoming meetings for today'
   ],
   github: [
-    'Create a new issue with summary',
-    'Post comment on latest pull request',
-    'Review open pull requests'
+    'Create a new issue with title and reproduction steps',
+    'Fetch pull request diff and review changed files',
+    'Create branch and submit a pull request with code fix',
+    'Post review summary and findings comment on the PR',
+    'Review open pull requests in repository'
   ],
   websearch: [
     'Search the web for latest news and summarize',
     'Research competitor pricing and trends'
   ],
   opencode: [
+    'Analyze issue description, implement code fix, and verify tests pass',
+    'Review PR diff for bugs, edge cases, security, and missing tests',
     'Inspect code repository and summarize recent commits',
     'Run test suite and report any failures'
   ],
@@ -286,6 +290,15 @@ const FIELD_LABEL: Partial<Record<CanvasKind, string>> = {
   gmail: 'Do'
 }
 
+const WEEKDAY_LABELS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
+const TIME_PRESETS = ['09:00', '12:00', '17:00', '21:00']
+
+function ordinalSuffix(n: number): string {
+  const tail = n % 100
+  if (tail >= 11 && tail <= 13) return 'th'
+  return ['th', 'st', 'nd', 'rd'][n % 10] ?? 'th'
+}
+
 /**
  * Step inspector. A trigger edits its schedule or app event filters;
  * actions pick an app, action presets, and detailed instructions.
@@ -299,15 +312,19 @@ export function CanvasStepEditor({ step, index, onApply, onClose }: {
 }): React.JSX.Element {
   const isTrigger = step.kind === 'trigger'
   const schedule = parseRepeatTime(step.subtitle)
-  const [repeat, setRepeat] = useState<Repeat>(schedule.repeat)
-  const [time, setTime] = useState(schedule.time)
+  const [repeat, setRepeat] = useState<Repeat>((step.schedule?.type as Repeat) ?? schedule.repeat)
+  const [time, setTime] = useState(step.schedule?.time ?? schedule.time)
+  const [weekdays, setWeekdays] = useState<number[]>(() => step.schedule?.weekdays ?? [1, 2, 3, 4, 5])
+  const [date, setDate] = useState<string>(() => step.schedule?.date ?? new Date().toISOString().slice(0, 10))
+  const [dayOfMonth, setDayOfMonth] = useState<number>(() => step.schedule?.dayOfMonth ?? new Date().getDate())
   const [kind, setKind] = useState<CanvasKind>(step.kind)
   const [title, setTitle] = useState(step.title)
-  const [event, setEvent] = useState(/^select the/i.test(step.subtitle) ? '' : step.subtitle)
+  const [event, setEvent] = useState(step.actionPrompt || (/^select the/i.test(step.subtitle) ? '' : step.subtitle))
 
   // Trigger app & event support
   const activeTriggerApp = TRIGGER_APPS.find((app) => app.label.toLowerCase() === title.toLowerCase() || app.id === title.toLowerCase())
-  const isEventTrigger = isTrigger && Boolean(activeTriggerApp) && title.toLowerCase() !== 'schedule'
+  const isEventInitially = isTrigger && Boolean(activeTriggerApp) && title.toLowerCase() !== 'schedule'
+  const [triggerMode, setTriggerMode] = useState<'schedule' | 'event'>(isEventInitially ? 'event' : 'schedule')
   const availableEvents = activeTriggerApp?.events ?? []
   const initialEventId = availableEvents.find((e) => e.phrase === step.event)?.id ?? availableEvents[0]?.id ?? ''
   const [selectedEventId, setSelectedEventId] = useState<string>(initialEventId)
@@ -332,18 +349,45 @@ export function CanvasStepEditor({ step, index, onApply, onClose }: {
     }
   }
 
+  function schedulePreview(): string {
+    const timeStr = clockLabel(time)
+    if (repeat === 'daily') return `Runs every day at ${timeStr}`
+    if (repeat === 'weekly') {
+      const dayNames = weekdays.length > 0 ? [...weekdays].sort((a, b) => a - b).map((d) => WEEKDAY_LABELS[d]).join(', ') : 'No days selected'
+      return `Runs every week on ${dayNames} at ${timeStr}`
+    }
+    if (repeat === 'monthly') return `Runs monthly on the ${dayOfMonth}${ordinalSuffix(dayOfMonth)} at ${timeStr}`
+    return `Runs once on ${date} at ${timeStr}`
+  }
+
+  function eventPreview(): string {
+    const ev = activeEvent?.label ?? 'event occurs'
+    const entries = Object.entries(config).filter(([, v]) => v && v.trim())
+    const filterStr = entries.map(([k, v]) => `${k}='${v}'`).join(', ')
+    return `When ${ev}${filterStr ? ` (${filterStr})` : ''} in ${activeTriggerApp?.label ?? 'app'} · checked ${repeat} at ${clockLabel(time)}`
+  }
+
   function submit(e: React.FormEvent): void {
     e.preventDefault()
     if (isTrigger) {
-      if (isEventTrigger && activeEvent) {
+      const scheduleObj = {
+        type: repeat,
+        time,
+        ...(repeat === 'weekly' ? { weekdays: weekdays.length ? weekdays : [1] } : {}),
+        ...(repeat === 'once' ? { date } : {}),
+        ...(repeat === 'monthly' ? { dayOfMonth } : {})
+      }
+
+      if (triggerMode === 'event' && activeTriggerApp && activeEvent) {
         const entries = Object.entries(config).filter(([, v]) => v && v.trim())
         const filterStr = entries.map(([k, v]) => `${k}='${v}'`).join(', ')
-        const sub = `When ${activeEvent.phrase}${filterStr ? ` (${filterStr})` : ''} · ${repeat} · ${clockLabel(time)}`
+        const sub = `When ${activeEvent.phrase}${filterStr ? ` (${filterStr})` : ''} · ${schedulePreview()}`
         onApply({
           kind: 'trigger',
-          title: activeTriggerApp?.label ?? title.trim() ?? 'Trigger',
+          title: activeTriggerApp.label,
           event: activeEvent.phrase,
           config,
+          schedule: scheduleObj,
           subtitle: sub,
           filled: true
         })
@@ -351,7 +395,8 @@ export function CanvasStepEditor({ step, index, onApply, onClose }: {
         onApply({
           kind: 'trigger',
           title: 'Schedule',
-          subtitle: `${repeat} · ${clockLabel(time)}`,
+          schedule: scheduleObj,
+          subtitle: schedulePreview(),
           filled: true
         })
       }
@@ -364,6 +409,7 @@ export function CanvasStepEditor({ step, index, onApply, onClose }: {
       kind,
       title: title.trim() || 'Action',
       subtitle: finalSubtitle,
+      actionPrompt: event.trim(),
       filled: Boolean(event.trim())
     })
   }
@@ -385,76 +431,114 @@ export function CanvasStepEditor({ step, index, onApply, onClose }: {
 
       {isTrigger ? (
         <>
-          <span className="canvas-label">Trigger App</span>
-          <div className="canvas-apps" role="group" aria-label="Trigger app">
-            {TRIGGER_PICKS.map((pick) => (
-              <button
-                key={pick.id}
-                type="button"
-                className="canvas-app"
-                aria-pressed={title.toLowerCase() === pick.title.toLowerCase() || (title === 'Trigger' && pick.id === TIMER_TRIGGER.id)}
-                title={pick.hint}
-                onClick={() => chooseTriggerApp(pick)}
-              >
-                <span aria-hidden="true">{iconFor(pick.id, pick.kind, 16)}</span>
-                {pick.label}
-              </button>
-            ))}
+          {/* Segmented control for Trigger type */}
+          <div className="canvas-trigger-type-tabs" role="tablist" aria-label="Trigger type">
+            <button
+              type="button"
+              className={`canvas-trigger-type-tab ${triggerMode === 'schedule' ? 'is-active' : ''}`}
+              role="tab"
+              aria-selected={triggerMode === 'schedule'}
+              onClick={() => {
+                setTriggerMode('schedule')
+                setTitle('Schedule')
+              }}
+            >
+              <Clock size={13} aria-hidden="true" />
+              <span>Schedule Timer</span>
+            </button>
+            <button
+              type="button"
+              className={`canvas-trigger-type-tab ${triggerMode === 'event' ? 'is-active' : ''}`}
+              role="tab"
+              aria-selected={triggerMode === 'event'}
+              onClick={() => {
+                setTriggerMode('event')
+                if (!activeTriggerApp) {
+                  setTitle('Gmail')
+                }
+              }}
+            >
+              <Zap size={13} aria-hidden="true" />
+              <span>App Event</span>
+            </button>
           </div>
 
-          {isEventTrigger && activeTriggerApp && (
+          {triggerMode === 'event' ? (
             <>
-              <label className="canvas-label" htmlFor="canvas-event-select">When this happens</label>
-              <select
-                id="canvas-event-select"
-                className="canvas-select"
-                value={selectedEventId}
-                onChange={(e) => {
-                  setSelectedEventId(e.currentTarget.value)
-                  setConfig({})
-                }}
-              >
-                {activeTriggerApp.events.map((ev) => (
-                  <option key={ev.id} value={ev.id}>{ev.label}</option>
+              <span className="canvas-label">Connected App</span>
+              <div className="canvas-apps" role="group" aria-label="Trigger app">
+                {TRIGGER_PICKS.filter((p) => p.id !== TIMER_TRIGGER.id).map((pick) => (
+                  <button
+                    key={pick.id}
+                    type="button"
+                    className="canvas-app"
+                    aria-pressed={title.toLowerCase() === pick.title.toLowerCase()}
+                    title={pick.hint}
+                    onClick={() => chooseTriggerApp(pick)}
+                  >
+                    <span aria-hidden="true">{iconFor(pick.id, pick.kind, 16)}</span>
+                    {pick.label}
+                  </button>
                 ))}
-              </select>
+              </div>
 
-              {activeEvent?.config && activeEvent.config.length > 0 && (
-                <div className="canvas-event-configs" style={{ marginTop: 8 }}>
-                  <span className="canvas-label">Filter conditions (optional)</span>
-                  {activeEvent.config.map((field) => (
-                    <div key={field.key} style={{ marginTop: 6 }}>
-                      <label style={{ display: 'block', fontSize: 11, color: 'var(--text-muted)', marginBottom: 2 }}>
-                        {field.label}
-                      </label>
-                      {field.options ? (
-                        <select
-                          className="canvas-select"
-                          value={config[field.key] ?? ''}
-                          onChange={(e) => setConfig((prev) => ({ ...prev, [field.key]: e.currentTarget.value }))}
-                        >
-                          <option value="">{field.placeholder}</option>
-                          {field.options.map((opt) => (
-                            <option key={opt} value={opt}>{opt}</option>
-                          ))}
-                        </select>
-                      ) : (
-                        <input
-                          className="canvas-input"
-                          placeholder={field.placeholder}
-                          value={config[field.key] ?? ''}
-                          onChange={(e) => setConfig((prev) => ({ ...prev, [field.key]: e.currentTarget.value }))}
-                        />
-                      )}
+              {activeTriggerApp && (
+                <>
+                  <label className="canvas-label" htmlFor="canvas-event-select" style={{ marginTop: 8 }}>
+                    When this happens in {activeTriggerApp.label}
+                  </label>
+                  <select
+                    id="canvas-event-select"
+                    className="canvas-select"
+                    value={selectedEventId}
+                    onChange={(e) => {
+                      setSelectedEventId(e.currentTarget.value)
+                      setConfig({})
+                    }}
+                  >
+                    {activeTriggerApp.events.map((ev) => (
+                      <option key={ev.id} value={ev.id}>{ev.label}</option>
+                    ))}
+                  </select>
+
+                  {activeEvent?.config && activeEvent.config.length > 0 && (
+                    <div className="canvas-event-configs" style={{ marginTop: 8 }}>
+                      <span className="canvas-label">Filter criteria</span>
+                      {activeEvent.config.map((field) => (
+                        <div key={field.key} style={{ marginTop: 6 }}>
+                          <label style={{ display: 'block', fontSize: 11, color: 'var(--text-muted)', marginBottom: 2 }}>
+                            {field.label}
+                          </label>
+                          {field.options ? (
+                            <select
+                              className="canvas-select"
+                              value={config[field.key] ?? ''}
+                              onChange={(e) => setConfig((prev) => ({ ...prev, [field.key]: e.currentTarget.value }))}
+                            >
+                              <option value="">{field.placeholder}</option>
+                              {field.options.map((opt) => (
+                                <option key={opt} value={opt}>{opt}</option>
+                              ))}
+                            </select>
+                          ) : (
+                            <input
+                              className="canvas-input"
+                              placeholder={field.placeholder}
+                              value={config[field.key] ?? ''}
+                              onChange={(e) => setConfig((prev) => ({ ...prev, [field.key]: e.currentTarget.value }))}
+                            />
+                          )}
+                        </div>
+                      ))}
                     </div>
-                  ))}
-                </div>
+                  )}
+                </>
               )}
             </>
-          )}
+          ) : null}
 
-          <label className="canvas-label" htmlFor="canvas-repeat">
-            {isEventTrigger ? 'Check Frequency' : 'Repeat Schedule'}
+          <label className="canvas-label" htmlFor="canvas-repeat" style={{ marginTop: 10 }}>
+            {triggerMode === 'event' ? 'Check Schedule' : 'Repeat Schedule'}
           </label>
           <div className="canvas-schedule">
             <select
@@ -474,6 +558,86 @@ export function CanvasStepEditor({ step, index, onApply, onClose }: {
               onChange={(e) => setTime(e.currentTarget.value || '09:00')}
               aria-label="Time"
             />
+          </div>
+
+          {/* If weekly, render weekday toggle pills */}
+          {repeat === 'weekly' && (
+            <div style={{ marginTop: 8 }}>
+              <span className="canvas-label">On Days</span>
+              <div className="canvas-weekdays-row">
+                {WEEKDAY_LABELS.map((label, day) => {
+                  const isChecked = weekdays.includes(day)
+                  return (
+                    <button
+                      key={label}
+                      type="button"
+                      className="canvas-weekday-pill"
+                      aria-pressed={isChecked}
+                      onClick={() => {
+                        setWeekdays((cur) =>
+                          isChecked ? cur.filter((d) => d !== day) : [...cur, day]
+                        )
+                      }}
+                    >
+                      {label}
+                    </button>
+                  )
+                })}
+              </div>
+            </div>
+          )}
+
+          {/* If once, render date input */}
+          {repeat === 'once' && (
+            <div style={{ marginTop: 8 }}>
+              <label className="canvas-label" htmlFor="canvas-date">Date</label>
+              <input
+                id="canvas-date"
+                type="date"
+                className="canvas-input"
+                value={date}
+                onChange={(e) => setDate(e.currentTarget.value)}
+              />
+            </div>
+          )}
+
+          {/* If monthly, render day of month */}
+          {repeat === 'monthly' && (
+            <div style={{ marginTop: 8 }}>
+              <label className="canvas-label" htmlFor="canvas-month-day">Day of month</label>
+              <input
+                id="canvas-month-day"
+                type="number"
+                min="1"
+                max="31"
+                className="canvas-input"
+                value={dayOfMonth}
+                onChange={(e) => setDayOfMonth(Math.max(1, Math.min(31, Number(e.currentTarget.value) || 1)))}
+              />
+            </div>
+          )}
+
+          {/* Quick time presets */}
+          <div style={{ marginTop: 8 }}>
+            <span className="canvas-label">Quick Times</span>
+            <div className="canvas-time-presets">
+              {TIME_PRESETS.map((t) => (
+                <button
+                  key={t}
+                  type="button"
+                  className="canvas-time-preset"
+                  onClick={() => setTime(t)}
+                >
+                  {clockLabel(t)}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* Summary preview box */}
+          <div className="canvas-trigger-preview">
+            <strong>{triggerMode === 'event' ? 'Event Trigger Summary' : 'Schedule Summary'}</strong>
+            {triggerMode === 'event' ? eventPreview() : schedulePreview()}
           </div>
         </>
       ) : (

@@ -124,7 +124,7 @@ describe('AutomationsView', () => {
       onEdit: () => {}
     }))
     expect(html).toContain('Build an automation')
-    expect(html).toContain('Edit previous')
+    expect(html).toContain('canvas-landing-row is-saved')
     expect(html).toContain('aria-label="Edit Morning brief"')
     expect(html).toContain('Advanced automation')
     expect(html).toContain('Always open my last canvas')
@@ -140,7 +140,8 @@ describe('AutomationsView', () => {
       onNew: () => {},
       onEdit: () => {}
     }))
-    expect(html).toContain('No canvases yet')
+    expect(html).toContain('Previous &amp; Ready-Made Canvases')
+    expect(html).not.toContain('canvas-landing-row is-saved')
     expect(html).not.toContain('checked=""')
   })
 

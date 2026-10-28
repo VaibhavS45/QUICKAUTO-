@@ -35,6 +35,7 @@ interface ComposioSessionLike {
       slug: string
       name: string
       logo?: string
+      isNoAuth?: boolean
       connection?: { isActive: boolean }
     }>
   }>
@@ -139,7 +140,7 @@ export class ComposioMarketplace {
       const connectionState = await session.toolkits({ isConnected: true })
       connected = new Set(
         (connectionState?.items ?? [])
-          .filter((item) => item.connection?.isActive ?? true)
+        .filter((item) => item.connection?.isActive === true || item.isNoAuth === true)
           .map((item) => item.slug)
       )
     } catch (error) {
@@ -169,11 +170,11 @@ export class ComposioMarketplace {
       const connectionState = await session.toolkits({ isConnected: true })
       return new Set(
         (connectionState?.items ?? [])
-          .filter((item) => item.connection?.isActive ?? true)
+          .filter((item) => item.connection?.isActive === true || item.isNoAuth === true)
           .map((item) => item.slug.toLowerCase())
       )
-    } catch {
-      return new Set()
+    } catch (error) {
+      throw new Error(describeComposioError(error))
     }
   }
 

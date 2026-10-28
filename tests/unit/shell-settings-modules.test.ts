@@ -142,7 +142,7 @@ describe('McpRegistry and approval provider', () => {
     const [name] = Object.keys(toolSet)
     expect(name).toMatch(/^mcp_writer_write_document_/)
     expect(buildToolApproval('chat', [name as string])[name as string]).toBe('user-approval')
-    expect(buildToolApproval('scheduled', [name as string])[name as string]).toEqual(expect.objectContaining({ type: 'denied' }))
+    expect(buildToolApproval('scheduled', [name as string])[name as string]).toBe('user-approval')
     expect(provider.status('mcp').connected).toBe(true)
     await registry.stop('writer')
     expect(closed).toBe(1)

@@ -171,13 +171,10 @@ describe('BudgetGuard accounting for writes', () => {
     expect(guard.status().used).toBe(1)
   })
 
-  it('scheduled-run writes are denied before any execution', () => {
+  it('scheduled-run writes require an approval card', () => {
     const policy = buildToolApproval('scheduled', [...GMAIL_WRITE_TOOLS])
     for (const name of GMAIL_WRITE_TOOLS) {
-      expect(policy[name]).toEqual({
-        type: 'denied',
-        reason: expect.stringContaining('Scheduled runs')
-      })
+      expect(policy[name]).toBe('user-approval')
     }
   })
 })

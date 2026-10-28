@@ -107,7 +107,7 @@ describe('tool surface + approvals', () => {
     expect(p.getTools([])).toEqual({})
   })
 
-  it('all three require approval; scheduled denies', () => {
+  it('all three require approval, including in scheduled runs', () => {
     for (const name of GITHUB_RESOLVE_TOOLS) {
       expect(APPROVAL_REQUIRED_TOOLS.has(name)).toBe(true)
     }
@@ -115,7 +115,7 @@ describe('tool surface + approvals', () => {
     for (const name of GITHUB_RESOLVE_TOOLS) expect(palette[name]).toBe('user-approval')
     const scheduled = buildToolApproval('scheduled', [...GITHUB_RESOLVE_TOOLS])
     for (const name of GITHUB_RESOLVE_TOOLS) {
-      expect(scheduled[name]).toEqual({ type: 'denied', reason: expect.stringContaining('Scheduled runs') })
+      expect(scheduled[name]).toBe('user-approval')
     }
   })
 

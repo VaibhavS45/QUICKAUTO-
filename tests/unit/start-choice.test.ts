@@ -116,6 +116,6 @@ describe('start choice', () => {
     }
     expect(html).toContain('Writes blocked')
     expect(html).toContain('Separate task')
-    expect(html).toContain('Scheduled runs are read-only')
+    expect(html).toContain('pause for your in-app approval')
   })
 })

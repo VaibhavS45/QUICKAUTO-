@@ -797,13 +797,23 @@ function wireIpc(): void {
   ipcMain.handle(IpcChannels.getConnector, async () => {
     const pub = await connectorSettings.getPublicState()
     const configured = pub.configured || Boolean(COMPOSIO_FALLBACK_KEY) || Boolean(runtimeConnectorKey)
-    const connectedSlugs = configured ? await composioMarketplace.getConnectedToolkits() : new Set<string>()
+    let connectedSlugs = new Set<string>()
+    let connectionError: string | undefined
+    if (configured) {
+      try {
+        connectedSlugs = await composioMarketplace.getConnectedToolkits()
+      } catch (error) {
+        connectionError = error instanceof Error ? error.message : String(error)
+      }
+    }
 
     const services: Array<{ id: string; connected: boolean; detail?: string }> = [
       {
         id: 'notion',
         connected: connectedSlugs.has('notion'),
-        detail: connectedSlugs.has('notion') ? 'Notion connected via Composio.' : 'No active Notion connection.'
+        detail: connectedSlugs.has('notion')
+          ? 'Notion connected via Composio.'
+          : connectionError ?? 'No active Notion connection.'
       },
       {
         id: 'calendar',

@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { mkdir, readFile, rm, writeFile } from 'node:fs/promises'
+import { homedir } from 'node:os'
 import path from 'node:path'
 import { createBuiltinTools } from '../../src/main/agent/tools.js'
 
@@ -76,6 +77,20 @@ describe('write_file', () => {
     const write = exec('write_file')
     await write({ path: p, content: 'after' })
     expect(await readFile(p, 'utf8')).toBe('after')
+  })
+
+  it('writes a bare filename in the user home folder', async () => {
+    const target = path.join(homedir(), `palette-output-${Date.now()}.txt`)
+    const write = exec('write_file')
+    try {
+      await expect(write({ path: path.basename(target), content: 'research' })).resolves.toMatchObject({
+        ok: true,
+        path: target
+      })
+      expect(await readFile(target, 'utf8')).toBe('research')
+    } finally {
+      await rm(target, { force: true })
+    }
   })
 })
 

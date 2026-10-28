@@ -104,6 +104,11 @@ describe('ComposioMarketplace', () => {
     expect(authorize).toHaveBeenCalledWith('gmail')
   })
 
+  it('surfaces connection-state errors instead of reporting a false disconnected state', async () => {
+    const { marketplace } = setup({ createClientError: new Error('403: not allowed to create sessions') })
+    await expect(marketplace.getConnectedToolkits()).rejects.toThrow(/Session management and Session tool execution/)
+  })
+
   it('connects to notion and authorizes the hosted connect link', async () => {
     const { marketplace, authorize } = setup()
     await expect(marketplace.connect('notion')).resolves.toBe('https://connect.example/auth')

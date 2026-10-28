@@ -362,7 +362,7 @@ export function BuilderSettingsMenu(props: BuilderSettingsMenuProps): React.JSX.
           </div>
         </div>
       ))}
-      <p className="builder-setnote">Scheduled runs are read-only: sending, writing, deleting and pushing are always blocked.</p>
+      <p className="builder-setnote">Writes, sends, deletes and pushes pause for your in-app approval before they run.</p>
       <button type="button" className="builder-connect" onClick={props.onConnectApps}>Connect apps</button>
     </div>
   )
@@ -384,6 +384,8 @@ export default function Builder(props: BuilderProps): React.JSX.Element {
   const mentionMenuRef = useRef<HTMLDivElement>(null)
   const [connectorState, setConnectorState] = useState<ConnectorStatusContext | null>(null)
   const [gmailConnected, setGmailConnected] = useState(Boolean(props.gmailConnected))
+  const [triggerConnectionMessage, setTriggerConnectionMessage] = useState('')
+  const [connectingTrigger, setConnectingTrigger] = useState<string | null>(null)
   const [agent, setAgent] = useState(props.initial.agent)
   const [expiresAt, setExpiresAt] = useState('')
   const [agents, setAgents] = useState<AgentProfile[]>([])
@@ -415,6 +417,7 @@ export default function Builder(props: BuilderProps): React.JSX.Element {
   const [openDayId, setOpenDayId] = useState<string | null>(null)
   const [connectorMenuOpen, setConnectorMenuOpen] = useState(false)
   const [settingsOpen, setSettingsOpen] = useState(false)
+  const pendingToolkitRef = useRef<string | null>(null)
 
   // The agent and the connected apps the task may use.
   useEffect(() => {
@@ -433,14 +436,24 @@ export default function Builder(props: BuilderProps): React.JSX.Element {
         if (conn) {
           setConnectorState(conn as ConnectorStatusContext)
           setConnectorOptions((conn.services ?? []).filter((service) => service.connected).map((service) => service.id))
+          const pendingToolkit = pendingToolkitRef.current
+          if (pendingToolkit && conn.services?.some((service) => service.id === pendingToolkit && service.connected)) {
+            setTriggerConnectionMessage(`${triggerApp(pendingToolkit)?.label ?? pendingToolkit} connected.`)
+            pendingToolkitRef.current = null
+          }
         }
         if (gm && gm.ok) setGmailConnected(Boolean(gm.connected))
       } catch {
-        /* ignore */
+        if (live) setTriggerConnectionMessage('Could not refresh connection status. Try again.')
       }
     }
     void loadConnectors()
-    return () => { live = false }
+    const onFocus = (): void => { void loadConnectors() }
+    window.addEventListener('focus', onFocus)
+    return () => {
+      live = false
+      window.removeEventListener('focus', onFocus)
+    }
   }, [])
 
   const availableTools = useMemo(() => {
@@ -645,6 +658,30 @@ export default function Builder(props: BuilderProps): React.JSX.Element {
     if (appId === 'gmail') return props.gmailConnected === true
     if (triggerMention(appId) === appId) return connectorOptions.includes(appId)
     return undefined
+  }
+
+  async function connectTrigger(appId: string): Promise<void> {
+    if (appId === 'gmail' || appId === 'github') {
+      props.onConnect()
+      return
+    }
+    setConnectingTrigger(appId)
+    setTriggerConnectionMessage('')
+    pendingToolkitRef.current = appId
+    try {
+      const result = await window.app.composioConnect(appId)
+      if (!result.ok) {
+        pendingToolkitRef.current = null
+        setTriggerConnectionMessage(result.error ?? `Could not connect ${triggerApp(appId)?.label ?? appId}.`)
+        return
+      }
+      setTriggerConnectionMessage(`Complete ${triggerApp(appId)?.label ?? appId} authorization in your browser, then return here to refresh its status.`)
+    } catch (error) {
+      pendingToolkitRef.current = null
+      setTriggerConnectionMessage(error instanceof Error ? error.message : 'Could not start the connection.')
+    } finally {
+      setConnectingTrigger(null)
+    }
   }
 
   async function handleLocalFilesClick(): Promise<void> {
@@ -1115,6 +1152,7 @@ export default function Builder(props: BuilderProps): React.JSX.Element {
                     const app = triggerApp(trigger.app)
                     const fields = triggerEvent(trigger.app, trigger.event)?.config ?? []
                     const connection = triggerConnection(trigger.app)
+                    const connectionDetail = connectorState?.services?.find((service) => service.id === trigger.app)?.detail
                     const status = connection === undefined ? 'Via Composio' : connection ? 'Connected' : 'Not connected'
                     const tone = connection === undefined ? 'is-muted' : connection ? 'is-on' : 'is-off'
                     const filledEntries = Object.entries(trigger.config ?? {}).filter(([, value]) => value && value.trim())
@@ -1128,12 +1166,14 @@ export default function Builder(props: BuilderProps): React.JSX.Element {
                         <div className="builder-trig-line">
                           {app ? <TriggerAppIcon app={app} size={22} /> : null}
                           <span className="builder-trig-text">When {trigger.event || 'something happens'} in {app?.label ?? trigger.app}</span>
-                          <span className={`builder-status ${tone}`}>
+                          <span className={`builder-status ${tone}`} title={connectionDetail}>
                             <span className="builder-status-dot" aria-hidden="true" />
                             {status}
                           </span>
                           {connection !== true && (
-                            <button type="button" className="builder-connect" onClick={props.onConnect}>Connect</button>
+                            <button type="button" className="builder-connect" disabled={connectingTrigger === trigger.app} onClick={() => void connectTrigger(trigger.app)}>
+                              {connectingTrigger === trigger.app ? 'Connecting…' : 'Connect'}
+                            </button>
                           )}
                           <button
                             type="button"
@@ -1144,6 +1184,9 @@ export default function Builder(props: BuilderProps): React.JSX.Element {
                             <TrashIcon />
                           </button>
                         </div>
+                        {connection === false && connectionDetail && !/no active .* connection/i.test(connectionDetail) && (
+                          <p className="builder-sched-note" role="alert">{connectionDetail}</p>
+                        )}
                         {fields.length > 0 && (
                           <div className="builder-trig-line indent">
                             {configOpen ? (
@@ -1319,6 +1362,7 @@ export default function Builder(props: BuilderProps): React.JSX.Element {
                       </div>
                     )
                   })}
+                  {triggerConnectionMessage && <p className="builder-sched-note" role="status">{triggerConnectionMessage}</p>}
 
                   {(triggers.length === 0 || hasEvent) && (
                     <div className="builder-menu-anchor builder-trig-anchor" ref={triggerAnchorRef}>

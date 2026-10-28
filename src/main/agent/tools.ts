@@ -26,7 +26,7 @@ export const READ_FILE_MAX_BYTES = 512_000
 function validateWritePath(filePath: string): string {
   const trimmed = filePath.trim()
   if (!trimmed) return 'Write target path is required.'
-  const resolved = path.resolve(trimmed)
+  const resolved = resolveWritePath(trimmed)
   const allowedRoots = [path.resolve(homedir()), path.resolve(process.cwd()), '/tmp']
   const ok = allowedRoots.some((root) => resolved === root || resolved.startsWith(`${root}${path.sep}`))
   if (!ok) {
@@ -36,6 +36,13 @@ function validateWritePath(filePath: string): string {
     return 'Invalid file path.'
   }
   return ''
+}
+
+function resolveWritePath(filePath: string): string {
+  const trimmed = filePath.trim()
+  if (trimmed === '~') return homedir()
+  if (trimmed.startsWith(`~${path.sep}`)) return path.resolve(homedir(), trimmed.slice(2))
+  return path.resolve(path.isAbsolute(trimmed) ? trimmed : path.join(homedir(), trimmed))
 }
 
 function validateReadPath(filePath: string): string {
@@ -86,7 +93,7 @@ export function createBuiltinTools() {
 
   const write_file = tool({
     description:
-      'Safely write a text payload to a local file, creating parent directories when needed. Use only when the user explicitly asks to save or append data.',
+      'Safely write a text payload to a local file, creating parent directories when needed. Relative filenames are saved in the user home folder. Use only when the user explicitly asks to save or append data.',
     inputSchema: z.object({
       path: z.string().min(1).max(4096),
       content: z.string().max(200000),
@@ -96,7 +103,7 @@ export function createBuiltinTools() {
     execute: async ({ path: filePath, content, append = false, createDirs = true }) => {
       const error = validateWritePath(filePath)
       if (error) throw new Error(error)
-      const resolved = path.resolve(filePath)
+      const resolved = resolveWritePath(filePath)
       const dir = path.dirname(resolved)
       if (createDirs) await mkdir(dir, { recursive: true })
       if (!append) {
@@ -177,9 +184,8 @@ export type ToolApprovalValue = 'user-approval' | 'approved' | { type: 'denied';
 
 /**
  * Build the `toolApproval` map for the agent.
- * - Write tools: 'user-approval' in interactive runs, ALWAYS — the per-tool
- *   auto-approve setting never applies to writes. Scheduled runs deny them
- *   outright (queued for review, never run silently).
+ * - Write tools: 'user-approval' for every run — the per-tool auto-approve
+ *   setting never applies to writes.
  * - Other tools: 'approved' when the user enabled per-tool auto-approve for
  *   interactive runs, otherwise omitted ('not-applicable', runs normally).
  *   Auto-approve is ignored for every scheduled run.
@@ -193,9 +199,7 @@ export function buildToolApproval(
   for (const name of toolNames) {
     if (APPROVAL_REQUIRED_TOOLS.has(name) || name.startsWith('mcp_')) {
       out[name] =
-        source === 'scheduled'
-          ? { type: 'denied', reason: 'Scheduled runs cannot auto-approve writes; queued for review.' }
-          : 'user-approval'
+        'user-approval'
       continue
     }
     if ((source === 'palette' || source === 'chat') && autoApprove.has(name)) {

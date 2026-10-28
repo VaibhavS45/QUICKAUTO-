@@ -43,7 +43,15 @@ export const CanvasStepSchema = z.object({
   /** Step that feeds this one. Absent = the step before it (legacy chain). */
   from: z.string().max(64).optional(),
   /** Label on the incoming edge, e.g. a condition's "Yes" / "No" branch. */
-  branch: z.string().max(64).optional()
+  branch: z.string().max(64).optional(),
+  /** Selected trigger event phrase. */
+  event: z.string().max(2000).optional(),
+  /** Trigger filters or action parameters. */
+  config: z.record(z.string().max(64), z.string().max(2000)).optional(),
+  /** Detailed instruction entered in the step editor. */
+  actionPrompt: z.string().max(2000).optional(),
+  /** Structured schedule configured on a trigger node. */
+  schedule: AutomationScheduleSchema.optional()
 })
 export type CanvasStepRecord = z.infer<typeof CanvasStepSchema>
 

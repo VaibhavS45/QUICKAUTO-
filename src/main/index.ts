@@ -83,9 +83,11 @@ import { bootstrapLocalAccountUserData } from './auth/user-data-bootstrap.js'
 import { getShellAppWindow, openShellAppWindow } from './shell/shell-app-window.js'
 import type { RunSource } from '../shared/agent.js'
 import type { RunLogRecord } from '../shared/contracts/schedule.js'
+import type { CanvasStepRecord } from '../shared/contracts/automations.js'
 import { ChatStore, type ChatStoreStorage } from './shell/chat-store.js'
 import { registerChatIpc } from './shell/chat-ipc.js'
 import { AutomationService } from './automations/schedule/automation-service.js'
+import { runCanvasAutomation, type CanvasStepResult } from './automations/canvas/canvas-runner.js'
 import { registerAutomationIpc } from './automations/schedule/automation-ipc.js'
 import { createShellRuntime, runLogStatusFor } from './shell/runtime.js'
 import { createSettingsShellRuntime } from './shell/settings-runtime.js'
@@ -474,13 +476,13 @@ function wireIpc(): void {
       scheduler.setEnabled(routine.id, false)
       return
     }
-    startAgentRun(routine.prompt, routine.tools, 'scheduled', routine.id, undefined, agentSystemPrompt(routine.agent), undefined, routine.runAt)
+    startAgentRun(routine.prompt, routine.tools, 'scheduled', routine.id, undefined, agentSystemPrompt(routine.agent), undefined, routine.runAt, undefined, routine.canvasSteps)
     shellRuntime.notify({ kind: 'info', title: 'Automation started', body: routine.prompt.slice(0, 200) })
     shellRuntime.notificationsChanged()
     new Notification({ title: 'Palette routine fired', body: routine.prompt.slice(0, 200) }).show()
   }
   runAutomationTest = (routine) =>
-    startAgentRun(routine.prompt, routine.tools, 'scheduled', routine.id, undefined, agentSystemPrompt(routine.agent), undefined, Date.now())
+    startAgentRun(routine.prompt, routine.tools, 'scheduled', routine.id, undefined, agentSystemPrompt(routine.agent), undefined, Date.now(), undefined, routine.canvasSteps)
   registerAutomationIpc(ipcMain, automationService, async (id) => {
     const runs = await shellRuntime.scheduleService.listRecentRuns(50)
     return runs.filter((run) => run.routineId === id)
@@ -623,7 +625,8 @@ function wireIpc(): void {
     systemPrompt?: string,
     chatId?: string,
     scheduledFor?: number,
-    attachments?: RunAttachment[]
+    attachments?: RunAttachment[],
+    canvasSteps?: CanvasStepRecord[]
   ): string {
     const runId = randomUUID()
     const startedAt = Date.now()
@@ -649,72 +652,98 @@ function wireIpc(): void {
       title: prompt.slice(0, 200),
       startedAt,
     })
-    const tools = toolNames.filter((t): t is ToolId => (TOOL_IDS as readonly string[]).includes(t))
     const guard = getGuard()
-    void runAgent({
-      prompt,
-      tools,
-      source,
-      history,
-      systemPrompt,
-      signal: controller.signal,
-      runId,
-      ...(attachments?.length ? { attachments } : {}),
-      // W3: folders the user shared with this run via @/path mentions
-      // (attachments/references in the prompt and recent USER history only —
-      // assistant/tool text never widens access).
-      sharedFolders: sharedPathsForRun(prompt, history),
-      emit: (event) => {
-        shellRuntime.observeRunEvent(event)
-        emitToApp(event)
-        // Files the tool produced land in the artifact store for every run
-        // (chat and scheduled alike), before the run-log-only early return.
-        if (event.type === 'tool-result') shellRuntime.recordToolResult(runId, event.toolName, event.output)
-        if (!logRunId) return
-        if (event.type === 'tool-call') {
-          shellRuntime.appendRunLogStep(logRunId, { tool: event.toolName, input: event.input })
-        } else if (event.type === 'tool-result') {
-          shellRuntime.appendRunLogStep(logRunId, { tool: event.toolName, outputPreview: String(event.output ?? '').slice(0, 300) })
-        } else if (event.type === 'tool-error') {
-          shellRuntime.appendRunLogStep(logRunId, { tool: event.toolName, outputPreview: `Error: ${event.message}` })
-        }
-      },
-      decideApproval: (req) =>
-        new Promise<ApprovalDecision>((resolve) => {
-          active.pending.set(req.approvalId, resolve)
-          // Re-emit is unnecessary (runner already emitted); just track.
-          // If the run is cancelled first, cancel resolves this as denied.
-        }),
-      deps: {
-        getConfig: () => settingsService.getConfig(),
-        getApiKey: () => settingsService.getApiKey(),
-        getAgentProvider: () => agentProviderService.get(),
-        getAcpModel: () => acpModelService.get(),
-        // Harness workspace: the user's home dir (their machine, their agent).
-        getHarnessDirectory: () => os.homedir(),
-        // Every Composio tool execution goes through BudgetGuard here.
-        // Local gh tools are free; Gmail tools already guard themselves with
-        // cache and dedupe keys, so neither should be metered here again.
-        getTools: async (ids) => {
-          const set = await getToolsForMentions(ids)
-          for (const [name, t] of Object.entries(set)) {
-            if (name === 'echo' || name === 'echo_write' || name.startsWith('mcp_')) continue
-            if (name.startsWith('github_') || isZeroCostTool(t)) continue
-            if (isBudgetGuardedTool(t) || isComposioBudgetGuardedTool(t)) continue
-            const orig = (t as { execute?: unknown }).execute
-            if (typeof orig !== 'function') continue
-            const fn = orig as (args: never, opts: never) => Promise<unknown>
-            ;(t as { execute: unknown }).execute = (args: never, opts: never) =>
-              guard
-                .execute({ source, runId, label: name, fn: () => fn(args, opts) })
-                .then((r) => r.result)
-          }
-          return set
-        }
+    const sharedFolders = sharedPathsForRun(prompt, history)
+    let failureAlreadyEmitted = false
+    let abortAlreadyEmitted = false
+    const forwardEvent = (event: import('../shared/agent.js').AgentEvent): void => {
+      shellRuntime.observeRunEvent(event)
+      emitToApp(event)
+      if (event.type === 'tool-result') shellRuntime.recordToolResult(runId, event.toolName, event.output)
+      if (!logRunId) return
+      if (event.type === 'tool-call') {
+        shellRuntime.appendRunLogStep(logRunId, { tool: event.toolName, input: event.input })
+      } else if (event.type === 'tool-result') {
+        shellRuntime.appendRunLogStep(logRunId, { tool: event.toolName, outputPreview: String(event.output ?? '').slice(0, 300) })
+      } else if (event.type === 'tool-error') {
+        shellRuntime.appendRunLogStep(logRunId, { tool: event.toolName, outputPreview: `Error: ${event.message}` })
       }
-    })
+    }
+    const runPrompt = async (taskPrompt: string, selectedTools: string[]): Promise<CanvasStepResult> => {
+      let terminalStatus: 'failed' | 'aborted' | null = null
+      let terminalMessage: string | undefined
+      const tools = selectedTools.filter((t): t is ToolId => (TOOL_IDS as readonly string[]).includes(t))
+      const result = await runAgent({
+        prompt: taskPrompt,
+        tools,
+        source,
+        history,
+        systemPrompt,
+        signal: controller.signal,
+        runId,
+        ...(attachments?.length ? { attachments } : {}),
+        sharedFolders,
+        emit: (event) => {
+          if (event.type === 'done') return
+          if (event.type === 'error') {
+            terminalStatus = 'failed'
+            terminalMessage = event.message
+            failureAlreadyEmitted = true
+          } else if (event.type === 'aborted') {
+            terminalStatus = 'aborted'
+            abortAlreadyEmitted = true
+          }
+          forwardEvent(event)
+        },
+        decideApproval: (req) =>
+          new Promise<ApprovalDecision>((resolve) => {
+            active.pending.set(req.approvalId, resolve)
+          }),
+        deps: {
+          getConfig: () => settingsService.getConfig(),
+          getApiKey: () => settingsService.getApiKey(),
+          getAgentProvider: () => agentProviderService.get(),
+          getAcpModel: () => acpModelService.get(),
+          getHarnessDirectory: () => os.homedir(),
+          getTools: async (ids) => {
+            const set = await getToolsForMentions(ids)
+            for (const [name, t] of Object.entries(set)) {
+              if (name === 'echo' || name === 'echo_write' || name.startsWith('mcp_')) continue
+              if (name.startsWith('github_') || isZeroCostTool(t)) continue
+              if (isBudgetGuardedTool(t) || isComposioBudgetGuardedTool(t)) continue
+              const orig = (t as { execute?: unknown }).execute
+              if (typeof orig !== 'function') continue
+              const fn = orig as (args: never, opts: never) => Promise<unknown>
+              ;(t as { execute: unknown }).execute = (args: never, opts: never) =>
+                guard
+                  .execute({ source, runId, label: name, fn: () => fn(args, opts) })
+                  .then((r) => r.result)
+            }
+            return set
+          }
+        }
+      })
+      if (terminalStatus === 'failed') return { status: 'failed', message: terminalMessage }
+      if (terminalStatus === 'aborted') return { status: 'aborted' }
+      return { status: 'completed', text: result.text, steps: result.steps }
+    }
+    const executeRun = async (): Promise<void> => {
+      const canvasResult = canvasSteps?.length
+        ? await runCanvasAutomation(canvasSteps, toolNames, (task) => runPrompt(task.prompt, task.tools))
+        : null
+      const result = canvasResult ?? await runPrompt(prompt, toolNames)
+      if (result.status === 'completed') {
+        forwardEvent({ type: 'done', runId, text: result.text, steps: result.steps })
+      } else if (result.status === 'aborted') {
+        if (!abortAlreadyEmitted) forwardEvent({ type: 'aborted', runId })
+      } else if (!failureAlreadyEmitted) {
+        forwardEvent({ type: 'error', runId, message: result.message || 'Canvas step failed.' })
+      }
+    }
+    void executeRun()
     .catch((err) => {
       const message = err instanceof Error ? err.message : String(err)
+      failureAlreadyEmitted = true
       shellRuntime.observeRunFailure(runId, message)
       if (logRunId) shellRuntime.finishRunLog(logRunId, { status: 'failed', error: message, finishedAt: Date.now() })
       emitToApp({

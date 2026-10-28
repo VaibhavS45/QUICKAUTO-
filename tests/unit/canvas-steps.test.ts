@@ -40,6 +40,17 @@ describe('canvas steps', () => {
   })
   it('reopening prefers the stored graph, keeping every node as drawn', () => {
     const drawn = defaultCanvasSteps()
+    drawn[0] = {
+      ...drawn[0]!,
+      title: 'Gmail',
+      event: 'a new email is received',
+      config: { label: 'inbox' },
+      schedule: { type: 'weekly', time: '09:00', weekdays: [1, 3] }
+    }
+    drawn[1] = {
+      ...drawn[1]!,
+      actionPrompt: 'Summarize the email'
+    }
     const input = canvasToCreate(drawn, 'Graph')
     const reopened = canvasStepsForRoutine({
       prompt: input.prompt ?? '',
@@ -51,6 +62,10 @@ describe('canvas steps', () => {
     expect(reopened.map((s) => s.title)).toEqual(drawn.map((s) => s.title))
     expect(reopened.map((s) => s.subtitle)).toEqual(drawn.map((s) => s.subtitle))
     expect(reopened.map((s) => s.pos)).toEqual(drawn.map((s) => s.pos))
+    expect(reopened.map((s) => s.event)).toEqual(drawn.map((s) => s.event))
+    expect(reopened.map((s) => s.config)).toEqual(drawn.map((s) => s.config))
+    expect(reopened.map((s) => s.actionPrompt)).toEqual(drawn.map((s) => s.actionPrompt))
+    expect(reopened.map((s) => s.schedule)).toEqual(drawn.map((s) => s.schedule))
   })
 
   it('inserts, moves, updates and removes steps', () => {
@@ -226,6 +241,7 @@ describe('canvas steps', () => {
       steps: patch.canvasSteps
     })
     expect(reopened.map((s) => s.subtitle)).toEqual(steps.map((s) => s.subtitle))
+    expect(reopened.map((s) => s.schedule)).toEqual(steps.map((s) => s.schedule))
   })
 
   it('creates a Manage automation from the chain, keeping the trigger time', () => {    const base = defaultCanvasSteps()

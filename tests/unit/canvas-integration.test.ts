@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { AutomationCreateSchema, AutomationPatchSchema } from '../../src/shared/contracts/automations.js'
 import {
+  canvasStepsForRoutine,
   canvasToCreate,
   canvasToPatch,
   canvasToPrompt,
@@ -105,6 +106,44 @@ describe('Canvas Integration & End-to-End Workflow', () => {
     const runId = service.testRun(created.id)
     expect(runId).toBe('test-run-123')
     expect(fired).toContain(created.id)
+  })
+
+  it('persists trigger event settings and editor prompts through create and reopen', () => {
+    const now = new Date(2026, 9, 28, 10, 0, 0).getTime()
+    const scheduler = new Scheduler(new MemoryRoutineStore(), { fire: () => {}, now: () => now })
+    const service = new AutomationService({ scheduler, now: () => now })
+    const steps = defaultCanvasSteps()
+    const configured = updateCanvasStep(steps, steps[0]!.id, {
+      title: 'Gmail',
+      subtitle: 'When a new email is received · daily · 09:00 AM',
+      event: 'a new email is received',
+      config: { label: 'inbox' },
+      schedule: { type: 'daily', time: '09:00' }
+    })
+    const action = updateCanvasStep(configured, configured[1]!.id, {
+      subtitle: 'Summarize the email',
+      actionPrompt: 'Summarize the email'
+    })
+    const created = service.create(canvasToCreate(action, 'Email summary', new Date(now)))
+
+    expect(created.canvasSteps?.[0]).toMatchObject({
+      event: 'a new email is received',
+      config: { label: 'inbox' },
+      schedule: { type: 'daily', time: '09:00' }
+    })
+    const reopened = canvasStepsForRoutine({
+      prompt: created.prompt ?? '',
+      tools: created.connectors,
+      runAt: now,
+      repeat: 'daily',
+      steps: created.canvasSteps
+    })
+    expect(reopened[0]).toMatchObject({
+      event: 'a new email is received',
+      config: { label: 'inbox' },
+      schedule: { type: 'daily', time: '09:00' }
+    })
+    expect(reopened[1]?.actionPrompt).toBe('Summarize the email')
   })
 
   it('all 4 pre-built demo workflows connect, compile cleanly, and register as valid automations', () => {

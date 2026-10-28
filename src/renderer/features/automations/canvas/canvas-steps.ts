@@ -164,7 +164,11 @@ export function canvasToRecords(steps: CanvasStep[]): CanvasStepRecord[] {
     ...(step.filled !== undefined ? { filled: step.filled } : {}),
     pos: { x: step.pos.x, y: step.pos.y },
     ...(step.from ? { from: step.from.slice(0, 64) } : {}),
-    ...(step.branch ? { branch: step.branch.slice(0, 64) } : {})
+    ...(step.branch ? { branch: step.branch.slice(0, 64) } : {}),
+    ...(step.event ? { event: step.event.slice(0, 2000) } : {}),
+    ...(step.config ? { config: { ...step.config } } : {}),
+    ...(step.actionPrompt ? { actionPrompt: step.actionPrompt.slice(0, 2000) } : {}),
+    ...(step.schedule ? { schedule: { ...step.schedule } } : {})
   }))
 }
 
@@ -392,7 +396,11 @@ export function canvasStepsForRoutine(routine: CanvasRoutine | undefined): Canva
       filled: record.filled ?? true,
       pos: { x: record.pos.x, y: record.pos.y },
       ...(record.from ? { from: record.from } : {}),
-      ...(record.branch ? { branch: record.branch } : {})
+      ...(record.branch ? { branch: record.branch } : {}),
+      ...(record.event ? { event: record.event } : {}),
+      ...(record.config ? { config: { ...record.config } } : {}),
+      ...(record.actionPrompt ? { actionPrompt: record.actionPrompt } : {}),
+      ...(record.schedule ? { schedule: { ...record.schedule } } : {})
     }))
     return steps.length > 0 ? steps : defaultCanvasSteps()
   }

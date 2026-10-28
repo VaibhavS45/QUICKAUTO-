@@ -1070,6 +1070,57 @@
   opacity: .65;
 }
 
+/* Inline @mention pills: a mirror layer paints the text, the textarea stays the real input. */
+.mention-field {
+  position: relative;
+}
+
+.mention-mirror {
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  overflow: hidden;
+  margin: 0;
+  color: var(--text);
+  pointer-events: none;
+  user-select: none;
+  white-space: pre-wrap;
+  overflow-wrap: break-word;
+}
+
+.mention-mirror.builder-taskbox,
+.mention-mirror.st-textarea {
+  border-color: transparent;
+  background: transparent;
+  box-shadow: none;
+}
+
+.mention-field > textarea {
+  position: relative;
+  z-index: 1;
+  color: transparent;
+  caret-color: var(--text);
+}
+
+.chat-composer-card .mention-mirror {
+  padding: 2px 0;
+  font: inherit;
+  line-height: 1.6;
+}
+
+.mention-token {
+  border-radius: 6px;
+  background: rgb(74 169 255 / 22%);
+  box-shadow: 0 0 0 3px rgb(74 169 255 / 22%);
+  color: #cfe8ff;
+}
+
+.light .mention-token {
+  background: rgb(37 99 235 / 12%);
+  box-shadow: 0 0 0 3px rgb(37 99 235 / 12%);
+  color: #1d4ed8;
+}
+
 .chat-composer-toolbar {
   display: flex;
   min-height: 38px;
@@ -1834,6 +1885,7 @@
   gap: 2px;
   max-height: 280px;
   overflow-y: auto;
+  scrollbar-width: none;
   padding: 6px;
   border: 1px solid rgba(255, 255, 255, 0.14);
   border-radius: 12px;
@@ -1842,12 +1894,17 @@
   backdrop-filter: blur(16px);
 }
 
+.chat-mention-menu::-webkit-scrollbar {
+  display: none;
+}
+
 .chat-mention-menu button,
 .chat-mention-option {
   display: flex;
   align-items: center;
   gap: 10px;
   width: 100%;
+  flex: 0 0 auto;
   padding: 7px 10px;
   border: 0;
   border-radius: 8px;

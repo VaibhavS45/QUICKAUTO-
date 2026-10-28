@@ -6,6 +6,7 @@ import {
   getAvailableMentionTools,
   filterMentionTools,
   parsePromptMentionedTools,
+  MentionMirror,
   ToolPillIcon,
   type ConnectorStatusContext
 } from '../../../shell/mentionTools.js'
@@ -378,7 +379,7 @@ export default function Builder(props: BuilderProps): React.JSX.Element {
   const [taskCaret, setTaskCaret] = useState(0)
   const [mentionDismissed, setMentionDismissed] = useState(false)
   const [selectedMentionIndex, setSelectedMentionIndex] = useState(0)
-  const [mentionBox, setMentionBox] = useState<{ top: number; left: number; width: number } | null>(null)
+  const [mentionBox, setMentionBox] = useState<{ bottom: number; left: number; width: number; maxHeight: number } | null>(null)
   const taskTextareaRef = useRef<HTMLTextAreaElement>(null)
   const mentionMenuRef = useRef<HTMLDivElement>(null)
   const [connectorState, setConnectorState] = useState<ConnectorStatusContext | null>(null)
@@ -469,9 +470,12 @@ export default function Builder(props: BuilderProps): React.JSX.Element {
     const updatePosition = (): void => {
       const rect = taskTextareaRef.current?.getBoundingClientRect()
       if (!rect) return
-      const spaceBelow = window.innerHeight - rect.bottom
-      const top = spaceBelow > 240 ? rect.bottom + 6 : Math.max(10, rect.top - 240)
-      setMentionBox({ top, left: rect.left, width: rect.width })
+      setMentionBox({
+        bottom: window.innerHeight - rect.top + 6,
+        left: rect.left,
+        width: rect.width,
+        maxHeight: Math.min(280, Math.max(120, rect.top - 16))
+      })
     }
     updatePosition()
     window.addEventListener('resize', updatePosition)
@@ -494,15 +498,6 @@ export default function Builder(props: BuilderProps): React.JSX.Element {
       taskTextareaRef.current?.focus()
       taskTextareaRef.current?.setSelectionRange(nextCaret, nextCaret)
     })
-  }
-
-  function removeMention(id: string): void {
-    const re = new RegExp(`@${id}\\b\\s*`, 'gi')
-    const next = task.replace(re, '')
-    setTask(next)
-    setTools((prev) => prev.filter((t) => t.toLowerCase() !== id.toLowerCase()))
-    setTaskCaret(Math.min(taskCaret, next.length))
-    taskTextareaRef.current?.focus()
   }
 
   function handleTaskKeyDown(event: React.KeyboardEvent<HTMLTextAreaElement>): void {
@@ -1339,44 +1334,29 @@ export default function Builder(props: BuilderProps): React.JSX.Element {
                     <div className="builder-willlabel">
                       Palette will
                     </div>
-                    {activePromptTools.length > 0 && (
-                      <div className="chat-composer-pills-row builder-taskbox-pills-row" aria-label="Mentioned tools">
-                        {activePromptTools.map((tool) => (
-                          <span key={tool.id} className="chat-tool-pill-modern" title={tool.hint}>
-                            <ToolPillIcon tool={tool} />
-                            <span className="chat-tool-pill-label">{tool.label}</span>
-                            <button
-                              type="button"
-                              className="chat-tool-pill-remove"
-                              aria-label={`Remove ${tool.label}`}
-                              onClick={() => removeMention(tool.id)}
-                            >
-                              ×
-                            </button>
-                          </span>
-                        ))}
-                      </div>
-                    )}
-                    <textarea
-                      ref={taskTextareaRef}
-                      className="builder-taskbox"
-                      rows={3}
-                      value={task}
-                      onChange={(e) => {
-                        setTask(e.currentTarget.value)
-                        setTaskCaret(e.currentTarget.selectionStart)
-                        setMentionDismissed(false)
-                      }}
-                      onClick={(e) => {
-                        setTaskCaret(e.currentTarget.selectionStart)
-                        setMentionDismissed(false)
-                      }}
-                      onKeyUp={(e) => {
-                        setTaskCaret(e.currentTarget.selectionStart)
-                      }}
-                      onKeyDown={handleTaskKeyDown}
-                      placeholder="Describe what Palette should do, e.g. summarize the latest AI news and send me the highlights"
-                    />
+                    <div className="mention-field">
+                      <MentionMirror value={task} tools={availableTools} className="builder-taskbox" textareaRef={taskTextareaRef} />
+                      <textarea
+                        ref={taskTextareaRef}
+                        className="builder-taskbox"
+                        rows={3}
+                        value={task}
+                        onChange={(e) => {
+                          setTask(e.currentTarget.value)
+                          setTaskCaret(e.currentTarget.selectionStart)
+                          setMentionDismissed(false)
+                        }}
+                        onClick={(e) => {
+                          setTaskCaret(e.currentTarget.selectionStart)
+                          setMentionDismissed(false)
+                        }}
+                        onKeyUp={(e) => {
+                          setTaskCaret(e.currentTarget.selectionStart)
+                        }}
+                        onKeyDown={handleTaskKeyDown}
+                        placeholder="Describe what Palette should do, e.g. summarize the latest AI news and send me the highlights"
+                      />
+                    </div>
                     {taskMention && mentionBox && createPortal(
                       <div
                         ref={mentionMenuRef}
@@ -1385,9 +1365,10 @@ export default function Builder(props: BuilderProps): React.JSX.Element {
                         aria-label="Available tools"
                         style={{
                           position: 'fixed',
-                          top: `${mentionBox.top}px`,
+                          bottom: `${mentionBox.bottom}px`,
                           left: `${mentionBox.left}px`,
                           width: `${mentionBox.width}px`,
+                          maxHeight: `${mentionBox.maxHeight}px`,
                           zIndex: 10000
                         }}
                       >

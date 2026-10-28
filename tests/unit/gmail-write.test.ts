@@ -348,8 +348,8 @@ describe('draft-default prompt', () => {
     expect(GMAIL_WRITE_PROMPT).toMatch(/approval/i)
   })
 
-  it('scheduled runs still forbid writes', () => {
+  it('scheduled runs still keep writes behind the approval card', () => {
     const instructions = buildInstructions('scheduled', ['gmail'])
-    expect(instructions).toMatch(/do not perform writes/i)
+    expect(instructions).toMatch(/approve\/deny card/i)
   })
 })

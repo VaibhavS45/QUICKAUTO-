@@ -2035,6 +2035,23 @@
   background: #28251e;
 }
 
+/* Approve/deny cards raised by automation (scheduled) runs, not chat. */
+.shell-run-approvals {
+  position: fixed;
+  right: 18px;
+  bottom: 18px;
+  z-index: 60;
+  display: grid;
+  gap: 10px;
+  width: min(400px, calc(100vw - 36px));
+}
+
+.shell-run-approvals .chat-approval-card {
+  max-width: none;
+  margin: 0;
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.45);
+}
+
 .chat-approval-card strong {
   color: #f1e0b0;
 }

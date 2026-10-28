@@ -38,6 +38,20 @@ describe('canvas steps', () => {
     expect(steps.map((s) => s.title)).toContain('Gmail')
     expect(steps.map((s) => s.title)).toContain('Sheets')
   })
+  it('reopening prefers the stored graph, keeping every node as drawn', () => {
+    const drawn = defaultCanvasSteps()
+    const input = canvasToCreate(drawn, 'Graph')
+    const reopened = canvasStepsForRoutine({
+      prompt: input.prompt ?? '',
+      tools: input.connectors,
+      runAt: Date.now(),
+      repeat: 'daily',
+      steps: input.canvasSteps
+    })
+    expect(reopened.map((s) => s.title)).toEqual(drawn.map((s) => s.title))
+    expect(reopened.map((s) => s.subtitle)).toEqual(drawn.map((s) => s.subtitle))
+    expect(reopened.map((s) => s.pos)).toEqual(drawn.map((s) => s.pos))
+  })
 
   it('inserts, moves, updates and removes steps', () => {
     let steps = defaultCanvasSteps()
@@ -168,6 +182,47 @@ describe('canvas steps', () => {
     const patch = canvasToPatch(moveStepTo(steps, steps[1]!.id, 320, 320), automation)
     expect(patch.prompt).toBeUndefined()
     expect(patch.connectors).toBeUndefined()
+  })
+
+  it('saves the edited trigger time and never emits an oversized connector', () => {
+    const automation: Automation = {
+      id: 'a-news',
+      kind: 'advanced',
+      title: 'Old title',
+      prompt: 'old prompt',
+      status: 'active',
+      schedule: { type: 'daily', time: '10:10' },
+      autoApprove: false,
+      runMode: 'separate_task',
+      agent: '',
+      connectors: [],
+      createdAt: new Date().toISOString()
+    }
+    let steps = defaultCanvasSteps()
+    steps = updateCanvasStep(steps, steps[1]!.id, { subtitle: 'search for todays indian news' })
+    steps = updateCanvasStep(steps, steps[2]!.id, { title: 'Files' })
+    steps = updateCanvasStep(steps, steps[2]!.id, {
+      title: 'Files',
+      subtitle: 'put that information in the files folder with a nicely written readme document today'
+    })
+    steps = updateCanvasStep(steps, steps[0]!.id, { subtitle: 'daily · 6:29 am' })
+    const patch = canvasToPatch(steps, automation)
+    // The new schedule must land even though a node carries a long sentence —
+    // that is exactly the edit which used to invalidate the whole save.
+    expect(patch.schedule).toEqual({ type: 'daily', time: '06:29' })
+    expect(patch.title).toBe('search for todays indian news')
+    expect(patch.prompt).toBe('search for todays indian news')
+    expect(patch.connectors?.every((tool) => tool.length <= 64)).toBe(true)
+    expect(patch.canvasSteps?.length).toBe(steps.length)
+    // The saved graph reopens as drawn.
+    const reopened = canvasStepsForRoutine({
+      prompt: patch.prompt ?? automation.prompt ?? '',
+      tools: patch.connectors ?? automation.connectors,
+      runAt: Date.now(),
+      repeat: 'daily',
+      steps: patch.canvasSteps
+    })
+    expect(reopened.map((s) => s.subtitle)).toEqual(steps.map((s) => s.subtitle))
   })
 
   it('creates a Manage automation from the chain, keeping the trigger time', () => {    const base = defaultCanvasSteps()

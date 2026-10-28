@@ -118,6 +118,7 @@ export function toAutomation(routine: Routine, now = Date.now()): Automation {
     runMode: routine.runMode ?? 'separate_task',
     agent: routine.agent ?? '',
     connectors: [...routine.tools],
+    ...(routine.canvasSteps?.length ? { canvasSteps: routine.canvasSteps } : {}),
     ...(routine.expiresAt !== undefined ? { expiresAt: new Date(routine.expiresAt).toISOString() } : {}),
     createdAt: new Date(routine.createdAt).toISOString(),
     ...(routine.lastRunAt !== undefined ? { lastRunAt: new Date(routine.lastRunAt).toISOString() } : {}),
@@ -175,7 +176,8 @@ export class AutomationService {
       ...(input.schedule?.type === 'weekly'
         ? { weekdays: input.schedule.weekdays?.length ? input.schedule.weekdays : [new Date(runAt).getDay()] }
         : {}),
-      ...(input.expiresAt ? { expiresAt: Date.parse(input.expiresAt) } : {})
+      ...(input.expiresAt ? { expiresAt: Date.parse(input.expiresAt) } : {}),
+      ...(input.canvasSteps?.length ? { canvasSteps: input.canvasSteps } : {})
     }
     const created = this.options.scheduler.add(routine)
     return toAutomation(created, now)
@@ -196,6 +198,7 @@ export class AutomationService {
     if (patch.runMode !== undefined) patchRoutine.runMode = patch.runMode
     if (patch.agent !== undefined) patchRoutine.agent = patch.agent
     if (patch.connectors !== undefined) patchRoutine.tools = patch.connectors
+    if (patch.canvasSteps !== undefined) patchRoutine.canvasSteps = patch.canvasSteps
     if (patch.expiresAt !== undefined) {
       patchRoutine.expiresAt = patch.expiresAt === null ? null : Date.parse(patch.expiresAt)
     }

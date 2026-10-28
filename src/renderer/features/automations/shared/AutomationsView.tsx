@@ -91,6 +91,14 @@ function FilterIcon(): React.JSX.Element {
   )
 }
 
+function RefreshIcon(): React.JSX.Element {
+  return (
+    <svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.6" aria-hidden="true">
+      <path d="M13.5 8a5.5 5.5 0 1 1-1.6-3.9M13.5 1.5v3h-3" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  )
+}
+
 /** Canvas tab opener: create a new graph, or jump back into a previous one. */
 export function CanvasLanding({ automations, resume = false, onResumeChange, onNew, onEdit }: {
   automations: Automation[]
@@ -389,6 +397,8 @@ export default function AutomationsView(props: FeatureProps): React.JSX.Element 
     | null
   >(null)
   const [loading, setLoading] = useState(true)
+  const [refreshing, setRefreshing] = useState(false)
+  const refreshingRef = useRef(false)
   const [error, setError] = useState('')
   const [manageFilter, setManageFilter] = useState<ManageFilter>('all')
   const [filterOpen, setFilterOpen] = useState(false)
@@ -464,6 +474,22 @@ export default function AutomationsView(props: FeatureProps): React.JSX.Element 
     return () => {
       active = false
       unsubscribe()
+    }
+  }, [refresh])
+
+  /** Manual refresh for Updates and Manage, so a brand-new automation shows up without remounting the view. */
+  const handleRefresh = useCallback(async (): Promise<void> => {
+    if (refreshingRef.current) return
+    refreshingRef.current = true
+    setRefreshing(true)
+    try {
+      await refresh()
+      setError('')
+    } catch (reason: unknown) {
+      setError(errorText(reason))
+    } finally {
+      refreshingRef.current = false
+      setRefreshing(false)
     }
   }, [refresh])
 
@@ -664,7 +690,8 @@ export default function AutomationsView(props: FeatureProps): React.JSX.Element 
       prompt: canvasAutomation.prompt ?? canvasAutomation.title,
       tools: canvasAutomation.connectors,
       runAt: canvasAutomation.nextRunAt ? new Date(canvasAutomation.nextRunAt).getTime() : Date.now(),
-      repeat: canvasAutomation.schedule?.type ?? 'daily'
+      repeat: canvasAutomation.schedule?.type ?? 'daily',
+      steps: canvasAutomation.canvasSteps
     }
     : undefined
   const canvasRoutineKey = canvasAutomation?.id ?? 'blank'
@@ -1135,6 +1162,16 @@ export default function AutomationsView(props: FeatureProps): React.JSX.Element 
                 </div>
               )}
             </div>
+            <button
+              type="button"
+              className="automations-filter"
+              aria-label="Refresh automations"
+              title="Refresh automations"
+              disabled={refreshing}
+              onClick={() => void handleRefresh()}
+            >
+              <RefreshIcon />
+            </button>
             <button type="button" className="automations-create-btn" onClick={goCreate}>+ Create</button>
           </div>
         </div>
@@ -1145,6 +1182,20 @@ export default function AutomationsView(props: FeatureProps): React.JSX.Element 
 
       {!loading && !error && tab === 'updates' && (
         <div className="automations-body updates-body">
+          <div className="automations-toolbar">
+            <div className="automations-actions">
+              <button
+                type="button"
+                className="automations-filter"
+                aria-label="Refresh updates"
+                title="Refresh updates"
+                disabled={refreshing}
+                onClick={() => void handleRefresh()}
+              >
+                <RefreshIcon />
+              </button>
+            </div>
+          </div>
           <UpdatesList
             runs={runs}
             todayKey={todayKey}

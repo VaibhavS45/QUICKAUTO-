@@ -121,6 +121,21 @@
   padding: 0 !important;
 }
 
+.automations-filter:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
+.automations-filter:disabled svg {
+  animation: automations-refresh-spin 900ms linear infinite;
+}
+
+@keyframes automations-refresh-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
 /* Neutral focus ring: the ember halo around the button reads as a glow. */
 .automations-filter:focus-visible,
 .automations-filter-menu button:focus-visible {

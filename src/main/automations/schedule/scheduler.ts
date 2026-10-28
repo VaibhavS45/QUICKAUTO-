@@ -1,5 +1,6 @@
 import { z } from 'zod'
 import { TOOL_IDS, parseMentionedTools, type ToolId } from '../../../shared/types.js'
+import { CanvasStepSchema, type CanvasStepRecord } from '../../../shared/contracts/automations.js'
 
 /**
  * Routines (OpenMausBot pattern, smallest cut): a prompt + @tools that fires
@@ -33,9 +34,11 @@ export const RoutineSchema = z.object({
   autoApprove: z.boolean().optional(),
   runMode: z.enum(['separate_task', 'same_task']).optional(),
   agent: z.string().max(120).optional(),
-  expiresAt: z.number().int().optional()
+  expiresAt: z.number().int().optional(),
+  /** Canvas nodes as drawn (additive): the graph reopens exactly as edited. */
+  canvasSteps: z.array(CanvasStepSchema).max(64).optional()
 })
-export type Routine = z.infer<typeof RoutineSchema>
+export type Routine = z.infer<typeof RoutineSchema> & { canvasSteps?: CanvasStepRecord[] }
 
 export const CreateRoutineSchema = z.object({
   text: z.string().min(1).max(8000)
@@ -237,6 +240,7 @@ export class Scheduler {
     runMode?: 'separate_task' | 'same_task'
     agent?: string
     expiresAt?: number | null
+    canvasSteps?: CanvasStepRecord[]
   }): Routine | null {
     const r = this.routines.find((x) => x.id === id)
     if (!r) return null
@@ -251,6 +255,7 @@ export class Scheduler {
     if (typeof patch.autoApprove === 'boolean') r.autoApprove = patch.autoApprove
     if (patch.runMode) r.runMode = patch.runMode
     if (typeof patch.agent === 'string') r.agent = patch.agent
+    if (Array.isArray(patch.canvasSteps)) r.canvasSteps = patch.canvasSteps
     if (patch.expiresAt === null) r.expiresAt = undefined
     else if (typeof patch.expiresAt === 'number') r.expiresAt = patch.expiresAt
     this.persist()

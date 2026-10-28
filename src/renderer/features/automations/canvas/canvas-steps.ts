@@ -1,4 +1,4 @@
-import type { Automation, AutomationCreate, AutomationSchedule } from '../../../../shared/contracts/automations.js'
+import type { Automation, AutomationCreate, AutomationSchedule, CanvasStepRecord } from '../../../../shared/contracts/automations.js'
 import { formatTime } from '../../../lib/format.js'
 
 export type CanvasKind = 'trigger' | 'action' | 'gmail' | 'filter' | 'delay'
@@ -24,6 +24,8 @@ export interface CanvasRoutine {
   tools: string[]
   runAt: number
   repeat: string
+  /** The graph as drawn, when the automation stored it (additive). */
+  steps?: CanvasStepRecord[]
 }
 
 let seq = 0
@@ -116,6 +118,20 @@ export function scheduleFromSteps(steps: CanvasStep[], now = new Date()): Automa
   }
 }
 
+/** The graph as it will be stored: plain records the contracts accept. */
+export function canvasToRecords(steps: CanvasStep[]): CanvasStepRecord[] {
+  return steps.slice(0, 64).map((step) => ({
+    id: step.id.slice(0, 64),
+    kind: step.kind,
+    title: step.title.slice(0, 120),
+    subtitle: step.subtitle.slice(0, 2000),
+    ...(step.filled !== undefined ? { filled: step.filled } : {}),
+    pos: { x: step.pos.x, y: step.pos.y },
+    ...(step.from ? { from: step.from.slice(0, 64) } : {}),
+    ...(step.branch ? { branch: step.branch.slice(0, 64) } : {})
+  }))
+}
+
 /** The canvas chain as a new automation, so it lands in Manage like any other. */
 export function canvasToCreate(steps: CanvasStep[], title: string, now = new Date()): AutomationCreate {
   const { text, tools } = canvasToPrompt(steps)
@@ -125,23 +141,14 @@ export function canvasToCreate(steps: CanvasStep[], title: string, now = new Dat
     prompt: (text || title).slice(0, 20000),
     schedule: scheduleFromSteps(steps, now),
     connectors: tools,
+    canvasSteps: canvasToRecords(steps),
     autoApprove: false,
     runMode: 'separate_task',
     agent: ''
   }
 }
 
-/** What the node edits mean for the automation they came from. */
-export interface CanvasPatch {
-  prompt?: string
-  connectors?: string[]
-  schedule?: AutomationSchedule
-}
-
-/**
- * The tool a connector node stands for. The title names the app (Gmail,
- * Sheets, GitHub); a generic node keeps its tool id in the subtitle.
- */
+/** The tool a connector node stands for, or '' when the step is logic. */
 function toolOfStep(step: CanvasStep): string {
   // Logic steps shape the run; they are not connectors.
   if (step.kind === 'filter' || step.kind === 'delay') return ''
@@ -150,7 +157,27 @@ function toolOfStep(step: CanvasStep): string {
   if (/sheet/.test(title)) return 'sheets'
   if (/github/.test(title)) return 'github'
   if (/search/.test(title)) return 'websearch'
-  return step.subtitle.trim()
+  // Known labels map onto real tool mentions; a bare sentence is never a
+  // connector — an oversized one would invalidate the whole save patch.
+  if (/file/.test(title)) return 'files'
+  if (/notion/.test(title)) return 'notion'
+  if (/code/.test(title)) return 'opencode'
+  const fallback = step.subtitle.trim()
+  if (!fallback || /^select /i.test(fallback)) return ''
+  return fallback.length <= 64 ? fallback : fallback.slice(0, 64)
+}
+
+/**
+ * The edited nodes back onto the automation: the first action is the task, the
+ * rest are the connectors, the trigger carries the schedule. The drawn graph
+ * itself is stored too, so reopening keeps every node as it was.
+ */
+export interface CanvasPatch {
+  title?: string
+  prompt?: string
+  connectors?: string[]
+  schedule?: AutomationSchedule
+  canvasSteps?: CanvasStepRecord[]
 }
 
 /**
@@ -164,12 +191,18 @@ export function canvasToPatch(steps: CanvasStep[], automation: Automation): Canv
   // Logic steps shape the flow; the task is the first real action.
   const promptStep = actions.find((step) => step.kind !== 'filter' && step.kind !== 'delay') ?? actions[0]
   const prompt = promptStep?.subtitle.trim() ?? ''
+  const title = titleOf(prompt)
+  if (title && title !== automation.title) patch.title = title
   if (prompt && prompt !== (automation.prompt ?? '')) patch.prompt = prompt
   const connectors = actions.filter((step) => step !== promptStep).map(toolOfStep).filter(Boolean)
   if (connectors.join('|') !== automation.connectors.join('|')) patch.connectors = connectors
   if (trigger) {
     const schedule = parseScheduleSummary(trigger.subtitle, automation)
     if (schedule) patch.schedule = schedule
+  }
+  const graph = canvasToRecords(steps)
+  if (JSON.stringify(graph) !== JSON.stringify(automation.canvasSteps ?? [])) {
+    patch.canvasSteps = graph
   }
   return patch
 }
@@ -289,6 +322,21 @@ export function defaultCanvasSteps(): CanvasStep[] {
 /** Derive editable canvas steps from a stored routine. */
 export function canvasStepsForRoutine(routine: CanvasRoutine | undefined): CanvasStep[] {
   if (!routine) return defaultCanvasSteps()
+  // The stored graph wins: nodes reopen exactly as they were drawn.
+  const stored = routine.steps
+  if (stored?.length) {
+    const steps: CanvasStep[] = stored.map((record) => ({
+      id: record.id,
+      kind: record.kind,
+      title: record.title,
+      subtitle: record.subtitle,
+      filled: record.filled ?? true,
+      pos: { x: record.pos.x, y: record.pos.y },
+      ...(record.from ? { from: record.from } : {}),
+      ...(record.branch ? { branch: record.branch } : {})
+    }))
+    return steps.length > 0 ? steps : defaultCanvasSteps()
+  }
   const steps: CanvasStep[] = [
     {
       id: makeStepId(),

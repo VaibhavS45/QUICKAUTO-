@@ -147,7 +147,7 @@ export function draftToAutomation(draft: BuilderDraft): CompiledAutomation {
     title: title || titleFromTask(prompt),
     prompt,
     schedule,
-    // Scheduled runs never write, so nothing is auto-approved here.
+    // Writes always require a separate approval, never auto-approval.
     autoApprove: false,
     runMode: 'separate_task',
     agent: draft.agent,

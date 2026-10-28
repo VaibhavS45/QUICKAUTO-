@@ -4,7 +4,7 @@ import { CanvasStepSchema, type CanvasStepRecord } from '../../../shared/contrac
 
 /**
  * Routines (OpenMausBot pattern, smallest cut): a prompt + @tools that fires
- * at a specific time and runs the agent as source 'scheduled' (writes denied,
+ * at a specific time and runs the agent as source 'scheduled' (writes require approval,
  * BudgetGuard scheduled share). No polling, no Composio triggers — one
  * setTimeout per routine, rescheduled after each fire. The app stays alive in
  * the tray so timers can fire (see index.ts window-all-closed).

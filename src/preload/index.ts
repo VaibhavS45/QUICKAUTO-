@@ -82,6 +82,7 @@ const api = {
     configured: boolean
     encryptionAvailable: boolean
     services: Array<{ id: string; connected: boolean; detail?: string }>
+    connectedSlugs?: string[]
   }> => ipcRenderer.invoke('connector:get'),
   setConnectorKey: (key: string) => ipcRenderer.invoke('connector:set-key', { key }),
   clearConnectorKey: () => ipcRenderer.invoke('connector:clear-key'),

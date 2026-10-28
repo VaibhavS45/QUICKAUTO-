@@ -63,12 +63,9 @@ describe('toolApproval policy (ai v7 toolApproval, not needsApproval)', () => {
     expect(policy).toEqual({ echo: 'approved', echo_write: 'user-approval' })
   })
 
-  it('denies writes outright for scheduled runs', () => {
+  it('requires an approval card for writes in scheduled runs', () => {
     const policy = buildToolApproval('scheduled', ['echo_write'])
-    expect(policy['echo_write']).toEqual({
-      type: 'denied',
-      reason: expect.stringContaining('Scheduled runs')
-    })
+    expect(policy['echo_write']).toBe('user-approval')
   })
 
   it('built-in tools carry no deprecated needsApproval flag', () => {
@@ -158,6 +155,25 @@ describe('runAgent approval flow', () => {
     expect(events.map((e) => e.type)).not.toContain('tool-result')
   })
 
+  it('scheduled writes wait for and honor the in-app approval decision', async () => {
+    const fake = approvalFakeAgent({ approveSendsWrite: true })
+    const events: Array<{ type: string }> = []
+    const out = await runAgent({
+      prompt: 'write hello',
+      tools: [],
+      source: 'scheduled',
+      emit: (e) => events.push(e),
+      decideApproval: async () => ({ approved: true }),
+      deps: depsWith({
+        getTools: async () => ({}) as unknown as ToolSet,
+        createAgent: () => fake
+      })
+    })
+    expect(out.text).toBe('wrote hello')
+    expect(events.map((e) => e.type)).toContain('approval-requested')
+    expect(events.map((e) => e.type)).toContain('done')
+  })
+
   it('abort mid-run emits aborted', async () => {
     const hanging: AgentLike = {
       async stream() {
@@ -220,5 +236,13 @@ describe('prompt-injection guardrails (instructions)', () => {
 
   it('scheduled runs route writes through the approve/deny card', () => {
     expect(buildInstructions('scheduled')).toMatch(/approve\/deny card/i)
+  })
+
+  it('asks research runs to justify conclusions and save requested output files', () => {
+    const instructions = buildInstructions('scheduled', ['websearch'])
+    expect(instructions).toMatch(/compare evidence across sources/i)
+    expect(instructions).toMatch(/justify each selection with sourced evidence/i)
+    expect(instructions).toMatch(/use write_file/i)
+    expect(instructions).toMatch(/user home folder/i)
   })
 })

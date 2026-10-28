@@ -77,7 +77,7 @@ describe('ComposioProvider', () => {
   it('requires an approval card for every generic Composio action', () => {
     expect(APPROVAL_REQUIRED_TOOLS.has('composio_execute')).toBe(true)
     expect(buildToolApproval('chat', ['composio_execute'])['composio_execute']).toBe('user-approval')
-    expect(buildToolApproval('scheduled', ['composio_execute'])['composio_execute']).toMatchObject({ type: 'denied' })
+    expect(buildToolApproval('scheduled', ['composio_execute'])['composio_execute']).toBe('user-approval')
   })
 
   it('meters tool search and execution with BudgetGuard', async () => {

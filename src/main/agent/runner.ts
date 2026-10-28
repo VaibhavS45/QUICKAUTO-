@@ -276,7 +276,7 @@ export async function runAgent(opts: RunAgentOptions): Promise<{ text: string; s
   if (engine !== 'builtin') {
     // Engine selected: authoritative, no builtin fall-through (one outcome
     // per run; failures emit a single error with the install/auth fix).
-    // Scheduled runs keep their read-only framing via buildInstructions.
+    // Scheduled runs keep writes behind the explicit approval flow.
     const engineSystemPrompt = [
       opts.systemPrompt?.trim() ?? '',
       buildInstructions(source, tools)
@@ -423,7 +423,7 @@ export async function runAgent(opts: RunAgentOptions): Promise<{ text: string; s
       return { text, steps: Array.isArray(steps) ? steps.length : 0 }
     }
 
-    // Manual approval round: ask the UI (or auto-deny for scheduled runs).
+    // Every write, including scheduled writes, waits for an explicit UI decision.
     const responses: Array<Record<string, unknown>> = []
     for (const a of approvals) {
       const req: ApprovalRequest = {
@@ -443,9 +443,7 @@ export async function runAgent(opts: RunAgentOptions): Promise<{ text: string; s
         reason: req.reason
       })
       let decision: ApprovalDecision
-      if (source === 'scheduled') {
-        decision = { approved: false, reason: 'Scheduled runs cannot auto-approve writes; queued for review.' }
-      } else if (opts.decideApproval) {
+      if (opts.decideApproval) {
         decision = await opts.decideApproval(req)
       } else {
         decision = { approved: false, reason: 'No approval handler; denied by default.' }

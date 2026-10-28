@@ -208,9 +208,9 @@ async function runViaHarness(args: HarnessRunArgs): Promise<{ text: string; step
           signal,
           emit,
           onPermission: async (perm) => {
-            // Scheduled runs never execute writes unapproved: deny without
-            // consulting the UI (headless — no approve/deny card could answer).
-            if (args.source === 'scheduled') return false
+            // Scheduled runs CAN write once the user approves: the request
+            // surfaces as the in-app approve/deny card (same channel a chat
+            // run uses). Unanswered requests ride out the scheduled timeout.
             if (!args.decideApproval) return false
             const decision = await args.decideApproval({
               approvalId: perm.id,
@@ -269,10 +269,10 @@ export async function runAgent(opts: RunAgentOptions): Promise<{ text: string; s
   const runSignal = scheduledController?.signal ?? signal
 
   // OpenCode runs bring their own models + auth (`opencode auth login`), so no
-  // model API key is needed. Its ACP permission protocol is fail-closed (deny
-  // without approval, see runViaHarness), so scheduled runs still never
-  // execute writes unapproved. `builtin` only survives as a stored legacy
-  // value; the UI no longer offers it.
+  // model API key is needed. Its ACP permission protocol fails closed (deny
+  // without an approval answer), so scheduled runs never execute writes
+  // unless the user approves the in-app card. `builtin` only survives as a
+  // stored legacy value; the UI no longer offers it.
   if (engine !== 'builtin') {
     // Engine selected: authoritative, no builtin fall-through (one outcome
     // per run; failures emit a single error with the install/auth fix).

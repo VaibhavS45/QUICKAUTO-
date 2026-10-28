@@ -94,6 +94,14 @@ function FilterIcon(): React.JSX.Element {
   )
 }
 
+function RefreshIcon(): React.JSX.Element {
+  return (
+    <svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.6" aria-hidden="true">
+      <path d="M13.5 8a5.5 5.5 0 1 1-1.6-3.9M13.5 1.5v3h-3" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  )
+}
+
 /** Canvas tab opener: create a new graph, or jump back into a previous one. */
 export function CanvasLanding({
   automations,
@@ -440,6 +448,8 @@ export default function AutomationsView(props: FeatureProps): React.JSX.Element 
   const [addAt, setAddAt] = useState<number | null>(null)
   const [vp, setVp] = useState({ x: 24, y: 0, z: 1 })
   const viewportRef = useRef<HTMLDivElement | null>(null)
+  const vpRef = useRef(vp)
+  vpRef.current = vp
   /** The canvas that was just created keeps the nodes it was built from. */
   const keepCanvasRef = useRef('')
   /** "New" cleared the route on purpose, so losing focusId must not bounce back. */
@@ -455,6 +465,8 @@ export default function AutomationsView(props: FeatureProps): React.JSX.Element 
     | null
   >(null)
   const [loading, setLoading] = useState(true)
+  const [refreshing, setRefreshing] = useState(false)
+  const refreshingRef = useRef(false)
   const [error, setError] = useState('')
   const [manageFilter, setManageFilter] = useState<ManageFilter>('all')
   const [filterOpen, setFilterOpen] = useState(false)
@@ -535,6 +547,22 @@ export default function AutomationsView(props: FeatureProps): React.JSX.Element 
     return () => {
       active = false
       unsubscribe()
+    }
+  }, [refresh])
+
+  /** Manual refresh for Updates and Manage, so a brand-new automation shows up without remounting the view. */
+  const handleRefresh = useCallback(async (): Promise<void> => {
+    if (refreshingRef.current) return
+    refreshingRef.current = true
+    setRefreshing(true)
+    try {
+      await refresh()
+      setError('')
+    } catch (reason: unknown) {
+      setError(errorText(reason))
+    } finally {
+      refreshingRef.current = false
+      setRefreshing(false)
     }
   }, [refresh])
 
@@ -804,10 +832,13 @@ export default function AutomationsView(props: FeatureProps): React.JSX.Element 
       prompt: canvasAutomation.prompt ?? canvasAutomation.title,
       tools: canvasAutomation.connectors,
       runAt: canvasAutomation.nextRunAt ? new Date(canvasAutomation.nextRunAt).getTime() : Date.now(),
-      repeat: canvasAutomation.schedule?.type ?? 'daily'
+      repeat: canvasAutomation.schedule?.type ?? 'daily',
+      steps: canvasAutomation.canvasSteps
     }
     : undefined
   const canvasRoutineKey = canvasAutomation?.id ?? 'blank'
+  /** True while the graph viewport (not the chooser) is mounted. A failed save must not blank the graph, so errors only add a banner. */
+  const canvasVisible = tab === 'canvas' && !loading && Boolean(canvasStarted || props.focusId || autoCanvas)
 
   useEffect(() => {
     if (canvasRoutineKey === canvasKey) return
@@ -1111,19 +1142,26 @@ export default function AutomationsView(props: FeatureProps): React.JSX.Element 
   }
 
   function beginNodeDrag(event: React.PointerEvent, step: CanvasStep): void {
-    if ((event.target as HTMLElement).closest('button')) return
+    // The title row is itself a button, so only the footer controls and the
+    // add-step handles opt out; everything else on the card drags it.
+    if ((event.target as HTMLElement).closest('.n8n-foot button, .n8n-dir, .n8n-menu')) return
     event.stopPropagation()
+    const startX = event.clientX
+    const startY = event.clientY
+    let moved = false
     const w = toWorld(event.clientX, event.clientY)
     dragRef.current = { mode: 'node', id: step.id, dx: w.x - step.pos.x, dy: w.y - step.pos.y }
     pickStep(step)
     const move = (e: PointerEvent): void => {
       const d = dragRef.current
       if (!d || d.mode !== 'node') return
+      if (!moved && Math.hypot(e.clientX - startX, e.clientY - startY) < 4) return
+      moved = true
       const rect = viewportRef.current?.getBoundingClientRect()
       if (!rect) return
-      const z = vp.z
-      const x = (e.clientX - rect.left - vp.x) / z - d.dx
-      const y = (e.clientY - rect.top - vp.y) / z - d.dy
+      const z = vpRef.current.z
+      const x = (e.clientX - rect.left - vpRef.current.x) / z - d.dx
+      const y = (e.clientY - rect.top - vpRef.current.y) / z - d.dy
       setCanvasSteps((steps) => moveStepTo(steps, d.id, x, y))
     }
     const up = (): void => {
@@ -1180,6 +1218,8 @@ export default function AutomationsView(props: FeatureProps): React.JSX.Element 
     const el = viewportRef.current
     if (!el) return
     const onWheel = (e: WheelEvent): void => {
+      // Let the picker list and the inspector scroll instead of zooming the graph.
+      if ((e.target as HTMLElement | null)?.closest('.n8n-picker, .n8n-inspector')) return
       e.preventDefault()
       if (e.ctrlKey) return
       if (Math.abs(e.deltaX) > Math.abs(e.deltaY)) {
@@ -1191,19 +1231,23 @@ export default function AutomationsView(props: FeatureProps): React.JSX.Element 
     }
     el.addEventListener('wheel', onWheel, { passive: false })
     return () => el.removeEventListener('wheel', onWheel)
-  }, [tab]) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [canvasVisible]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // Frame the chain the first time the canvas is shown, so it never opens
   // jammed into the top-left corner.
   const fittedRef = useRef(false)
   useEffect(() => {
-    if (tab !== 'canvas' || !canvasStarted || fittedRef.current || canvasSteps.length === 0) return
+    if (!canvasVisible) {
+      fittedRef.current = false
+      return
+    }
+    if (fittedRef.current || canvasSteps.length === 0) return
     const id = requestAnimationFrame(() => {
       fittedRef.current = true
       fitCanvas()
     })
     return () => cancelAnimationFrame(id)
-  }, [tab, canvasStarted, canvasSteps.length]) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [canvasVisible, canvasSteps.length]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const runId = props.focusRunId ?? ''
   const goUpdates = (): void => {
@@ -1361,6 +1405,16 @@ export default function AutomationsView(props: FeatureProps): React.JSX.Element 
                 </div>
               )}
             </div>
+            <button
+              type="button"
+              className="automations-filter"
+              aria-label="Refresh automations"
+              title="Refresh automations"
+              disabled={refreshing}
+              onClick={() => void handleRefresh()}
+            >
+              <RefreshIcon />
+            </button>
             <button type="button" className="automations-create-btn" onClick={goCreate}>+ Create</button>
           </div>
         </div>
@@ -1371,6 +1425,20 @@ export default function AutomationsView(props: FeatureProps): React.JSX.Element 
 
       {!loading && !error && tab === 'updates' && (
         <div className="automations-body updates-body">
+          <div className="automations-toolbar">
+            <div className="automations-actions">
+              <button
+                type="button"
+                className="automations-filter"
+                aria-label="Refresh updates"
+                title="Refresh updates"
+                disabled={refreshing}
+                onClick={() => void handleRefresh()}
+              >
+                <RefreshIcon />
+              </button>
+            </div>
+          </div>
           <UpdatesList
             runs={runs}
             todayKey={todayKey}
@@ -1401,7 +1469,7 @@ export default function AutomationsView(props: FeatureProps): React.JSX.Element 
         </div>
       )}
 
-      {!loading && !error && tab === 'canvas' && !canvasStarted && !props.focusId && !autoCanvas && (
+      {!loading && tab === 'canvas' && !canvasStarted && !props.focusId && !autoCanvas && (
         <CanvasLanding
           automations={automations.filter((automation) => automation.kind === 'advanced')}
           resume={canvasMemory.resume}
@@ -1412,7 +1480,7 @@ export default function AutomationsView(props: FeatureProps): React.JSX.Element 
         />
       )}
 
-      {!loading && !error && tab === 'canvas' && (canvasStarted || props.focusId || autoCanvas) && (
+      {canvasVisible && (
         <div className="automations-canvas">
           <header className="canvas-head">
             <div className="canvas-head-text">

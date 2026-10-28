@@ -14,7 +14,8 @@ import { HomeView } from './HomeView.js'
 import { ProfileMenu } from './ProfileMenu.js'
 import { LoginScreen } from './LoginScreen.js'
 import { BreadcrumbBar, BreadcrumbProvider } from '../components/layout/Breadcrumbs.js'
-import { createChatRunState, reduceChatRun, resolveChatApproval, type ChatRunState } from './chat-state.js'
+import { createChatRunState, reduceChatRun, resolveChatApproval, type ChatRunState, type ChatApproval } from './chat-state.js'
+import { ApprovalCard } from './ApprovalCard.js'
 import { getFeatureRegistry } from './registry.js'
 import { FeatureContent } from './FeatureHost.js'
 import type { AutomationTemplate } from '../../shared/contracts/automation-templates.js'
@@ -114,6 +115,8 @@ export default function ShellApp(): React.JSX.Element {
   const [runThreadId, setRunThreadId] = useState('')
   const [busy, setBusy] = useState(false)
   const [approvalError, setApprovalError] = useState('')
+  /** Approve/deny cards from automation (non-chat) runs, keyed by approval id. */
+  const [automationApprovals, setAutomationApprovals] = useState<Map<string, { runId: string; approval: ChatApproval }>>(new Map())
   const busyRef = useRef(false)
   const startingRunRef = useRef(false)
   const pendingRunEventsRef = useRef<AgentEvent[]>([])
@@ -325,6 +328,37 @@ export default function ShellApp(): React.JSX.Element {
   }, [router, navigate])
 
   const handleAgentEvent = useCallback((event: AgentEvent): void => {
+    // Approval requests from automation runs (not the open chat run) surface
+    // as a global card — scheduled runs are headless but the app is running,
+    // so the user can always answer in place.
+    if (event.type === 'approval-requested' && event.runId !== runIdRef.current) {
+      setAutomationApprovals((current) => {
+        const next = new Map(current)
+        next.set(event.approvalId, {
+          runId: event.runId,
+          approval: {
+            approvalId: event.approvalId,
+            toolCallId: event.toolCallId,
+            toolName: event.toolName,
+            input: event.input,
+            ...(event.reason ? { reason: event.reason } : {})
+          }
+        })
+        return next
+      })
+      return
+    }
+    // A finished automation run drops its unanswered cards (the run resolved denied).
+    if ((event.type === 'done' || event.type === 'error' || event.type === 'aborted') && event.runId !== runIdRef.current) {
+      setAutomationApprovals((current) => {
+        const next = new Map(current)
+        for (const [key, entry] of current) {
+          if (entry.runId === event.runId) next.delete(key)
+        }
+        return next.size === current.size ? current : next
+      })
+      return
+    }
     if (!runIdRef.current) {
       if (startingRunRef.current) pendingRunEventsRef.current.push(event)
       return
@@ -424,6 +458,25 @@ export default function ShellApp(): React.JSX.Element {
     } catch (error) {
       setApprovalError(errorText(error))
     }
+  }
+
+  /** Decision for an automation-run approval card (keyed by its own run id). */
+  function decideAutomationApproval(approvalId: string, approved: boolean): void {
+    const entry = automationApprovals.get(approvalId)
+    if (!entry) return
+    setApprovalError('')
+    void window.app.agentApproval({ runId: entry.runId, approvalId, approved })
+      .then((result) => {
+        if (!result.ok) throw new Error(result.error || 'Could not submit approval.')
+        setAutomationApprovals((current) => {
+          const next = new Map(current)
+          next.delete(approvalId)
+          return next
+        })
+      })
+      .catch((error: unknown) => {
+        setApprovalError(errorText(error))
+      })
   }
 
   async function stopRun(): Promise<void> {
@@ -626,6 +679,18 @@ export default function ShellApp(): React.JSX.Element {
             </div>
           </section>
         </div>
+        {automationApprovals.size > 0 && (
+          <div className="shell-run-approvals" aria-label="Automation approval requests">
+            {[...automationApprovals.values()].map(({ approval }) => (
+              <ApprovalCard
+                key={approval.approvalId}
+                approval={{ ...approval, reason: approval.reason ?? 'An automation run needs your approval to continue.' }}
+                disabled={false}
+                onDecide={decideAutomationApproval}
+              />
+            ))}
+          </div>
+        )}
         {settings !== null && (
           <div
             className="shell-settings-overlay"

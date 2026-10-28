@@ -27,7 +27,8 @@ describe('canvas step picker', () => {
   it('reads and writes the trigger schedule summary', () => {
     expect(parseRepeatTime('weekly · 6:30 PM')).toEqual({ repeat: 'weekly', time: '18:30' })
     expect(parseRepeatTime('nonsense')).toEqual({ repeat: 'daily', time: '09:00' })
-    expect(clockLabel('18:30')).toBe('6:30 pm')
-    expect(clockLabel('09:00')).toBe('9:00 am')
+    // Casing depends on the host locale (en-US "PM", en-GB "pm").
+    expect(clockLabel('18:30').toLowerCase()).toBe('6:30 pm')
+    expect(clockLabel('09:00').toLowerCase()).toBe('9:00 am')
   })
 })

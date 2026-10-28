@@ -218,7 +218,7 @@ describe('prompt-injection guardrails (instructions)', () => {
     }
   })
 
-  it('scheduled runs are told not to perform writes', () => {
-    expect(buildInstructions('scheduled')).toMatch(/do not perform writes/i)
+  it('scheduled runs route writes through the approve/deny card', () => {
+    expect(buildInstructions('scheduled')).toMatch(/approve\/deny card/i)
   })
 })

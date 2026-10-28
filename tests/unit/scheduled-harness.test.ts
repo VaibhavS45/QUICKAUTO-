@@ -26,7 +26,7 @@ function scheduledDeps(seen: Seen) {
   }
 }
 
-function runScheduled(seen: Seen, extraDeps: Partial<RunnerDeps> = {}) {
+function runScheduled(seen: Seen, extraDeps: Partial<RunnerDeps> = {}, decideApproval?: (req: { toolName: string }) => Promise<{ approved: boolean; reason?: string }>) {
   const events: AgentEvent[] = []
   return runAgent({
     prompt: 'Every day at 9am summarize the news',
@@ -34,7 +34,7 @@ function runScheduled(seen: Seen, extraDeps: Partial<RunnerDeps> = {}) {
     source: 'scheduled',
     runId: 'sched-opencode',
     emit: (e) => events.push(e),
-    decideApproval: async () => ({ approved: true, reason: 'ui' }),
+    decideApproval: decideApproval ?? (async () => ({ approved: true, reason: 'ui' })),
     deps: { ...scheduledDeps(seen), ...extraDeps }
   }).then((out) => ({ out, events }))
 }
@@ -48,17 +48,28 @@ describe('scheduled runs on the opencode harness', () => {
     expect(events.at(-1)).toMatchObject({ type: 'done' })
   })
 
-  it('keeps the scheduled read-only framing in the harness prompt', async () => {
+  it('keeps the approval-card framing for scheduled writes in the harness prompt', async () => {
     const seen: Seen = {}
     await runScheduled(seen)
-    expect(seen.prompt).toContain('scheduled run: do not perform writes')
+    expect(seen.prompt).toContain('scheduled run: a file write pauses the run until the user answers the in-app approve/deny card')
   })
 
-  it('denies ACP permissions on scheduled runs even when the UI would approve', async () => {
+  it('routes ACP permission requests on scheduled runs through the UI decision', async () => {
     const seen: Seen = {}
     await runScheduled(seen)
     expect(seen.onPermission).toBeTypeOf('function')
+    await expect(seen.onPermission!({} as never)).resolves.toBe(true)
+  })
+
+  it('denies ACP permission requests when the UI denies (or no handler answers)', async () => {
+    const seen: Seen = {}
+    await runScheduled(seen, {}, async () => ({ approved: false, reason: 'user denied' }))
     await expect(seen.onPermission!({} as never)).resolves.toBe(false)
+    const noHandler: Seen = {}
+    await runAgent({
+      prompt: 'x', tools: [], source: 'scheduled', runId: 'r', emit: () => {}, deps: scheduledDeps(noHandler)
+    })
+    await expect(noHandler.onPermission!({} as never)).resolves.toBe(false)
   })
 
 })

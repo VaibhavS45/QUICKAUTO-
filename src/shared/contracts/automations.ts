@@ -32,6 +32,21 @@ export const AutomationScheduleSchema = z.object({
 })
 export type AutomationSchedule = z.infer<typeof AutomationScheduleSchema>
 
+/** One node of a canvas-built automation, stored so reopening is lossless. */
+export const CanvasStepSchema = z.object({
+  id: z.string().min(1).max(64),
+  kind: z.enum(['trigger', 'action', 'gmail', 'filter', 'delay', 'opencode']),
+  title: z.string().max(120),
+  subtitle: z.string().max(2000),
+  filled: z.boolean().optional(),
+  pos: z.object({ x: z.number(), y: z.number() }),
+  /** Step that feeds this one. Absent = the step before it (legacy chain). */
+  from: z.string().max(64).optional(),
+  /** Label on the incoming edge, e.g. a condition's "Yes" / "No" branch. */
+  branch: z.string().max(64).optional()
+})
+export type CanvasStepRecord = z.infer<typeof CanvasStepSchema>
+
 export const AutomationSchema = z.object({
   id: z.string().min(1).max(128),
   kind: AutomationKindSchema,
@@ -51,7 +66,9 @@ export const AutomationSchema = z.object({
   createdAt: z.string().max(40),
   lastRunAt: z.string().max(40).optional(),
   /** Computed server-side from the schedule. */
-  nextRunAt: z.string().max(40).optional()
+  nextRunAt: z.string().max(40).optional(),
+  /** Canvas nodes as drawn (additive). Present when the graph was opened. */
+  canvasSteps: z.array(CanvasStepSchema).max(64).optional()
 })
 export type Automation = z.infer<typeof AutomationSchema>
 
@@ -64,7 +81,9 @@ export const AutomationCreateSchema = z.object({
   runMode: RunModeSchema.default('separate_task'),
   agent: z.string().max(120).default(''),
   connectors: z.array(z.string().max(64)).max(32).default([]),
-  expiresAt: z.string().max(40).optional()
+  expiresAt: z.string().max(40).optional(),
+  /** Canvas nodes as drawn, so the graph reopens exactly as edited (additive). */
+  canvasSteps: z.array(CanvasStepSchema).max(64).optional()
 })
 export type AutomationCreate = z.infer<typeof AutomationCreateSchema>
 
@@ -77,6 +96,8 @@ export const AutomationPatchSchema = z.object({
   runMode: RunModeSchema.optional(),
   agent: z.string().max(120).optional(),
   connectors: z.array(z.string().max(64)).max(32).optional(),
+  /** Canvas nodes as drawn (additive) — whole-graph replace on update. */
+  canvasSteps: z.array(CanvasStepSchema).max(64).optional(),
   /** null clears the expiration date. */
   expiresAt: z.string().max(40).nullable().optional()
 })

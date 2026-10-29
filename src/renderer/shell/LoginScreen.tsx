@@ -17,7 +17,6 @@ export function LoginScreen({ hasAccounts, onAuthenticated }: LoginScreenProps):
   const [confirm, setConfirm] = useState('')
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
-  const [restarting, setRestarting] = useState(false)
 
   const isRegister = mode === 'register'
 
@@ -46,8 +45,7 @@ export function LoginScreen({ hasAccounts, onAuthenticated }: LoginScreenProps):
         setError(result.error)
         return
       }
-      setRestarting(true)
-      window.setTimeout(() => onAuthenticated(result.state), 4000)
+      onAuthenticated(result.state)
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : String(reason))
     } finally {
@@ -55,11 +53,9 @@ export function LoginScreen({ hasAccounts, onAuthenticated }: LoginScreenProps):
     }
   }
 
-  const action = restarting
-    ? t('shell.restarting')
-    : busy
-      ? isRegister ? t('shell.creatingAccount') : t('shell.signingIn')
-      : isRegister ? t('shell.createAccountAction') : t('shell.signInAction')
+  const action = busy
+    ? isRegister ? t('shell.creatingAccount') : t('shell.signingIn')
+    : isRegister ? t('shell.createAccountAction') : t('shell.signInAction')
 
   return (
     <div className="shell-auth-gate">
@@ -80,7 +76,7 @@ export function LoginScreen({ hasAccounts, onAuthenticated }: LoginScreenProps):
               maxLength={32}
               pattern="[A-Za-z0-9._-]+"
               value={username}
-              disabled={busy || restarting}
+              disabled={busy}
               onChange={(event) => setUsername(event.target.value)}
             />
           </label>
@@ -94,7 +90,7 @@ export function LoginScreen({ hasAccounts, onAuthenticated }: LoginScreenProps):
               minLength={8}
               maxLength={200}
               value={password}
-              disabled={busy || restarting}
+              disabled={busy}
               onChange={(event) => setPassword(event.target.value)}
             />
           </label>
@@ -109,20 +105,20 @@ export function LoginScreen({ hasAccounts, onAuthenticated }: LoginScreenProps):
                 minLength={8}
                 maxLength={200}
                 value={confirm}
-                disabled={busy || restarting}
+                disabled={busy}
                 onChange={(event) => setConfirm(event.target.value)}
               />
             </label>
           )}
-          <button type="submit" disabled={busy || restarting}>{action}</button>
+          <button type="submit" disabled={busy}>{action}</button>
         </form>
         <p className="shell-auth-status" role="status" aria-live="polite">
-          {error || (restarting ? t('shell.restarting') : t('shell.localAccountHint'))}
+          {error || t('shell.localAccountHint')}
         </p>
         <button
           type="button"
           className="shell-auth-switch"
-          disabled={busy || restarting}
+          disabled={busy}
           onClick={() => switchMode(isRegister ? 'login' : 'register')}
         >
           {isRegister ? t('shell.haveAccount') : t('shell.needAccount')}

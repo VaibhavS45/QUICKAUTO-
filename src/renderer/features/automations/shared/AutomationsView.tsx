@@ -103,20 +103,12 @@ function RefreshIcon(): React.JSX.Element {
 }
 
 /** Canvas tab opener: create a new graph, or jump back into a previous one. */
-export function CanvasLanding({
-  automations,
-  resume = false,
-  onResumeChange,
-  onNew,
-  onEdit,
-  onLoadTemplate
-}: {
+export function CanvasLanding({ automations, resume = false, onResumeChange, onNew, onEdit }: {
   automations: Automation[]
   resume?: boolean
   onResumeChange?(next: boolean): void
   onNew(): void
   onEdit(id: string): void
-  onLoadTemplate?(template: CanvasDemoTemplate): void
 }): React.JSX.Element {
   return (
     <div className="automations-canvas is-canvas-landing">
@@ -133,66 +125,39 @@ export function CanvasLanding({
           <h2>Build an automation</h2>
           <p>Wire triggers, conditions and actions in any direction. Canvas automations show up in Manage.</p>
           <button type="button" className="canvas-landing-new" onClick={onNew}>
-            <span aria-hidden="true">+</span> Create Blank Canvas
+            <span aria-hidden="true">+</span> Create
           </button>
         </div>
         <div className="canvas-landing-recent">
-          <div className="canvas-landing-recent-head">
-            <h3>Previous &amp; Ready-Made Canvases</h3>
-            <span className="canvas-templates-count">
-              {automations.length > 0 ? `${automations.length} saved · ` : ''}{CANVAS_DEMO_TEMPLATES.length} ready-made
-            </span>
-          </div>
-          <div className="canvas-landing-list">
-            {automations.map((automation) => (
-              <button
-                key={automation.id}
-                type="button"
-                className="canvas-landing-row is-saved"
-                aria-label={`Edit ${automation.title}`}
-                onClick={() => onEdit(automation.id)}
-              >
-                <span className="canvas-landing-icon" aria-hidden="true">
-                  <svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
-                    <rect x="3" y="3" width="6" height="6" rx="1.5" />
-                    <rect x="15" y="15" width="6" height="6" rx="1.5" />
-                    <path d="M9 6h5a3 3 0 0 1 3 3v6" />
-                    <path d="m14.5 12.5 2.5 2.5 2.5-2.5" />
-                  </svg>
-                </span>
-                <span className="canvas-landing-copy">
-                  <span className="canvas-landing-copy-top">
+          <h3>Edit previous</h3>
+          {automations.length === 0 ? (
+            <p className="canvas-landing-empty">No canvases yet. Create one and it will show up here.</p>
+          ) : (
+            <div className="canvas-landing-list">
+              {automations.map((automation) => (
+                <button
+                  key={automation.id}
+                  type="button"
+                  aria-label={`Edit ${automation.title}`}
+                  onClick={() => onEdit(automation.id)}
+                >
+                  <span className="canvas-landing-icon" aria-hidden="true">
+                    <svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
+                      <rect x="3" y="3" width="6" height="6" rx="1.5" />
+                      <rect x="15" y="15" width="6" height="6" rx="1.5" />
+                      <path d="M9 6h5a3 3 0 0 1 3 3v6" />
+                      <path d="m14.5 12.5 2.5 2.5 2.5-2.5" />
+                    </svg>
+                  </span>
+                  <span className="canvas-landing-copy">
                     <strong>{automation.title}</strong>
-                    <span className="canvas-saved-chip">Saved</span>
+                    <small>{automationMeta(automation)}</small>
                   </span>
-                  <small>{automationMeta(automation)}</small>
-                </span>
-                <span className="canvas-landing-go" aria-hidden="true">→</span>
-              </button>
-            ))}
-
-            {CANVAS_DEMO_TEMPLATES.map((tmpl) => (
-              <button
-                key={`recent-${tmpl.id}`}
-                type="button"
-                className="canvas-landing-row is-ready-made"
-                aria-label={`Open ready-made workflow ${tmpl.title}`}
-                onClick={() => onLoadTemplate?.(tmpl)}
-              >
-                <span className="canvas-landing-icon is-tmpl" aria-hidden="true">
-                  <span style={{ color: '#ff9f1c', fontSize: 13, fontWeight: 700 }}>⚡</span>
-                </span>
-                <span className="canvas-landing-copy">
-                  <span className="canvas-landing-copy-top">
-                    <strong>{tmpl.title}</strong>
-                    <span className="canvas-template-badge">{tmpl.badge}</span>
-                  </span>
-                  <small>{tmpl.tagline}</small>
-                </span>
-                <span className="canvas-landing-go" aria-hidden="true">Open →</span>
-              </button>
-            ))}
-          </div>
+                  <span className="canvas-landing-go" aria-hidden="true">→</span>
+                </button>
+              ))}
+            </div>
+          )}
           <label className="canvas-landing-resume">
             <input
               type="checkbox"
@@ -205,36 +170,6 @@ export function CanvasLanding({
               <small>Skip this screen next time.</small>
             </span>
           </label>
-        </div>
-      </div>
-
-      <div className="canvas-landing-templates">
-        <div className="canvas-landing-templates-head">
-          <div>
-            <h3>Ready-to-use Demo Workflows</h3>
-            <p>Pre-configured multi-step automations ready to inspect, customize, and run</p>
-          </div>
-          <span className="canvas-templates-count">4 Featured</span>
-        </div>
-        <div className="canvas-landing-templates-grid">
-          {CANVAS_DEMO_TEMPLATES.map((tmpl) => (
-            <div key={tmpl.id} className="canvas-landing-template-card">
-              <div className="canvas-template-card-header">
-                <span className="canvas-template-badge">{tmpl.badge}</span>
-                <span className="canvas-template-steps-tag">{tmpl.buildSteps().length} steps</span>
-              </div>
-              <h4>{tmpl.title}</h4>
-              <p className="canvas-template-tagline">{tmpl.tagline}</p>
-              <p className="canvas-template-desc">{tmpl.description}</p>
-              <button
-                type="button"
-                className="canvas-template-open-btn"
-                onClick={() => onLoadTemplate?.(tmpl)}
-              >
-                Load into Canvas →
-              </button>
-            </div>
-          ))}
         </div>
       </div>
     </div>
@@ -1476,7 +1411,6 @@ export default function AutomationsView(props: FeatureProps): React.JSX.Element 
           onResumeChange={setResumeCanvas}
           onNew={startNewCanvas}
           onEdit={openCanvas}
-          onLoadTemplate={loadDemoTemplate}
         />
       )}
 

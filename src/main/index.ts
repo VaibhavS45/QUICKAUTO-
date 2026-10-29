@@ -1,4 +1,4 @@
-import { app, ipcMain, session, Notification, safeStorage, shell, dialog } from 'electron'
+import { app, BrowserWindow, ipcMain, session, Notification, safeStorage, shell, dialog } from 'electron'
 import Store from 'electron-store'
 import { randomUUID } from 'node:crypto'
 import os from 'node:os'
@@ -77,7 +77,8 @@ import { shouldAutoOpenApp } from './shell/launch-policy.js'
 import { applyAppBehaviorPatch, resolveAppBehavior, type AppBehavior } from './shell/app-prefs.js'
 import { installStdioGuard } from './engines/opencode/stdio-guard.js'
 import { createAppTray, watchDockVisibility } from './shell/app-lifecycle.js'
-import { registerAuthIpc } from './auth/auth-ipc.js'
+import { registerAuthIpc, AuthChannels } from './auth/auth-ipc.js'
+import type { AuthState } from '../shared/contracts/auth.js'
 import { LocalAccountService } from './auth/local-accounts.js'
 import { bootstrapLocalAccountUserData } from './auth/user-data-bootstrap.js'
 import { getShellAppWindow, openShellAppWindow } from './shell/shell-app-window.js'
@@ -446,25 +447,27 @@ function wireIpc(): void {
   }
   registerChatIpc(ipcMain, chatStore)
   settingsShellRuntime.registerIpc(ipcMain)
+  /** Every renderer picks up account changes; sessions and chats reload on auth:changed. */
+  const emitAuthChanged = (state: AuthState): void => {
+    for (const win of BrowserWindow.getAllWindows()) {
+      win.webContents.send(AuthChannels.changed, state)
+    }
+  }
   registerAuthIpc(ipcMain, {
-    getState: () => {
-      const state = localAccounts.getState()
-      return {
-        ...state,
-        signedIn: true,
-        name: localAccounts.currentAccount()?.username || 'Developer'
-      }
-    },
+    getState: () => localAccounts.getState(),
     login: async (credentials) => {
       const state = await localAccounts.login(credentials)
+      emitAuthChanged(state)
       return state
     },
     register: async (credentials) => {
       const state = await localAccounts.register(credentials)
+      emitAuthChanged(state)
       return state
     },
     logout: async () => {
       const state = await localAccounts.logout()
+      emitAuthChanged(state)
       return state
     }
   })

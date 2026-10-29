@@ -100,9 +100,9 @@ export default function ShellApp(): React.JSX.Element {
   const [route, setRoute] = useState(router.current)
   const [profile, setProfile] = useState<LocalProfile>({ name: '', email: '' })
   const [profileMenuOpen, setProfileMenuOpen] = useState(false)
-  const [auth, setAuth] = useState<AuthState>({ signedIn: true, configured: true, method: 'local', name: 'Developer' })
+  const [auth, setAuth] = useState<AuthState>({ signedIn: false, configured: true, method: 'local' })
   const [authBusy, setAuthBusy] = useState(false)
-  const [authLoading, setAuthLoading] = useState(false)
+  const [authLoading, setAuthLoading] = useState(true)
   const [settings, setSettings] = useState<{ tab?: string } | null>(null)
   const avatarRef = useRef<HTMLButtonElement>(null)
   const [notificationsOpen, setNotificationsOpen] = useState(false)
@@ -566,8 +566,9 @@ export default function ShellApp(): React.JSX.Element {
     )
   }
 
-  // Login paused for development: keep shell unlocked and active
-  const accountLocked = false
+  // Gate the whole shell behind the account: show the loading splash first,
+  // then the login screen once the real auth state has loaded.
+  const accountLocked = authLoading || !auth.signedIn
 
   return (
     <BreadcrumbProvider>

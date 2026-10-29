@@ -378,6 +378,33 @@ export function defaultCanvasSteps(): CanvasStep[] {
   }))
 }
 
+/**
+ * Route→canvas sync policy. True only when the graph on screen may be replaced
+ * by the automation the route currently points at.
+ *
+ * A locally-owned graph — a blank canvas or a loaded demo template — is never
+ * overwritten by a sync: its steps would otherwise be wiped back to the
+ * generic starter within one render run. It yields only when the user opens a
+ * real automation again; an automation merely resumed from "open my last
+ * canvas" does not take ownership (no `focusId` on the route). `freshLocalNav`
+ * marks a route navigation started from such a flow whose route commit has not
+ * landed yet, so a stale `focusId` from the previous screen cannot win a race.
+ * `canvasKey === canvasRoutineKey` means the screen is already synced to the
+ * route and there is nothing to do.
+ */
+export function shouldSyncCanvasGraph(
+  canvasKey: string,
+  canvasRoutineKey: string,
+  focusId: string | undefined,
+  localGraph: boolean,
+  freshLocalNav: boolean
+): boolean {
+  if (freshLocalNav) return false
+  if (canvasRoutineKey === canvasKey) return false
+  if (localGraph && (canvasRoutineKey === 'blank' || !focusId)) return false
+  return true
+}
+
 /** Derive editable canvas steps from a stored routine. */
 export function canvasStepsForRoutine(routine: CanvasRoutine | undefined): CanvasStep[] {
   if (!routine) return defaultCanvasSteps()

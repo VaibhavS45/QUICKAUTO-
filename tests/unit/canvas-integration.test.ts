@@ -6,6 +6,7 @@ import {
   canvasToPrompt,
   defaultCanvasSteps,
   insertCanvasStep,
+  shouldSyncCanvasGraph,
   updateCanvasStep,
   type CanvasStep
 } from '../../src/renderer/features/automations/canvas/canvas-steps.js'
@@ -107,7 +108,7 @@ describe('Canvas Integration & End-to-End Workflow', () => {
     expect(fired).toContain(created.id)
   })
 
-  it('all 4 pre-built demo workflows connect, compile cleanly, and register as valid automations', () => {
+  it('all 7 pre-built demo workflows connect, compile cleanly, and register as valid automations', () => {
     const now = new Date(2026, 9, 28, 10, 0, 0).getTime()
     const scheduler = new Scheduler(new MemoryRoutineStore(), { fire: () => {}, now: () => now })
     const service = new AutomationService({ scheduler, now: () => now })
@@ -181,5 +182,49 @@ describe('Canvas Integration & End-to-End Workflow', () => {
     const createPayload = canvasToCreate(steps, 'Security PR Sentinel')
     expect(createPayload.kind).toBe('advanced')
     expect(createPayload.connectors).toEqual(expect.arrayContaining(['github', 'composio', 'opencode']))
+  })
+})
+
+describe('shouldSyncCanvasGraph', () => {
+  it('never syncs to a locally-owned blank/graph-template flow on the landing screen', () => {
+    // A demo template was just loaded on the landing page: no route automation.
+    expect(shouldSyncCanvasGraph('web-research-to-file', 'blank', undefined, true, false)).toBe(false)
+    // A blank canvas was just started the same way.
+    expect(shouldSyncCanvasGraph('blank', 'blank', undefined, true, false)).toBe(false)
+  })
+
+  it('keeps a locally-owned graph while an automation is merely resumed from memory (no route focus)', () => {
+    // "Open my last canvas" resumed automation A; the user then loads a demo
+    // template from the in-editor dropdown — the sync must not replace it
+    // with A's saved steps.
+    expect(shouldSyncCanvasGraph('github-conflict-resolver', 'automation-a', undefined, true, false)).toBe(false)
+  })
+
+  it('ends local mode once the route opens a real automation again', () => {
+    expect(shouldSyncCanvasGraph('github-conflict-resolver', 'automation-a', 'automation-a', true, false)).toBe(true)
+  })
+
+  it("blocks one render while a local navigation's route commit is still in flight", () => {
+    // Shell navigation runs inside startViewTransition: a previous screen's
+    // automation id can still be on the route for one render, which must not
+    // win against the locally-owned graph that replaced it.
+    expect(shouldSyncCanvasGraph('template-id', 'automation-a', 'automation-a', true, true)).toBe(false)
+    // Blocks even when nothing is locally owned: the navigation will commit.
+    expect(shouldSyncCanvasGraph('blank', 'automation-a', 'automation-a', false, true)).toBe(false)
+  })
+
+  it('stays blocked when a locally-owned graph has no route focus even after syncs', () => {
+    // Template on landing, canvasKey already the template id.
+    expect(shouldSyncCanvasGraph('web-research-to-file', 'web-research-to-file', undefined, true, false)).toBe(false)
+  })
+
+  it('syncs when a plain automation is opened (no local graph on screen)', () => {
+    expect(shouldSyncCanvasGraph('automation-a', 'automation-b', 'automation-b', false, false)).toBe(true)
+    expect(shouldSyncCanvasGraph('blank', 'automation-a', 'automation-a', false, false)).toBe(true)
+  })
+
+  it('skips work when the canvas is already synced to the route', () => {
+    expect(shouldSyncCanvasGraph('automation-a', 'automation-a', 'automation-a', false, false)).toBe(false)
+    expect(shouldSyncCanvasGraph('blank', 'blank', undefined, false, false)).toBe(false)
   })
 })

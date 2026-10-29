@@ -1,12 +1,12 @@
 import type { AutomationSchedule } from '../../../../shared/contracts/automations.js'
-import { makeStepId, layoutPos, type CanvasStep } from './canvas-steps.js'
+import { makeStepId, layoutPos, ORIGIN, STEP_X, NODE_H, type CanvasStep } from './canvas-steps.js'
 
 export interface CanvasDemoTemplate {
   id: string
   title: string
   tagline: string
   badge: string
-  icon: 'github' | 'code' | 'mail' | 'calendar'
+  icon: 'github' | 'code' | 'mail' | 'calendar' | 'search' | 'sheets'
   description: string
   targetTitle: string
   buildSteps(): CanvasStep[]
@@ -263,6 +263,207 @@ export const CANVAS_DEMO_TEMPLATES: CanvasDemoTemplate[] = [
           pos: layoutPos(4)
         }
       ]
+    }
+  },
+  {
+    id: 'web-research-to-file',
+    title: 'Web Research → File Report',
+    tagline: 'Schedule → Web search → AI distills findings → Writes report to an exact file path',
+    badge: 'Web Search + OpenCode + Files',
+    icon: 'search',
+    targetTitle: 'Web Research → File Report',
+    description:
+      'Runs on a schedule, searches the web for your configured topic, has the AI agent distill the results into a sourced report, then writes it as Markdown to the exact file path you set (folders are created if missing).',
+    buildSteps(): CanvasStep[] {
+      const schedule: AutomationSchedule = { type: 'daily', time: '09:00' }
+      const row = 1 // middle row of the graph
+      const pos = (index: number, line = row): { x: number; y: number } => ({
+        x: ORIGIN.x + index * STEP_X,
+        y: ORIGIN.y + (line - 1) * (NODE_H + 28)
+      })
+      return [
+        {
+          id: makeStepId(),
+          kind: 'trigger',
+          title: 'Schedule',
+          subtitle: 'Runs every day at 9:00 am',
+          filled: true,
+          schedule,
+          pos: pos(0)
+        },
+        {
+          id: makeStepId(),
+          kind: 'action',
+          title: 'Web Search',
+          subtitle: 'Search the web for "<your topic>" and gather sources',
+          actionPrompt:
+            'Search the web for the topic configured below (e.g. "latest AI model releases"). Gather the 10 most relevant and recent results with their source URLs, publication dates, and the key facts from each.',
+          config: { topic: 'e.g. latest AI model releases' },
+          filled: true,
+          pos: pos(1)
+        },
+        {
+          id: makeStepId(),
+          kind: 'opencode',
+          title: 'OpenCode',
+          subtitle: 'Distill findings into a clean, sourced written report',
+          actionPrompt:
+            'Distill the search results into a research report: a 5-bullet executive summary, key findings with supporting source URLs, notable quotes, and a list of anything unverified or conflicting between sources.',
+          filled: true,
+          pos: pos(2)
+        },
+        {
+          id: makeStepId(),
+          kind: 'action',
+          title: 'Files',
+          subtitle: 'Write the report to the exact file path below',
+          actionPrompt:
+            'Write the final report as Markdown to this exact path: /home/<you>/Documents/research/report.md. Create any missing parent folders; if the file already exists, keep the old copy until the new report is fully written.',
+          config: { path: '/home/<you>/Documents/research/report.md' },
+          filled: true,
+          pos: pos(3)
+        }
+      ]
+    }
+  },
+  {
+    id: 'github-conflict-resolver',
+    title: 'GitHub Repo Conflict Resolver',
+    tagline: 'Merge conflict detected → AI rewrites & re-tests branch → Pushes fix & comments on PR',
+    badge: 'GitHub + OpenCode',
+    icon: 'github',
+    targetTitle: 'GitHub Repo Conflict Resolver',
+    description:
+      'Scans a repository daily for pull requests tangled in merge conflicts, fetches both sides of every conflicting hunk, lets the AI agent resolve them (preserving both intents where possible), runs the tests, then pushes the resolved branch and comments a per-conflict summary on the PR.',
+    buildSteps(): CanvasStep[] {
+      const schedule: AutomationSchedule = { type: 'daily', time: '09:00' }
+      return [
+        {
+          id: makeStepId(),
+          kind: 'trigger',
+          title: 'GitHub',
+          subtitle: 'Check for pull requests with merge conflicts (repository=owner/repo) · daily at 9:00 am',
+          filled: true,
+          event: 'a pull request has merge conflicts',
+          config: { repository: 'owner/repo' },
+          schedule,
+          pos: layoutPos(0)
+        },
+        {
+          id: makeStepId(),
+          kind: 'action',
+          title: 'GitHub',
+          subtitle: 'Fetch conflicted PR, both base/head sides, and conflicting hunks',
+          actionPrompt:
+            'For the conflicted pull request in owner/repo: fetch the base and head branches, the list of conflicting files, and both sides of each conflicting hunk so the resolution has full context.',
+          config: { repository: 'owner/repo' },
+          filled: true,
+          pos: layoutPos(1)
+        },
+        {
+          id: makeStepId(),
+          kind: 'opencode',
+          title: 'OpenCode',
+          subtitle: 'Rebase branch, resolve every hunk, and verify tests pass',
+          actionPrompt:
+            'Resolve the merge conflicts automatically: rebase the PR branch onto the target branch, resolve each conflicting hunk preserving both intents where possible, keep formatting consistent, and run the test suite until it passes.',
+          filled: true,
+          pos: layoutPos(2)
+        },
+        {
+          id: makeStepId(),
+          kind: 'action',
+          title: 'GitHub',
+          subtitle: 'Push resolved branch and comment how each conflict was fixed',
+          actionPrompt:
+            'Push the conflict-resolved commits back to the pull request branch, then post a comment on the PR summarizing how each conflict was resolved and the final test result.',
+          config: { repository: 'owner/repo' },
+          filled: true,
+          pos: layoutPos(3)
+        }
+      ]
+    }
+  },
+  {
+    id: 'sheets-manual-bulk-email',
+    title: 'Bulk Email Sender: Sheets or Manual List',
+    tagline: 'Schedule → Google Sheets rows OR a manual list → Whole-body emails to 1–30 real people',
+    badge: 'Gmail + Sheets + Schedule',
+    icon: 'mail',
+    targetTitle: 'Bulk Email Sender: Sheets or Manual List',
+    description:
+      'One schedule feeds two data sources at once: recipient rows from a Google Sheet and a manually typed list attached straight to the trigger. Each branch emails its 1–30 real recipients the full email body. Every send runs through an approval card first.',
+    buildSteps(): CanvasStep[] {
+      const schedule: AutomationSchedule = { type: 'daily', time: '09:00' }
+      const trigger = makeStepId()
+      const steps: CanvasStep[] = [
+        {
+          id: trigger,
+          kind: 'trigger',
+          title: 'Schedule',
+          subtitle: 'Runs every day at 9:00 am',
+          filled: true,
+          schedule,
+          pos: { x: ORIGIN.x, y: ORIGIN.y }
+        },
+        // Branch 1: recipient rows come from Google Sheets.
+        {
+          id: makeStepId(),
+          kind: 'action',
+          title: 'Google Sheets',
+          subtitle: 'Read recipients (name, email) from the sheet rows below',
+          actionPrompt:
+            'Read the recipient rows from the Google Sheet below (columns: name, email). Take at most 30 recipients per run and skip rows without an email address.',
+          from: trigger,
+          branch: 'Google Sheets',
+          filled: true,
+          pos: { x: ORIGIN.x + STEP_X, y: ORIGIN.y }
+        },
+        {
+          id: makeStepId(),
+          kind: 'gmail',
+          title: 'Gmail',
+          subtitle: 'Email each Sheets recipient the full body defined here',
+          actionPrompt:
+            'For each recipient read from the Google Sheet (max 30), send one email: personalized greeting with their name, and the whole email body defined here. Subject: "<Your subject>". Body: <Replace with the whole email body you want to send>.',
+          from: undefined,
+          filled: true,
+          pos: { x: ORIGIN.x + 2 * STEP_X, y: ORIGIN.y }
+        },
+        // Branch 2: the recipient list typed directly on this block.
+        {
+          id: makeStepId(),
+          kind: 'action',
+          title: 'Recipients',
+          subtitle: 'Manual list lives right here: replace the placeholder rows',
+          actionPrompt:
+            'Use this manually provided recipient list (replace it with real data — one per line, Name <email>, 1 to 30 people):\n1. First Person <first.person@example.com>\n2. Second Person <second.person@example.com>',
+          from: trigger,
+          branch: 'Manual list',
+          filled: true,
+          pos: { x: ORIGIN.x + STEP_X, y: ORIGIN.y + NODE_H + 28 }
+        },
+        {
+          id: makeStepId(),
+          kind: 'gmail',
+          title: 'Gmail',
+          subtitle: 'Email each listed recipient with the same whole body',
+          actionPrompt:
+            'For each recipient on the manual list (max 30), send one email using the full email body defined here. Subject: "<Your subject>". Body: <Replace with the whole email body you want to send>.',
+          from: undefined,
+          filled: true,
+          pos: { x: ORIGIN.x + 2 * STEP_X, y: ORIGIN.y + NODE_H + 28 }
+        }
+      ]
+      // Steps after the first are implicitly chained from the previous step
+      // unless they declare an explicit `from`; fill the gaps explicitly so
+      // the fan-out edges survive serialization.
+      return steps.map((step, index, all): CanvasStep => {
+        if (index > 0 && step.from === undefined) {
+          return { ...step, from: all[index - 1]!.id }
+        }
+        return step
+      })
     }
   }
 ]

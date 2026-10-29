@@ -22,6 +22,7 @@ import {
   moveCanvasStep,
   moveStepTo,
   removeCanvasStep,
+  shouldSyncCanvasGraph,
   tidyCanvasSteps,
   updateCanvasStep,
   type CanvasDirection,
@@ -387,6 +388,8 @@ export default function AutomationsView(props: FeatureProps): React.JSX.Element 
   vpRef.current = vp
   /** The canvas that was just created keeps the nodes it was built from. */
   const keepCanvasRef = useRef('')
+  /** A locally-owned graph (blank canvas or a loaded demo template) is on screen until the route opens an automation again. */
+  const localGraphRef = useRef(false)
   /** "New" cleared the route on purpose, so losing focusId must not bounce back. */
   const freshCanvasRef = useRef(false)
   /** The steps last read from or written to the stored automation; skips the autosave. */
@@ -504,6 +507,7 @@ export default function AutomationsView(props: FeatureProps): React.JSX.Element 
   // "Advanced" starts describe an automation on the canvas instead of the builder.
   useEffect(() => {
     if (createKind !== 'advanced') return
+    localGraphRef.current = true
     setCanvasStarted(true)
     setCanvasKey('blank')
     setCanvasSteps([])
@@ -618,6 +622,7 @@ export default function AutomationsView(props: FeatureProps): React.JSX.Element 
   /** Load a pre-built demo workflow onto the canvas graph. */
   function loadDemoTemplate(tmpl: CanvasDemoTemplate): void {
     fittedRef.current = false
+    localGraphRef.current = true
     setCanvasStarted(true)
     setResumeSkipped(false)
     setCanvasKey(tmpl.id)
@@ -640,6 +645,7 @@ export default function AutomationsView(props: FeatureProps): React.JSX.Element 
   /** A fresh graph: starter trigger + action ready to configure. */
   function startNewCanvas(): void {
     fittedRef.current = false
+    localGraphRef.current = true
     setCanvasStarted(true)
     setResumeSkipped(true)
     setCanvasKey('blank')
@@ -776,7 +782,11 @@ export default function AutomationsView(props: FeatureProps): React.JSX.Element 
   const canvasVisible = tab === 'canvas' && !loading && Boolean(canvasStarted || props.focusId || autoCanvas)
 
   useEffect(() => {
-    if (canvasRoutineKey === canvasKey) return
+    // The whole route→canvas sync policy lives in a pure helper so it is
+    // unit-testable: a locally-owned graph never gets wiped by a sync until
+    // the route opens a real automation again.
+    if (!shouldSyncCanvasGraph(canvasKey, canvasRoutineKey, props.focusId, localGraphRef.current, freshCanvasRef.current)) return
+    localGraphRef.current = false
     setCanvasKey(canvasRoutineKey)
     if (canvasAutomation) {
       setCustomTitle(canvasAutomation.title)
@@ -784,7 +794,11 @@ export default function AutomationsView(props: FeatureProps): React.JSX.Element 
       setCustomTitle('')
     }
     setIsEditingTitle(false)
-    if (keepCanvasRef.current === canvasRoutineKey) {
+    // The "keep" marker only applies while the screen still shows that
+    // automation's steps: an intervening sync (blank chooser, another
+    // automation) replaced the graph, so reopening the kept automation must
+    // reload its saved graph from disk instead of trusting the stale screen.
+    if (keepCanvasRef.current === canvasRoutineKey && stepsOwnerRef.current === canvasRoutineKey) {
       keepCanvasRef.current = ''
       return
     }
@@ -796,7 +810,7 @@ export default function AutomationsView(props: FeatureProps): React.JSX.Element 
     setSelectedStepId('')
     setOpenStepMenuId('')
     setAddAt(null)
-  }, [canvasRoutineKey, canvasKey, canvasRoutine, canvasAutomation])
+  }, [canvasRoutineKey, canvasKey, canvasRoutine, canvasAutomation, props.focusId])
 
   const currentTitle = useMemo(() => {
     if (customTitle.trim()) return customTitle.trim()
@@ -925,6 +939,16 @@ export default function AutomationsView(props: FeatureProps): React.JSX.Element 
   // Node edits (add, delete, drag, tidy, inspector) save themselves after a
   // short pause, so leaving and reopening a canvas never loses the graph.
   useEffect(() => {
+    // A locally-owned graph (blank canvas or a demo template) never autosaves:
+    // it becomes an automation only through Create. Without this, loading a
+    // demo while "open my last canvas" is showing would overwrite that
+    // automation once the debounce fires.
+    if (localGraphRef.current) return
+    // The screen is only owned by the route canvas once the sync effect has
+    // landed: on the transition render "canvasKey" still names the previous
+    // canvas while "stepsOwnerRef" already names this one, and the on-screen
+    // steps are about to be replaced — never persist that stale screen.
+    if (canvasRoutineKey !== canvasKey) return
     if (!canvasAutomation || stepsOwnerRef.current !== canvasAutomation.id) return
     if (canvasSteps === savedStepsRef.current) return
     pendingSaveRef.current = { automation: canvasAutomation, steps: canvasSteps }
@@ -943,7 +967,7 @@ export default function AutomationsView(props: FeatureProps): React.JSX.Element 
         flushPendingSave()
       }
     }
-  }, [canvasAutomation, canvasSteps, flushPendingSave])
+  }, [canvasRoutineKey, canvasKey, canvasAutomation, canvasSteps, flushPendingSave])
 
   // Leaving the tab or unmounting must not drop the last edit still waiting.
   useEffect(() => flushPendingSave, [flushPendingSave])

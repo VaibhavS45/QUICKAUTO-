@@ -2908,6 +2908,88 @@
   opacity: 0.55;
 }
 
+.shell-auth-forgot {
+  width: 100%;
+  margin-bottom: 6px;
+  padding: 0;
+  border: 0;
+  color: var(--text-muted);
+  background: transparent;
+  font: inherit;
+  font-size: 12px;
+  text-align: center;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  cursor: pointer;
+}
+
+.shell-auth-forgot:hover:not(:disabled) {
+  color: var(--text);
+}
+
+.shell-auth-forgot:disabled {
+  cursor: default;
+  opacity: 0.55;
+}
+
+/* One-time recovery key shown right after account creation. */
+.shell-auth-recovery {
+  margin-top: 16px;
+  padding: 12px;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-md);
+  background: var(--surface-2);
+  text-align: center;
+}
+
+.shell-auth-key {
+  display: block;
+  color: var(--text);
+  font: 600 14px/1.6 ui-monospace, SFMono-Regular, Menlo, monospace;
+  letter-spacing: 1px;
+  user-select: all;
+  word-break: break-all;
+}
+
+.shell-auth-key-copy {
+  margin-top: 8px;
+  padding: 4px 12px;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-sm);
+  color: var(--ash-1);
+  background: transparent;
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.shell-auth-key-copy:hover {
+  color: var(--text);
+}
+
+/* The recovery key field resets are typed loosely (dashes, casing). */
+.shell-auth-key-input {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+}
+
+.shell-auth-recovery-continue {
+  width: 100%;
+  margin-top: 12px;
+  padding: 10px 16px;
+  border: 0;
+  border-radius: var(--radius-md);
+  color: var(--text-on-accent);
+  background: var(--ember);
+  font: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.shell-auth-recovery-continue:hover {
+  background: var(--ember-hot);
+}
+
 .shell-auth-loading {
   color: var(--text-muted);
   font-size: 13px;

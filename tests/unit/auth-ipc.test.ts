@@ -13,6 +13,7 @@ function setup(): { handlers: Map<string, Handler>; auth: AuthPort } {
     getState: vi.fn(() => signedOut),
     login: vi.fn(async () => signedIn),
     register: vi.fn(async () => signedIn),
+    reset: vi.fn(async () => signedIn),
     logout: vi.fn(async () => signedOut)
   }
   registerAuthIpc({
@@ -54,5 +55,45 @@ describe('auth IPC', () => {
     const { handlers, auth } = setup()
     await expect(handlers.get(AuthChannels.signOut)!({})).resolves.toEqual({ ok: true, state: signedOut })
     expect(auth.logout).toHaveBeenCalledTimes(1)
+  })
+
+  it('routes password resets through username + recovery key validation', async () => {    const { handlers, auth } = setup()
+    const reset = handlers.get(AuthChannels.reset)!
+
+    await expect(reset({}, {
+      username: 'alice',
+      recoveryKey: 'AAAA-BBBB-CCCC-DDDD-EEEE-FFFF-0000-1111',
+      password: 'new-password'
+    })).resolves.toEqual({ ok: true, state: signedIn })
+    expect(auth.reset).toHaveBeenCalledWith({
+      username: 'alice',
+      recoveryKey: 'AAAA-BBBB-CCCC-DDDD-EEEE-FFFF-0000-1111',
+      password: 'new-password'
+    })
+
+    await expect(reset({}, { username: 'alice', recoveryKey: '   ', password: 'new-password' }))
+      .resolves.toEqual({ ok: false, error: 'Enter your recovery key.' })
+
+    await expect(reset({}, { username: 'alice', recoveryKey: 'A'.repeat(65), password: 'new-password' }))
+      .resolves.toEqual({ ok: false, error: 'Recovery keys are 32 characters.' })
+    expect(auth.reset).toHaveBeenCalledTimes(1)
+  })
+
+  it('passes the one-time recovery key from registration through untouched', async () => {
+    const handlers = new Map<string, Handler>()
+    const keyed = { ...signedIn, recoveryKey: 'AAAA-BBBB-CCCC-DDDD-EEEE-FFFF-0000-1111' }
+    const auth: AuthPort = {
+      getState: () => signedOut,
+      login: vi.fn(async () => signedIn),
+      register: vi.fn(async () => keyed as AuthState),
+      reset: vi.fn(async () => signedIn),
+      logout: vi.fn(async () => signedOut)
+    }
+    registerAuthIpc(
+      { handle: (channel, listener) => handlers.set(channel, listener as Handler) },
+      auth
+    )
+    await expect(handlers.get(AuthChannels.register)!({}, { username: 'alice', password: 'secret-password' }))
+      .resolves.toEqual({ ok: true, state: keyed })
   })
 })

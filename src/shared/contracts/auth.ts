@@ -9,7 +9,9 @@ export const AuthStateSchema = z.object({
   email: z.string().optional(),
   avatarUrl: z.string().optional(),
   hasAccounts: z.boolean().optional(),
-  method: z.enum(['local', 'oauth']).optional()
+  method: z.enum(['local', 'oauth']).optional(),
+  /** One-time recovery key. Returned only right after account creation, never by getState. */
+  recoveryKey: z.string().optional()
 })
 export type AuthState = z.infer<typeof AuthStateSchema>
 
@@ -26,5 +28,17 @@ export const AuthCredentialsSchema = z.object({
     .max(200, 'Password must be 200 characters or fewer.')
 })
 export type AuthCredentials = z.infer<typeof AuthCredentialsSchema>
+
+/** Forgot-password reset: username + recovery key + the replacement password. */
+export const AuthResetSchema = z.object({
+  username: AuthCredentialsSchema.shape.username,
+  recoveryKey: z
+    .string()
+    .trim()
+    .min(1, 'Enter your recovery key.')
+    .max(64, 'Recovery keys are 32 characters.'),
+  password: AuthCredentialsSchema.shape.password
+})
+export type AuthResetCredentials = z.infer<typeof AuthResetSchema>
 
 export type AuthResult = { ok: true; state: AuthState } | { ok: false; error: string }

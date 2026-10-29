@@ -2,6 +2,7 @@ import { ipcRenderer } from 'electron'
 import {
   AuthStateSchema,
   type AuthCredentials,
+  type AuthResetCredentials,
   type AuthResult,
   type AuthState
 } from '../shared/contracts/auth.js'
@@ -15,6 +16,8 @@ export const authApi = {
     ipcRenderer.invoke('auth:login', credentials),
   authRegister: (credentials: AuthCredentials): Promise<AuthResult> =>
     ipcRenderer.invoke('auth:register', credentials),
+  authResetPassword: (credentials: AuthResetCredentials): Promise<AuthResult> =>
+    ipcRenderer.invoke('auth:reset-password', credentials),
   onAuthChanged: (cb: (state: AuthState) => void) => {
     const fn = (_event: unknown, payload: unknown): void => {
       const parsed = AuthStateSchema.safeParse(payload)

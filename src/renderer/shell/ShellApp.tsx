@@ -12,7 +12,7 @@ import { parseMentionedTools } from '../../shared/types.js'
 import { ChatView } from './ChatView.js'
 import { HomeView } from './HomeView.js'
 import { ProfileMenu } from './ProfileMenu.js'
-import { LoginScreen } from './LoginScreen.js'
+import { LoginScreen, RecoveryKeyGate } from './LoginScreen.js'
 import { BreadcrumbBar, BreadcrumbProvider } from '../components/layout/Breadcrumbs.js'
 import { createChatRunState, reduceChatRun, resolveChatApproval, type ChatRunState, type ChatApproval } from './chat-state.js'
 import { ApprovalCard } from './ApprovalCard.js'
@@ -714,6 +714,19 @@ export default function ShellApp(): React.JSX.Element {
           ) : (
             <LoginScreen hasAccounts={auth.hasAccounts ?? false} onAuthenticated={setAuth} />
           )}
+        </div>
+      )}
+      {auth.recoveryKey && (
+        <div className="shell-auth-overlay">
+          <RecoveryKeyGate
+            value={auth.recoveryKey}
+            onDone={() => setAuth((current) => {
+              // The key is one-time; drop it from state once acknowledged.
+              const next = { ...current }
+              delete next.recoveryKey
+              return next
+            })}
+          />
         </div>
       )}
     </BreadcrumbProvider>

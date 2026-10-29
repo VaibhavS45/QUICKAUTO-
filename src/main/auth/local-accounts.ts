@@ -1,7 +1,7 @@
 import { randomBytes, randomUUID, scrypt as scryptCallback, timingSafeEqual } from 'node:crypto'
 import { constants, copyFileSync, cpSync, existsSync, mkdirSync, readFileSync, renameSync, rmSync, writeFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
-import { AuthCredentialsSchema, type AuthCredentials, type AuthState } from '../../shared/contracts/auth.js'
+import { AuthCredentialsSchema, AuthResetSchema, type AuthCredentials, type AuthState } from '../../shared/contracts/auth.js'
 
 const ACCOUNTS_FILE = 'accounts.json'
 const SESSION_FILE = 'session.json'
@@ -38,6 +38,9 @@ export interface LocalAccountRecord {
   hash: string
   createdAt: number
   primary?: boolean
+  /** Hash of the one-time recovery key; the key itself is never stored. */
+  recoverySalt?: string
+  recoveryHash?: string
 }
 
 interface AccountRegistry {
@@ -69,7 +72,9 @@ function isAccountRecord(value: unknown): value is LocalAccountRecord {
     typeof record.hash === 'string' &&
     HASH_PATTERN.test(record.hash) &&
     typeof record.createdAt === 'number' &&
-    (record.primary === undefined || typeof record.primary === 'boolean')
+    (record.primary === undefined || typeof record.primary === 'boolean') &&
+    (record.recoverySalt === undefined || (typeof record.recoverySalt === 'string' && SALT_PATTERN.test(record.recoverySalt))) &&
+    (record.recoveryHash === undefined || (typeof record.recoveryHash === 'string' && HASH_PATTERN.test(record.recoveryHash)))
   )
 }
 
@@ -149,6 +154,29 @@ function copyLegacyData(baseDir: string, destination: string): void {
   }
 }
 
+/** Marker: root-level legacy files were once claimed by this account directory. */
+const LEGACY_IMPORT_MARK = '.legacy-imported'
+
+/**
+ * Root-level legacy files belong to exactly one account: they are copied into
+ * the primary account's data dir once, marked, and never re-imported or
+ * overwritten — the copy is a snapshot, and later boots only fill gaps.
+ */
+export function migrateLegacyData(baseDir: string, destination: string): void {
+  if (!existsSync(join(destination, LEGACY_IMPORT_MARK))) {
+    copyLegacyData(baseDir, destination)
+    try {
+      writeFileSync(
+        join(destination, LEGACY_IMPORT_MARK),
+        `${new Date().toISOString()}\n`,
+        { encoding: 'utf8', mode: 0o600 }
+      )
+    } catch {
+      // Worst case the import is retried next boot; copyLegacyData only fills gaps.
+    }
+  }
+}
+
 export class LocalAccountStore {
   constructor(readonly baseDir: string) {}
 
@@ -189,6 +217,15 @@ export class LocalAccountStore {
     writeJson(this.accountsPath, registry)
   }
 
+  updateAccount(accountId: string, patch: Partial<LocalAccountRecord>): void {
+    const accounts = this.listAccounts()
+    const next = accounts.map((account) => (account.id === accountId ? { ...account, ...patch } : account))
+    if (next.every((account, index) => account === accounts[index])) return
+    const registry = emptyRegistry()
+    registry.accounts = next
+    writeJson(this.accountsPath, registry)
+  }
+
   readSession(): AccountSession | null {
     const raw = readJson(this.sessionPath)
     if (!isSession(raw)) return null
@@ -210,6 +247,23 @@ export class LocalAccountStore {
   clearSession(): void {
     rmSync(this.sessionPath, { force: true })
   }
+}
+
+/** One-time recovery key: typeable 8×4 hex groups; the app stores only its hash. */
+function generateRecoveryKey(): string {
+  const hex = randomBytes(16).toString('hex')
+  return (hex.match(/.{4}/g) ?? [hex]).join('-').toUpperCase()
+}
+
+/** Recovery keys compare case-insensitively, ignoring dashes and spaces. */
+function normalizeRecoveryKey(key: string): string {
+  return key.replace(/[^0-9a-zA-Z]/g, '').toLowerCase()
+}
+
+const parseReset = (input: unknown): { username: string; recoveryKey: string; password: string } => {
+  const parsed = AuthResetSchema.safeParse(input)
+  if (!parsed.success) throw new Error(parsed.error.issues[0]?.message ?? 'Invalid reset request.')
+  return parsed.data
 }
 
 export class LocalAccountService {
@@ -239,7 +293,7 @@ export class LocalAccountService {
     return account
   }
 
-  async register(input: unknown): Promise<AuthState> {
+  async register(input: unknown): Promise<AuthState & { recoveryKey?: string }> {
     const { username, password } = parseCredentials(input)
     const normalized = normalizeUsername(username)
     if (this.store.findAccount(normalized)) {
@@ -248,19 +302,25 @@ export class LocalAccountService {
     const firstAccount = this.store.listAccounts().length === 0
     const salt = randomBytes(SALT_BYTES)
     const hash = await scrypt(password, salt)
+    const recoveryKey = generateRecoveryKey()
+    const recoverySalt = randomBytes(SALT_BYTES)
+    const recoveryHash = await scrypt(normalizeRecoveryKey(recoveryKey), recoverySalt)
     const account: LocalAccountRecord = {
       id: randomUUID(),
       username: normalized,
       salt: salt.toString('hex'),
       hash: hash.toString('hex'),
       createdAt: Date.now(),
-      ...(firstAccount ? { primary: true } : {})
+      ...(firstAccount ? { primary: true } : {}),
+      recoverySalt: recoverySalt.toString('hex'),
+      recoveryHash: recoveryHash.toString('hex')
     }
-    if (firstAccount) copyLegacyData(this.store.baseDir, this.store.userDataDir(account.id))
+    if (firstAccount) migrateLegacyData(this.store.baseDir, this.store.userDataDir(account.id))
     this.store.addAccount(account)
     this.currentId = account.id
     this.store.writeSession(account.id)
-    return this.getState()
+    // The plain-text recovery key leaves the service exactly once.
+    return { ...this.getState(), recoveryKey }
   }
 
   async login(input: unknown): Promise<AuthState> {
@@ -279,6 +339,30 @@ export class LocalAccountService {
   async logout(): Promise<AuthState> {
     this.currentId = null
     this.store.clearSession()
+    return this.getState()
+  }
+
+  /** Forgot password: verify the recovery key, then store a fresh password hash and sign in. */
+  async resetPassword(input: unknown): Promise<AuthState> {
+    const { username, recoveryKey, password } = parseReset(input)
+    const account = this.store.findAccount(username)
+    if (!account) throw new Error('No account with that username.')
+    if (!account.recoverySalt || !account.recoveryHash) {
+      throw new Error('This account has no recovery key saved, so its password cannot be reset.')
+    }
+    const recoverySalt = Buffer.from(account.recoverySalt, 'hex')
+    const candidate = await scrypt(normalizeRecoveryKey(recoveryKey), recoverySalt)
+    const expected = Buffer.from(account.recoveryHash, 'hex')
+    const valid = candidate.length === expected.length && timingSafeEqual(candidate, expected)
+    if (!valid) throw new Error('That recovery key does not match this account.')
+    const salt = randomBytes(SALT_BYTES)
+    const hash = await scrypt(password, salt)
+    this.store.updateAccount(account.id, {
+      salt: salt.toString('hex'),
+      hash: hash.toString('hex')
+    })
+    this.currentId = account.id
+    this.store.writeSession(account.id)
     return this.getState()
   }
 }

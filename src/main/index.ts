@@ -453,21 +453,44 @@ function wireIpc(): void {
       win.webContents.send(AuthChannels.changed, state)
     }
   }
+  /**
+   * Account data lives in per-account userData dirs that stores bind at boot.
+   * After any successful auth change, relaunch so every store rebinds to the
+   * new account's directory instead of leaking the previous account's data.
+   */
+  let authRestartScheduled = false
+  const relaunchForAccountSwitch = (): void => {
+    if (authRestartScheduled) return
+    authRestartScheduled = true
+    setTimeout(() => {
+      app.relaunch()
+      app.quit()
+    }, 500)
+  }
   registerAuthIpc(ipcMain, {
     getState: () => localAccounts.getState(),
     login: async (credentials) => {
       const state = await localAccounts.login(credentials)
       emitAuthChanged(state)
+      relaunchForAccountSwitch()
       return state
     },
     register: async (credentials) => {
       const state = await localAccounts.register(credentials)
       emitAuthChanged(state)
+      relaunchForAccountSwitch()
+      return state
+    },
+    reset: async (credentials) => {
+      const state = await localAccounts.resetPassword(credentials)
+      emitAuthChanged(state)
+      relaunchForAccountSwitch()
       return state
     },
     logout: async () => {
       const state = await localAccounts.logout()
       emitAuthChanged(state)
+      relaunchForAccountSwitch()
       return state
     }
   })
